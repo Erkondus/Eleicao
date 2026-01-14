@@ -4,9 +4,18 @@ import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
+import multer from "multer";
+import { createReadStream } from "fs";
+import { parse } from "csv-parse";
+import iconv from "iconv-lite";
 import { storage } from "./storage";
-import type { User } from "@shared/schema";
+import type { User, InsertTseCandidateVote } from "@shared/schema";
 import OpenAI from "openai";
+
+const upload = multer({ 
+  dest: "/tmp/uploads/",
+  limits: { fileSize: 10 * 1024 * 1024 * 1024 }
+});
 
 declare module "express-session" {
   interface SessionData {
@@ -857,6 +866,241 @@ Responda em JSON com a seguinte estrutura:
       res.status(500).json({ error: "Failed to generate prediction" });
     }
   });
+
+  app.get("/api/imports/tse", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobs = await storage.getTseImportJobs();
+      res.json(jobs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch import jobs" });
+    }
+  });
+
+  app.get("/api/imports/tse/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const job = await storage.getTseImportJob(parseInt(req.params.id));
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+      res.json(job);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch import job" });
+    }
+  });
+
+  app.get("/api/imports/tse/:id/errors", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const errors = await storage.getTseImportErrors(parseInt(req.params.id));
+      res.json(errors);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch import errors" });
+    }
+  });
+
+  app.post("/api/imports/tse", requireAuth, requireRole("admin"), upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const job = await storage.createTseImportJob({
+        filename: req.file.originalname,
+        fileSize: req.file.size,
+        status: "pending",
+        electionYear: req.body.electionYear ? parseInt(req.body.electionYear) : null,
+        electionType: req.body.electionType || null,
+        uf: req.body.uf || null,
+        createdBy: req.user?.id || null,
+      });
+
+      await logAudit(req, "create", "tse_import", String(job.id), { filename: req.file.originalname });
+
+      processCSVImport(job.id, req.file.path);
+
+      res.json({ jobId: job.id, message: "Import started" });
+    } catch (error) {
+      console.error("TSE import error:", error);
+      res.status(500).json({ error: "Failed to start import" });
+    }
+  });
+
+  app.get("/api/tse/candidates", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, cargo, limit = 100, offset = 0 } = req.query;
+      const candidates = await storage.getTseCandidateVotes({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        cargo: cargo ? parseInt(cargo as string) : undefined,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      });
+      res.json(candidates);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch TSE candidates" });
+    }
+  });
+
+  app.get("/api/tse/stats", requireAuth, async (req, res) => {
+    try {
+      const stats = await storage.getTseStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch TSE stats" });
+    }
+  });
+
+  const processCSVImport = async (jobId: number, filePath: string) => {
+    try {
+      await storage.updateTseImportJob(jobId, { status: "running", startedAt: new Date() });
+
+      const records: InsertTseCandidateVote[] = [];
+      let rowCount = 0;
+      let errorCount = 0;
+      const BATCH_SIZE = 1000;
+
+      const parser = createReadStream(filePath)
+        .pipe(iconv.decodeStream("latin1"))
+        .pipe(parse({
+          delimiter: ";",
+          quote: '"',
+          relax_quotes: true,
+          relax_column_count: true,
+          skip_empty_lines: true,
+          from_line: 2,
+        }));
+
+      const fieldMap: { [key: number]: keyof InsertTseCandidateVote } = {
+        0: "dtGeracao",
+        1: "hhGeracao",
+        2: "anoEleicao",
+        3: "cdTipoEleicao",
+        4: "nmTipoEleicao",
+        5: "nrTurno",
+        6: "cdEleicao",
+        7: "dsEleicao",
+        8: "dtEleicao",
+        9: "tpAbrangencia",
+        10: "sgUf",
+        11: "sgUe",
+        12: "nmUe",
+        13: "cdMunicipio",
+        14: "nmMunicipio",
+        15: "nrZona",
+        16: "cdCargo",
+        17: "dsCargo",
+        18: "sqCandidato",
+        19: "nrCandidato",
+        20: "nmCandidato",
+        21: "nmUrnaCandidato",
+        22: "nmSocialCandidato",
+        23: "cdSituacaoCandidatura",
+        24: "dsSituacaoCandidatura",
+        25: "cdDetalheSituacaoCand",
+        26: "dsDetalheSituacaoCand",
+        27: "cdSituacaoJulgamento",
+        28: "dsSituacaoJulgamento",
+        29: "cdSituacaoCassacao",
+        30: "dsSituacaoCassacao",
+        31: "cdSituacaoDconstDiploma",
+        32: "dsSituacaoDconstDiploma",
+        33: "tpAgremiacao",
+        34: "nrPartido",
+        35: "sgPartido",
+        36: "nmPartido",
+        37: "nrFederacao",
+        38: "nmFederacao",
+        39: "sgFederacao",
+        40: "dsComposicaoFederacao",
+        41: "sqColigacao",
+        42: "nmColigacao",
+        43: "dsComposicaoColigacao",
+        44: "stVotoEmTransito",
+        45: "qtVotosNominais",
+        46: "nmTipoDestinacaoVotos",
+        47: "qtVotosNominaisValidos",
+        48: "cdSitTotTurno",
+        49: "dsSitTotTurno",
+      };
+
+      const parseValue = (value: string, field: string): any => {
+        if (value === "#NULO" || value === "#NE" || value === "") {
+          return null;
+        }
+        const intFields = [
+          "anoEleicao", "cdTipoEleicao", "nrTurno", "cdEleicao", "cdMunicipio",
+          "nrZona", "cdCargo", "nrCandidato", "cdSituacaoCandidatura",
+          "cdDetalheSituacaoCand", "cdSituacaoJulgamento", "cdSituacaoCassacao",
+          "cdSituacaoDconstDiploma", "nrPartido", "nrFederacao", "qtVotosNominais",
+          "qtVotosNominaisValidos", "cdSitTotTurno"
+        ];
+        if (intFields.includes(field)) {
+          const num = parseInt(value);
+          if (isNaN(num) || num === -1 || num === -3) return null;
+          return num;
+        }
+        return value;
+      };
+
+      for await (const row of parser) {
+        try {
+          rowCount++;
+          const record: any = { importJobId: jobId };
+
+          for (let i = 0; i < row.length; i++) {
+            const field = fieldMap[i];
+            if (field) {
+              record[field] = parseValue(row[i], field);
+            }
+          }
+
+          records.push(record);
+
+          if (records.length >= BATCH_SIZE) {
+            await storage.bulkInsertTseCandidateVotes(records);
+            await storage.updateTseImportJob(jobId, { processedRows: rowCount });
+            records.length = 0;
+          }
+        } catch (err: any) {
+          errorCount++;
+          await storage.createTseImportError({
+            importJobId: jobId,
+            rowNumber: rowCount,
+            errorType: "parse_error",
+            errorMessage: err.message,
+            rawData: JSON.stringify(row).substring(0, 1000),
+          });
+        }
+      }
+
+      if (records.length > 0) {
+        await storage.bulkInsertTseCandidateVotes(records);
+      }
+
+      await storage.updateTseImportJob(jobId, {
+        status: "completed",
+        totalRows: rowCount,
+        processedRows: rowCount,
+        errorCount,
+        completedAt: new Date(),
+      });
+
+      console.log(`TSE Import ${jobId} completed: ${rowCount} rows, ${errorCount} errors`);
+    } catch (error: any) {
+      console.error(`TSE Import ${jobId} failed:`, error);
+      await storage.updateTseImportJob(jobId, {
+        status: "failed",
+        errorCount: 1,
+        completedAt: new Date(),
+      });
+      await storage.createTseImportError({
+        importJobId: jobId,
+        rowNumber: 0,
+        errorType: "fatal_error",
+        errorMessage: error.message,
+        rawData: null,
+      });
+    }
+  }
 
   return httpServer;
 }

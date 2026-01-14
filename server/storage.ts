@@ -10,6 +10,9 @@ import {
   type AuditLog, type InsertAuditLog, auditLogs,
   type Alliance, type InsertAlliance, alliances,
   type AllianceParty, type InsertAllianceParty, allianceParties,
+  type TseImportJob, type InsertTseImportJob, tseImportJobs,
+  type TseCandidateVote, type InsertTseCandidateVote, tseCandidateVotes,
+  type TseImportError, type InsertTseImportError, tseImportErrors,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -294,6 +297,82 @@ export class DatabaseStorage implements IStorage {
         active: true,
       });
     }
+  }
+
+  async getTseImportJobs(): Promise<TseImportJob[]> {
+    return db.select().from(tseImportJobs).orderBy(desc(tseImportJobs.createdAt));
+  }
+
+  async getTseImportJob(id: number): Promise<TseImportJob | undefined> {
+    const [job] = await db.select().from(tseImportJobs).where(eq(tseImportJobs.id, id));
+    return job;
+  }
+
+  async createTseImportJob(job: InsertTseImportJob): Promise<TseImportJob> {
+    const [created] = await db.insert(tseImportJobs).values(job).returning();
+    return created;
+  }
+
+  async updateTseImportJob(id: number, data: Partial<InsertTseImportJob>): Promise<TseImportJob | undefined> {
+    const [updated] = await db.update(tseImportJobs).set(data).where(eq(tseImportJobs.id, id)).returning();
+    return updated;
+  }
+
+  async getTseImportErrors(jobId: number): Promise<TseImportError[]> {
+    return db.select().from(tseImportErrors).where(eq(tseImportErrors.importJobId, jobId)).orderBy(tseImportErrors.rowNumber);
+  }
+
+  async createTseImportError(error: InsertTseImportError): Promise<TseImportError> {
+    const [created] = await db.insert(tseImportErrors).values(error).returning();
+    return created;
+  }
+
+  async bulkInsertTseCandidateVotes(votes: InsertTseCandidateVote[]): Promise<void> {
+    if (votes.length === 0) return;
+    await db.insert(tseCandidateVotes).values(votes);
+  }
+
+  async getTseCandidateVotes(filters: {
+    year?: number;
+    uf?: string;
+    cargo?: number;
+    limit: number;
+    offset: number;
+  }): Promise<TseCandidateVote[]> {
+    let query = db.select().from(tseCandidateVotes);
+    const conditions = [];
+    if (filters.year) {
+      conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    }
+    if (filters.uf) {
+      conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    }
+    if (filters.cargo) {
+      conditions.push(eq(tseCandidateVotes.cdCargo, filters.cargo));
+    }
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+    return query.limit(filters.limit).offset(filters.offset);
+  }
+
+  async getTseStats(): Promise<{
+    totalRecords: number;
+    years: number[];
+    ufs: string[];
+    cargos: { code: number; name: string }[];
+  }> {
+    const countResult = await db.select({ count: sql<number>`count(*)` }).from(tseCandidateVotes);
+    const yearsResult = await db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`);
+    const ufsResult = await db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`);
+    const cargosResult = await db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`);
+
+    return {
+      totalRecords: Number(countResult[0]?.count || 0),
+      years: yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a),
+      ufs: ufsResult.map(r => r.uf!).filter(Boolean).sort(),
+      cargos: cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! })),
+    };
   }
 }
 

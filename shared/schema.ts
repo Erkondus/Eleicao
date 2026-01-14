@@ -222,3 +222,110 @@ export type AIPrediction = {
   recommendations: string[];
   generatedAt: string;
 };
+
+export const tseImportJobs = pgTable("tse_import_jobs", {
+  id: serial("id").primaryKey(),
+  filename: text("filename").notNull(),
+  fileSize: integer("file_size").notNull(),
+  status: text("status").notNull().default("pending"),
+  totalRows: integer("total_rows").default(0),
+  processedRows: integer("processed_rows").default(0),
+  errorCount: integer("error_count").default(0),
+  electionYear: integer("election_year"),
+  electionType: text("election_type"),
+  uf: text("uf"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const tseCandidateVotes = pgTable("tse_candidate_votes", {
+  id: serial("id").primaryKey(),
+  importJobId: integer("import_job_id").references(() => tseImportJobs.id, { onDelete: "cascade" }),
+  dtGeracao: text("dt_geracao"),
+  hhGeracao: text("hh_geracao"),
+  anoEleicao: integer("ano_eleicao"),
+  cdTipoEleicao: integer("cd_tipo_eleicao"),
+  nmTipoEleicao: text("nm_tipo_eleicao"),
+  nrTurno: integer("nr_turno"),
+  cdEleicao: integer("cd_eleicao"),
+  dsEleicao: text("ds_eleicao"),
+  dtEleicao: text("dt_eleicao"),
+  tpAbrangencia: text("tp_abrangencia"),
+  sgUf: text("sg_uf"),
+  sgUe: text("sg_ue"),
+  nmUe: text("nm_ue"),
+  cdMunicipio: integer("cd_municipio"),
+  nmMunicipio: text("nm_municipio"),
+  nrZona: integer("nr_zona"),
+  cdCargo: integer("cd_cargo"),
+  dsCargo: text("ds_cargo"),
+  sqCandidato: text("sq_candidato"),
+  nrCandidato: integer("nr_candidato"),
+  nmCandidato: text("nm_candidato"),
+  nmUrnaCandidato: text("nm_urna_candidato"),
+  nmSocialCandidato: text("nm_social_candidato"),
+  cdSituacaoCandidatura: integer("cd_situacao_candidatura"),
+  dsSituacaoCandidatura: text("ds_situacao_candidatura"),
+  cdDetalheSituacaoCand: integer("cd_detalhe_situacao_cand"),
+  dsDetalheSituacaoCand: text("ds_detalhe_situacao_cand"),
+  cdSituacaoJulgamento: integer("cd_situacao_julgamento"),
+  dsSituacaoJulgamento: text("ds_situacao_julgamento"),
+  cdSituacaoCassacao: integer("cd_situacao_cassacao"),
+  dsSituacaoCassacao: text("ds_situacao_cassacao"),
+  cdSituacaoDconstDiploma: integer("cd_situacao_dconst_diploma"),
+  dsSituacaoDconstDiploma: text("ds_situacao_dconst_diploma"),
+  tpAgremiacao: text("tp_agremiacao"),
+  nrPartido: integer("nr_partido"),
+  sgPartido: text("sg_partido"),
+  nmPartido: text("nm_partido"),
+  nrFederacao: integer("nr_federacao"),
+  nmFederacao: text("nm_federacao"),
+  sgFederacao: text("sg_federacao"),
+  dsComposicaoFederacao: text("ds_composicao_federacao"),
+  sqColigacao: text("sq_coligacao"),
+  nmColigacao: text("nm_coligacao"),
+  dsComposicaoColigacao: text("ds_composicao_coligacao"),
+  stVotoEmTransito: text("st_voto_em_transito"),
+  qtVotosNominais: integer("qt_votos_nominais"),
+  nmTipoDestinacaoVotos: text("nm_tipo_destinacao_votos"),
+  qtVotosNominaisValidos: integer("qt_votos_nominais_validos"),
+  cdSitTotTurno: integer("cd_sit_tot_turno"),
+  dsSitTotTurno: text("ds_sit_tot_turno"),
+});
+
+export const tseImportErrors = pgTable("tse_import_errors", {
+  id: serial("id").primaryKey(),
+  importJobId: integer("import_job_id").notNull().references(() => tseImportJobs.id, { onDelete: "cascade" }),
+  rowNumber: integer("row_number"),
+  errorType: text("error_type").notNull(),
+  errorMessage: text("error_message").notNull(),
+  rawData: text("raw_data"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const tseImportJobsRelations = relations(tseImportJobs, ({ many, one }) => ({
+  votes: many(tseCandidateVotes),
+  errors: many(tseImportErrors),
+  createdByUser: one(users, { fields: [tseImportJobs.createdBy], references: [users.id] }),
+}));
+
+export const tseCandidateVotesRelations = relations(tseCandidateVotes, ({ one }) => ({
+  importJob: one(tseImportJobs, { fields: [tseCandidateVotes.importJobId], references: [tseImportJobs.id] }),
+}));
+
+export const tseImportErrorsRelations = relations(tseImportErrors, ({ one }) => ({
+  importJob: one(tseImportJobs, { fields: [tseImportErrors.importJobId], references: [tseImportJobs.id] }),
+}));
+
+export const insertTseImportJobSchema = createInsertSchema(tseImportJobs).omit({ id: true, createdAt: true });
+export const insertTseCandidateVoteSchema = createInsertSchema(tseCandidateVotes).omit({ id: true });
+export const insertTseImportErrorSchema = createInsertSchema(tseImportErrors).omit({ id: true, createdAt: true });
+
+export type InsertTseImportJob = z.infer<typeof insertTseImportJobSchema>;
+export type TseImportJob = typeof tseImportJobs.$inferSelect;
+export type InsertTseCandidateVote = z.infer<typeof insertTseCandidateVoteSchema>;
+export type TseCandidateVote = typeof tseCandidateVotes.$inferSelect;
+export type InsertTseImportError = z.infer<typeof insertTseImportErrorSchema>;
+export type TseImportError = typeof tseImportErrors.$inferSelect;
