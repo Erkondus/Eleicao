@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   Shield,
+  Upload,
 } from "lucide-react";
 import {
   Sidebar,
@@ -40,6 +41,7 @@ const simulationNavItems = [
 ];
 
 const adminNavItems = [
+  { title: "Importação TSE", url: "/tse-import", icon: Upload, permission: "manage_users" },
   { title: "Auditoria", url: "/audit", icon: ClipboardList, permission: "view_audit" },
   { title: "Usuários", url: "/users", icon: Shield, permission: "manage_users" },
 ];

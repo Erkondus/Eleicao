@@ -20,6 +20,7 @@ import Audit from "@/pages/audit";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
 import Alliances from "@/pages/alliances";
+import TseImport from "@/pages/tse-import";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/audit" component={Audit} />
       <Route path="/users" component={Users} />
       <Route path="/settings" component={Settings} />
+      <Route path="/tse-import" component={TseImport} />
       <Route component={NotFound} />
     </Switch>
   );
