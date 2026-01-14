@@ -506,6 +506,65 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/scenarios/:id/candidates", requireAuth, async (req, res) => {
+    try {
+      const scenarioId = parseInt(req.params.id);
+      const scenarioCandidates = await storage.getScenarioCandidates(scenarioId);
+      res.json(scenarioCandidates);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch scenario candidates" });
+    }
+  });
+
+  app.post("/api/scenarios/:id/candidates", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const scenarioId = parseInt(req.params.id);
+      const { candidateId, partyId, ballotNumber, nickname } = req.body;
+      
+      if (!candidateId || !partyId || !ballotNumber) {
+        return res.status(400).json({ error: "candidateId, partyId, and ballotNumber are required" });
+      }
+      
+      const scenarioCandidate = await storage.addCandidateToScenario(
+        scenarioId,
+        candidateId,
+        partyId,
+        ballotNumber,
+        nickname
+      );
+      await logAudit(req, "create", "scenario_candidate", String(scenarioCandidate.id), { scenarioId, candidateId, ballotNumber });
+      res.json(scenarioCandidate);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add candidate to scenario" });
+    }
+  });
+
+  app.put("/api/scenario-candidates/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { ballotNumber, nickname, status, votes } = req.body;
+      const updated = await storage.updateScenarioCandidate(id, { ballotNumber, nickname, status, votes });
+      if (!updated) {
+        return res.status(404).json({ error: "Scenario candidate not found" });
+      }
+      await logAudit(req, "update", "scenario_candidate", String(id), { ballotNumber, nickname, status, votes });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update scenario candidate" });
+    }
+  });
+
+  app.delete("/api/scenario-candidates/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteScenarioCandidate(id);
+      await logAudit(req, "delete", "scenario_candidate", String(id), {});
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove candidate from scenario" });
+    }
+  });
+
   app.post("/api/electoral/calculate", requireAuth, async (req, res) => {
     try {
       const { scenarioId, partyVotes, candidateVotes } = req.body;

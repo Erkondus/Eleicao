@@ -21,6 +21,7 @@ import Users from "@/pages/users";
 import Settings from "@/pages/settings";
 import Alliances from "@/pages/alliances";
 import TseImport from "@/pages/tse-import";
+import ScenarioCandidates from "@/pages/scenario-candidates";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/candidates" component={Candidates} />
       <Route path="/scenarios" component={Scenarios} />
       <Route path="/scenarios/:scenarioId/alliances" component={Alliances} />
+      <Route path="/scenarios/:scenarioId/candidates" component={ScenarioCandidates} />
       <Route path="/simulations" component={Simulations} />
       <Route path="/predictions" component={Predictions} />
       <Route path="/audit" component={Audit} />

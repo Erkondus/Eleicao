@@ -13,6 +13,7 @@ import {
   type TseImportJob, type InsertTseImportJob, tseImportJobs,
   type TseCandidateVote, type InsertTseCandidateVote, tseCandidateVotes,
   type TseImportError, type InsertTseImportError, tseImportErrors,
+  type ScenarioCandidate, type InsertScenarioCandidate, scenarioCandidates,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -66,6 +67,13 @@ export interface IStorage {
   getAllianceParties(allianceId: number): Promise<AllianceParty[]>;
   setAllianceParties(allianceId: number, partyIds: number[]): Promise<AllianceParty[]>;
   getPartyAlliance(scenarioId: number, partyId: number): Promise<Alliance | undefined>;
+
+  getScenarioCandidates(scenarioId: number): Promise<(ScenarioCandidate & { candidate: Candidate; party: Party })[]>;
+  getScenarioCandidate(id: number): Promise<ScenarioCandidate | undefined>;
+  createScenarioCandidate(data: InsertScenarioCandidate): Promise<ScenarioCandidate>;
+  updateScenarioCandidate(id: number, data: Partial<InsertScenarioCandidate>): Promise<ScenarioCandidate | undefined>;
+  deleteScenarioCandidate(id: number): Promise<boolean>;
+  addCandidateToScenario(scenarioId: number, candidateId: number, partyId: number, ballotNumber: number, nickname?: string): Promise<ScenarioCandidate>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -423,6 +431,58 @@ export class DatabaseStorage implements IStorage {
       .limit(20);
 
     return results;
+  }
+
+  async getScenarioCandidates(scenarioId: number): Promise<(ScenarioCandidate & { candidate: Candidate; party: Party })[]> {
+    const results = await db
+      .select({
+        scenarioCandidate: scenarioCandidates,
+        candidate: candidates,
+        party: parties,
+      })
+      .from(scenarioCandidates)
+      .innerJoin(candidates, eq(scenarioCandidates.candidateId, candidates.id))
+      .innerJoin(parties, eq(scenarioCandidates.partyId, parties.id))
+      .where(eq(scenarioCandidates.scenarioId, scenarioId))
+      .orderBy(scenarioCandidates.ballotNumber);
+
+    return results.map((r) => ({
+      ...r.scenarioCandidate,
+      candidate: r.candidate,
+      party: r.party,
+    }));
+  }
+
+  async getScenarioCandidate(id: number): Promise<ScenarioCandidate | undefined> {
+    const [result] = await db.select().from(scenarioCandidates).where(eq(scenarioCandidates.id, id));
+    return result;
+  }
+
+  async createScenarioCandidate(data: InsertScenarioCandidate): Promise<ScenarioCandidate> {
+    const [created] = await db.insert(scenarioCandidates).values(data).returning();
+    return created;
+  }
+
+  async updateScenarioCandidate(id: number, data: Partial<InsertScenarioCandidate>): Promise<ScenarioCandidate | undefined> {
+    const [updated] = await db.update(scenarioCandidates).set(data).where(eq(scenarioCandidates.id, id)).returning();
+    return updated;
+  }
+
+  async deleteScenarioCandidate(id: number): Promise<boolean> {
+    const result = await db.delete(scenarioCandidates).where(eq(scenarioCandidates.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async addCandidateToScenario(scenarioId: number, candidateId: number, partyId: number, ballotNumber: number, nickname?: string): Promise<ScenarioCandidate> {
+    return this.createScenarioCandidate({
+      scenarioId,
+      candidateId,
+      partyId,
+      ballotNumber,
+      nickname,
+      status: "active",
+      votes: 0,
+    });
   }
 }
 

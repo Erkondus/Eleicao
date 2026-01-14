@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, FileText, PlayCircle, Eye, Handshake } from "lucide-react";
+import { Plus, Edit, Trash2, FileText, PlayCircle, Eye, Handshake, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -241,6 +241,18 @@ export default function Scenarios() {
                         <PlayCircle className="h-4 w-4" />
                       </Link>
                     </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild data-testid={`button-candidates-scenario-${scenario.id}`}>
+                          <Link href={`/scenarios/${scenario.id}/candidates`}>
+                            <Users className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Candidatos</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" asChild data-testid={`button-alliances-scenario-${scenario.id}`}>
