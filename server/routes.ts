@@ -434,6 +434,10 @@ export async function registerRoutes(
     try {
       const { scenarioId, partyVotes, candidateVotes } = req.body;
       
+      if (!scenarioId || typeof scenarioId !== "number") {
+        return res.status(400).json({ error: "Invalid scenarioId" });
+      }
+      
       const scenario = await storage.getScenario(scenarioId);
       if (!scenario) {
         return res.status(404).json({ error: "Scenario not found" });
@@ -444,7 +448,20 @@ export async function registerRoutes(
 
       const validVotes = scenario.validVotes;
       const availableSeats = scenario.availableSeats;
+      
+      if (availableSeats <= 0) {
+        return res.status(400).json({ error: "Available seats must be greater than zero" });
+      }
+      
+      if (validVotes < availableSeats) {
+        return res.status(400).json({ error: "Valid votes must be greater than or equal to available seats" });
+      }
+      
       const electoralQuotient = Math.floor(validVotes / availableSeats);
+      
+      if (electoralQuotient <= 0) {
+        return res.status(400).json({ error: "Electoral quotient must be greater than zero" });
+      }
 
       const candidatesByParty: Record<number, typeof allCandidates> = {};
       allParties.forEach((p) => {

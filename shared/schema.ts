@@ -122,7 +122,10 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertPartySchema = createInsertSchema(parties).omit({ id: true, createdAt: true });
 export const insertCandidateSchema = createInsertSchema(candidates).omit({ id: true, createdAt: true });
-export const insertScenarioSchema = createInsertSchema(scenarios).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertScenarioSchema = createInsertSchema(scenarios).omit({ id: true, createdAt: true, updatedAt: true }).refine(
+  (data) => data.availableSeats > 0 && data.validVotes >= data.availableSeats,
+  { message: "Valid votes must be greater than or equal to available seats, and seats must be positive" }
+);
 export const insertScenarioVoteSchema = createInsertSchema(scenarioVotes).omit({ id: true });
 export const insertSimulationSchema = createInsertSchema(simulations).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
