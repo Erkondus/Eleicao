@@ -430,6 +430,73 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/scenarios/:id/alliances", requireAuth, async (req, res) => {
+    try {
+      const alliances = await storage.getAlliances(parseInt(req.params.id));
+      const alliancesWithParties = await Promise.all(
+        alliances.map(async (alliance) => {
+          const members = await storage.getAllianceParties(alliance.id);
+          return { ...alliance, partyIds: members.map((m) => m.partyId) };
+        })
+      );
+      res.json(alliancesWithParties);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch alliances" });
+    }
+  });
+
+  app.post("/api/scenarios/:id/alliances", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const scenarioId = parseInt(req.params.id);
+      const { name, type, color, partyIds } = req.body;
+      const alliance = await storage.createAlliance({
+        scenarioId,
+        name,
+        type: type || "coalition",
+        color: color || "#003366",
+        createdBy: req.user!.id,
+      });
+      if (partyIds && partyIds.length > 0) {
+        await storage.setAllianceParties(alliance.id, partyIds);
+      }
+      await logAudit(req, "create", "alliance", String(alliance.id), { name, type, partyIds });
+      const members = await storage.getAllianceParties(alliance.id);
+      res.json({ ...alliance, partyIds: members.map((m) => m.partyId) });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create alliance" });
+    }
+  });
+
+  app.put("/api/alliances/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, type, color, partyIds } = req.body;
+      const alliance = await storage.updateAlliance(id, { name, type, color });
+      if (!alliance) {
+        return res.status(404).json({ error: "Alliance not found" });
+      }
+      if (partyIds !== undefined) {
+        await storage.setAllianceParties(id, partyIds);
+      }
+      await logAudit(req, "update", "alliance", String(id), { name, type, partyIds });
+      const members = await storage.getAllianceParties(id);
+      res.json({ ...alliance, partyIds: members.map((m) => m.partyId) });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update alliance" });
+    }
+  });
+
+  app.delete("/api/alliances/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteAlliance(id);
+      await logAudit(req, "delete", "alliance", String(id), {});
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete alliance" });
+    }
+  });
+
   app.post("/api/electoral/calculate", requireAuth, async (req, res) => {
     try {
       const { scenarioId, partyVotes, candidateVotes } = req.body;
@@ -445,6 +512,7 @@ export async function registerRoutes(
 
       const allParties = await storage.getParties();
       const allCandidates = await storage.getCandidates();
+      const scenarioAlliances = await storage.getAlliances(scenarioId);
 
       const validVotes = scenario.validVotes;
       const availableSeats = scenario.availableSeats;
@@ -463,74 +531,237 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Electoral quotient must be greater than zero" });
       }
 
+      const allianceMembers: Record<number, number[]> = {};
+      const partyToAlliance: Record<number, number> = {};
+      
+      for (const alliance of scenarioAlliances) {
+        const members = await storage.getAllianceParties(alliance.id);
+        allianceMembers[alliance.id] = members.map(m => m.partyId);
+        members.forEach(m => { partyToAlliance[m.partyId] = alliance.id; });
+      }
+
       const candidatesByParty: Record<number, typeof allCandidates> = {};
       allParties.forEach((p) => {
         candidatesByParty[p.id] = allCandidates.filter((c) => c.partyId === p.id);
       });
 
-      const partyResults = allParties.map((party) => {
-        const totalVotes = partyVotes[party.id] || 0;
-        const partyCandidates = candidatesByParty[party.id] || [];
+      type EntityResult = {
+        entityId: string;
+        entityType: "party" | "alliance";
+        name: string;
+        abbreviation: string;
+        totalVotes: number;
+        quotient: number;
+        seatsFromQuotient: number;
+        seatsFromRemainder: number;
+        totalSeats: number;
+        color: string;
+        memberPartyIds?: number[];
+        allianceType?: string;
+      };
 
-        const candidateResults = partyCandidates.map((c) => ({
-          candidateId: c.id,
-          name: c.nickname || c.name,
-          votes: candidateVotes[c.id] || 0,
-          elected: false,
-          position: 0,
-        })).sort((a, b) => b.votes - a.votes);
+      const entityResults: EntityResult[] = [];
+      const partiesInAlliances = new Set(Object.keys(partyToAlliance).map(Number));
 
-        const partyQuotient = totalVotes / electoralQuotient;
-        const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(partyQuotient) : 0;
+      for (const alliance of scenarioAlliances) {
+        const memberPartyIds = allianceMembers[alliance.id] || [];
+        const totalVotes = memberPartyIds.reduce((sum, pid) => sum + (partyVotes[pid] || 0), 0);
+        const quotient = totalVotes / electoralQuotient;
+        const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
 
-        return {
-          partyId: party.id,
-          partyName: party.name,
-          abbreviation: party.abbreviation,
+        entityResults.push({
+          entityId: `alliance-${alliance.id}`,
+          entityType: "alliance",
+          name: alliance.name,
+          abbreviation: alliance.name.substring(0, 10),
           totalVotes,
-          partyQuotient,
+          quotient,
           seatsFromQuotient,
           seatsFromRemainder: 0,
           totalSeats: 0,
-          electedCandidates: candidateResults,
-          color: party.color,
-        };
-      }).filter((r) => r.totalVotes >= electoralQuotient);
+          color: alliance.color,
+          memberPartyIds,
+          allianceType: alliance.type,
+        });
+      }
 
-      let seatsDistributedByQuotient = partyResults.reduce((sum, r) => sum + r.seatsFromQuotient, 0);
+      for (const party of allParties) {
+        if (partiesInAlliances.has(party.id)) continue;
+        const totalVotes = partyVotes[party.id] || 0;
+        const quotient = totalVotes / electoralQuotient;
+        const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
+
+        entityResults.push({
+          entityId: `party-${party.id}`,
+          entityType: "party",
+          name: party.name,
+          abbreviation: party.abbreviation,
+          totalVotes,
+          quotient,
+          seatsFromQuotient,
+          seatsFromRemainder: 0,
+          totalSeats: 0,
+          color: party.color,
+        });
+      }
+
+      const qualifiedEntities = entityResults.filter(e => e.totalVotes >= electoralQuotient);
+
+      let seatsDistributedByQuotient = qualifiedEntities.reduce((sum, e) => sum + e.seatsFromQuotient, 0);
       let remainingSeats = availableSeats - seatsDistributedByQuotient;
 
       for (let round = 0; round < remainingSeats; round++) {
         let maxQuotient = 0;
         let winnerIdx = -1;
 
-        partyResults.forEach((pr, idx) => {
-          const currentSeats = pr.seatsFromQuotient + pr.seatsFromRemainder;
-          const quotient = pr.totalVotes / (currentSeats + 1);
-          if (quotient > maxQuotient) {
-            maxQuotient = quotient;
+        qualifiedEntities.forEach((e, idx) => {
+          const currentSeats = e.seatsFromQuotient + e.seatsFromRemainder;
+          const q = e.totalVotes / (currentSeats + 1);
+          if (q > maxQuotient) {
+            maxQuotient = q;
             winnerIdx = idx;
           }
         });
 
         if (winnerIdx >= 0) {
-          partyResults[winnerIdx].seatsFromRemainder += 1;
+          qualifiedEntities[winnerIdx].seatsFromRemainder += 1;
         }
       }
 
-      partyResults.forEach((pr) => {
-        pr.totalSeats = pr.seatsFromQuotient + pr.seatsFromRemainder;
-        let electedCount = 0;
-        pr.electedCandidates.forEach((c) => {
-          if (electedCount < pr.totalSeats) {
-            c.elected = true;
-            c.position = electedCount + 1;
-            electedCount++;
+      qualifiedEntities.forEach(e => { e.totalSeats = e.seatsFromQuotient + e.seatsFromRemainder; });
+
+      type PartyResultWithAlliance = {
+        partyId: number;
+        partyName: string;
+        abbreviation: string;
+        totalVotes: number;
+        partyQuotient: number;
+        seatsFromQuotient: number;
+        seatsFromRemainder: number;
+        totalSeats: number;
+        electedCandidates: { candidateId: number; name: string; votes: number; elected: boolean; position: number }[];
+        color: string;
+        allianceId?: number;
+        allianceName?: string;
+        allianceType?: string;
+      };
+
+      const partyResults: PartyResultWithAlliance[] = [];
+
+      for (const entity of qualifiedEntities) {
+        if (entity.entityType === "party") {
+          const partyId = parseInt(entity.entityId.replace("party-", ""));
+          const party = allParties.find(p => p.id === partyId)!;
+          const partyCandidates = candidatesByParty[partyId] || [];
+          const candidateResults = partyCandidates.map(c => ({
+            candidateId: c.id,
+            name: c.nickname || c.name,
+            votes: candidateVotes[c.id] || 0,
+            elected: false,
+            position: 0,
+          })).sort((a, b) => b.votes - a.votes);
+
+          let electedCount = 0;
+          candidateResults.forEach(c => {
+            if (electedCount < entity.totalSeats) {
+              c.elected = true;
+              c.position = electedCount + 1;
+              electedCount++;
+            }
+          });
+
+          partyResults.push({
+            partyId: party.id,
+            partyName: party.name,
+            abbreviation: party.abbreviation,
+            totalVotes: entity.totalVotes,
+            partyQuotient: entity.quotient,
+            seatsFromQuotient: entity.seatsFromQuotient,
+            seatsFromRemainder: entity.seatsFromRemainder,
+            totalSeats: entity.totalSeats,
+            electedCandidates: candidateResults,
+            color: entity.color,
+          });
+        } else {
+          const allianceId = parseInt(entity.entityId.replace("alliance-", ""));
+          const alliance = scenarioAlliances.find(a => a.id === allianceId)!;
+          const memberPartyIds = entity.memberPartyIds || [];
+
+          const memberPartyResults: { partyId: number; votes: number; candidates: any[] }[] = [];
+          for (const pid of memberPartyIds) {
+            const party = allParties.find(p => p.id === pid)!;
+            const partyCandidates = candidatesByParty[pid] || [];
+            const candidateResults = partyCandidates.map(c => ({
+              candidateId: c.id,
+              name: c.nickname || c.name,
+              votes: candidateVotes[c.id] || 0,
+              elected: false,
+              position: 0,
+            })).sort((a, b) => b.votes - a.votes);
+            memberPartyResults.push({ partyId: pid, votes: partyVotes[pid] || 0, candidates: candidateResults });
           }
-        });
-      });
+
+          const allAllianceCandidates = memberPartyResults.flatMap(mp => 
+            mp.candidates.map(c => ({ ...c, partyId: mp.partyId }))
+          ).sort((a, b) => b.votes - a.votes);
+
+          const partySeatsInAlliance: Record<number, number> = {};
+          memberPartyIds.forEach(pid => { partySeatsInAlliance[pid] = 0; });
+
+          let electedCount = 0;
+          allAllianceCandidates.forEach(c => {
+            if (electedCount < entity.totalSeats) {
+              c.elected = true;
+              c.position = electedCount + 1;
+              partySeatsInAlliance[c.partyId] = (partySeatsInAlliance[c.partyId] || 0) + 1;
+              electedCount++;
+            }
+          });
+
+          for (const pid of memberPartyIds) {
+            const party = allParties.find(p => p.id === pid)!;
+            const partyVotesTotal = partyVotes[pid] || 0;
+            const partyCandidates = allAllianceCandidates.filter(c => c.partyId === pid);
+            const partySeats = partySeatsInAlliance[pid] || 0;
+
+            partyResults.push({
+              partyId: party.id,
+              partyName: party.name,
+              abbreviation: party.abbreviation,
+              totalVotes: partyVotesTotal,
+              partyQuotient: partyVotesTotal / electoralQuotient,
+              seatsFromQuotient: 0,
+              seatsFromRemainder: 0,
+              totalSeats: partySeats,
+              electedCandidates: partyCandidates.map(c => ({
+                candidateId: c.candidateId,
+                name: c.name,
+                votes: c.votes,
+                elected: c.elected,
+                position: c.position,
+              })),
+              color: party.color,
+              allianceId: alliance.id,
+              allianceName: alliance.name,
+              allianceType: alliance.type,
+            });
+          }
+        }
+      }
 
       partyResults.sort((a, b) => b.totalSeats - a.totalSeats || b.totalVotes - a.totalVotes);
+
+      const allianceResults = qualifiedEntities.filter(e => e.entityType === "alliance").map(e => ({
+        allianceId: parseInt(e.entityId.replace("alliance-", "")),
+        name: e.name,
+        type: e.allianceType,
+        totalVotes: e.totalVotes,
+        totalSeats: e.totalSeats,
+        seatsFromQuotient: e.seatsFromQuotient,
+        seatsFromRemainder: e.seatsFromRemainder,
+        memberPartyIds: e.memberPartyIds,
+        color: e.color,
+      }));
 
       const result = {
         electoralQuotient,
@@ -539,9 +770,15 @@ export async function registerRoutes(
         seatsDistributedByQuotient,
         seatsDistributedByRemainder: remainingSeats,
         partyResults,
+        allianceResults,
+        hasAlliances: scenarioAlliances.length > 0,
       };
 
-      await logAudit(req, "simulation", "electoral_calculation", String(scenarioId), { electoralQuotient, availableSeats });
+      await logAudit(req, "simulation", "electoral_calculation", String(scenarioId), { 
+        electoralQuotient, 
+        availableSeats,
+        alliancesCount: scenarioAlliances.length,
+      });
 
       res.json(result);
     } catch (error) {
