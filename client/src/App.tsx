@@ -19,6 +19,7 @@ import Predictions from "@/pages/predictions";
 import Audit from "@/pages/audit";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
+import Alliances from "@/pages/alliances";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/parties" component={Parties} />
       <Route path="/candidates" component={Candidates} />
       <Route path="/scenarios" component={Scenarios} />
+      <Route path="/scenarios/:scenarioId/alliances" component={Alliances} />
       <Route path="/simulations" component={Simulations} />
       <Route path="/predictions" component={Predictions} />
       <Route path="/audit" component={Audit} />
