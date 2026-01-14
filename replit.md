@@ -1,0 +1,80 @@
+# SimulaVoto - Sistema de Simulação Eleitoral Brasileiro
+
+## Visão Geral
+SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
+
+## Mudanças Recentes
+- **2026-01-14**: Implementação completa do backend com cálculo eleitoral server-side
+- **2026-01-14**: Integração do frontend com API de cálculo eleitoral
+- **2026-01-14**: Sistema de autenticação com passport-local e bcrypt
+- **2026-01-14**: RBAC implementado (admin/analyst/viewer)
+- **2026-01-14**: Trilha de auditoria completa com logging de todas as operações
+
+## Arquitetura do Projeto
+
+### Stack Tecnológica
+- **Frontend**: React + Vite + TailwindCSS + shadcn/ui
+- **Backend**: Express.js + TypeScript
+- **Banco de Dados**: PostgreSQL com Drizzle ORM
+- **Autenticação**: passport-local + express-session
+- **IA**: OpenAI GPT-4o via Replit AI Integrations
+
+### Estrutura de Diretórios
+```
+├── client/src/
+│   ├── components/     # Componentes reutilizáveis (sidebar, header, etc.)
+│   ├── pages/          # Páginas da aplicação
+│   ├── lib/            # Utilitários (queryClient, auth-context)
+│   └── hooks/          # Custom hooks
+├── server/
+│   ├── routes.ts       # Todas as rotas da API
+│   ├── storage.ts      # Camada de persistência (DatabaseStorage)
+│   └── index.ts        # Configuração do Express
+└── shared/
+    └── schema.ts       # Modelos de dados Drizzle + tipos TypeScript
+```
+
+### Modelos de Dados
+- **users**: Usuários do sistema (id, username, password hash, role, etc.)
+- **parties**: Partidos políticos (id, name, abbreviation, number, color)
+- **candidates**: Candidatos (id, name, nickname, number, partyId)
+- **scenarios**: Cenários eleitorais (id, name, description, validVotes, availableSeats)
+- **simulations**: Resultados de simulações (id, scenarioId, name, results JSON)
+- **auditLogs**: Trilha de auditoria (id, userId, action, entity, details, timestamp)
+- **scenarioVotes**: Votos por cenário (scenarioId, partyId, candidateId, votes)
+
+### Funções de Usuário (RBAC)
+- **admin**: Acesso completo (gerenciar usuários, partidos, candidatos, cenários, simulações, IA, auditoria)
+- **analyst**: Pode executar simulações, usar previsões IA, visualizar dados
+- **viewer**: Apenas visualização de dados e simulações
+
+### Endpoints da API
+- `POST /api/auth/login` - Login
+- `POST /api/auth/logout` - Logout
+- `GET /api/auth/me` - Usuário atual
+- `GET/POST/PUT/DELETE /api/parties` - CRUD de partidos
+- `GET/POST/PUT/DELETE /api/candidates` - CRUD de candidatos
+- `GET/POST/PUT/DELETE /api/scenarios` - CRUD de cenários
+- `GET/POST /api/simulations` - Simulações
+- `POST /api/electoral/calculate` - Cálculo eleitoral (backend)
+- `POST /api/predictions` - Previsões com IA (admin/analyst)
+- `GET /api/audit` - Logs de auditoria (admin)
+- `GET /api/stats` - Estatísticas do dashboard
+
+### Sistema Eleitoral Brasileiro
+O sistema implementa o cálculo proporcional brasileiro:
+1. **Quociente Eleitoral** = Votos Válidos / Vagas Disponíveis
+2. **Quociente Partidário** = Votos do Partido / Quociente Eleitoral
+3. **Distribuição inicial**: Cada partido recebe floor(Quociente Partidário) vagas
+4. **Distribuição de sobras**: Método D'Hondt para vagas restantes
+
+### Credenciais Padrão
+- **Usuário**: admin
+- **Senha**: admin123
+
+## Preferências de Desenvolvimento
+- Usar TypeScript em todo o código
+- Seguir padrões do shadcn/ui para componentes
+- Validação com Zod schemas
+- Design institucional inspirado no TSE (cores: #003366 azul, #FFD700 dourado)
+- Suporte a tema claro/escuro
