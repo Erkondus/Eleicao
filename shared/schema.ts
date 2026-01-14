@@ -86,9 +86,38 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const alliances = pgTable("alliances", {
+  id: serial("id").primaryKey(),
+  scenarioId: integer("scenario_id").notNull().references(() => scenarios.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("coalition"),
+  color: text("color").notNull().default("#003366"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const allianceParties = pgTable("alliance_parties", {
+  id: serial("id").primaryKey(),
+  allianceId: integer("alliance_id").notNull().references(() => alliances.id, { onDelete: "cascade" }),
+  partyId: integer("party_id").notNull().references(() => parties.id, { onDelete: "cascade" }),
+});
+
+export const alliancesRelations = relations(alliances, ({ many, one }) => ({
+  parties: many(allianceParties),
+  scenario: one(scenarios, { fields: [alliances.scenarioId], references: [scenarios.id] }),
+  createdByUser: one(users, { fields: [alliances.createdBy], references: [users.id] }),
+}));
+
+export const alliancePartiesRelations = relations(allianceParties, ({ one }) => ({
+  alliance: one(alliances, { fields: [allianceParties.allianceId], references: [alliances.id] }),
+  party: one(parties, { fields: [allianceParties.partyId], references: [parties.id] }),
+}));
+
 export const partiesRelations = relations(parties, ({ many, one }) => ({
   candidates: many(candidates),
   votes: many(scenarioVotes),
+  allianceMemberships: many(allianceParties),
   createdByUser: one(users, { fields: [parties.createdBy], references: [users.id] }),
 }));
 
@@ -101,6 +130,7 @@ export const candidatesRelations = relations(candidates, ({ one, many }) => ({
 export const scenariosRelations = relations(scenarios, ({ many, one }) => ({
   votes: many(scenarioVotes),
   simulations: many(simulations),
+  alliances: many(alliances),
   createdByUser: one(users, { fields: [scenarios.createdBy], references: [users.id] }),
 }));
 
@@ -129,6 +159,8 @@ export const insertScenarioSchema = createInsertSchema(scenarios).omit({ id: tru
 export const insertScenarioVoteSchema = createInsertSchema(scenarioVotes).omit({ id: true });
 export const insertSimulationSchema = createInsertSchema(simulations).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+export const insertAllianceSchema = createInsertSchema(alliances).omit({ id: true, createdAt: true });
+export const insertAlliancePartySchema = createInsertSchema(allianceParties).omit({ id: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -144,6 +176,10 @@ export type InsertSimulation = z.infer<typeof insertSimulationSchema>;
 export type Simulation = typeof simulations.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAlliance = z.infer<typeof insertAllianceSchema>;
+export type Alliance = typeof alliances.$inferSelect;
+export type InsertAllianceParty = z.infer<typeof insertAlliancePartySchema>;
+export type AllianceParty = typeof allianceParties.$inferSelect;
 
 export type PartyResult = {
   partyId: number;

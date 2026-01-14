@@ -8,6 +8,8 @@ import {
   type ScenarioVote, type InsertScenarioVote, scenarioVotes,
   type Simulation, type InsertSimulation, simulations,
   type AuditLog, type InsertAuditLog, auditLogs,
+  type Alliance, type InsertAlliance, alliances,
+  type AllianceParty, type InsertAllianceParty, allianceParties,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -51,6 +53,16 @@ export interface IStorage {
   getScenarioVotes(scenarioId: number): Promise<ScenarioVote[]>;
   saveScenarioVotes(scenarioId: number, votes: InsertScenarioVote[]): Promise<ScenarioVote[]>;
   deleteScenarioVotes(scenarioId: number): Promise<boolean>;
+
+  getAlliances(scenarioId: number): Promise<Alliance[]>;
+  getAlliance(id: number): Promise<Alliance | undefined>;
+  createAlliance(alliance: InsertAlliance): Promise<Alliance>;
+  updateAlliance(id: number, data: Partial<InsertAlliance>): Promise<Alliance | undefined>;
+  deleteAlliance(id: number): Promise<boolean>;
+  
+  getAllianceParties(allianceId: number): Promise<AllianceParty[]>;
+  setAllianceParties(allianceId: number, partyIds: number[]): Promise<AllianceParty[]>;
+  getPartyAlliance(scenarioId: number, partyId: number): Promise<Alliance | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -223,6 +235,51 @@ export class DatabaseStorage implements IStorage {
   async deleteScenarioVotes(scenarioId: number): Promise<boolean> {
     await db.delete(scenarioVotes).where(eq(scenarioVotes.scenarioId, scenarioId));
     return true;
+  }
+
+  async getAlliances(scenarioId: number): Promise<Alliance[]> {
+    return db.select().from(alliances).where(eq(alliances.scenarioId, scenarioId)).orderBy(alliances.name);
+  }
+
+  async getAlliance(id: number): Promise<Alliance | undefined> {
+    const [alliance] = await db.select().from(alliances).where(eq(alliances.id, id));
+    return alliance;
+  }
+
+  async createAlliance(alliance: InsertAlliance): Promise<Alliance> {
+    const [created] = await db.insert(alliances).values(alliance).returning();
+    return created;
+  }
+
+  async updateAlliance(id: number, data: Partial<InsertAlliance>): Promise<Alliance | undefined> {
+    const [updated] = await db.update(alliances).set(data).where(eq(alliances.id, id)).returning();
+    return updated;
+  }
+
+  async deleteAlliance(id: number): Promise<boolean> {
+    await db.delete(alliances).where(eq(alliances.id, id));
+    return true;
+  }
+
+  async getAllianceParties(allianceId: number): Promise<AllianceParty[]> {
+    return db.select().from(allianceParties).where(eq(allianceParties.allianceId, allianceId));
+  }
+
+  async setAllianceParties(allianceId: number, partyIds: number[]): Promise<AllianceParty[]> {
+    await db.delete(allianceParties).where(eq(allianceParties.allianceId, allianceId));
+    if (partyIds.length === 0) return [];
+    const toInsert = partyIds.map((partyId) => ({ allianceId, partyId }));
+    const created = await db.insert(allianceParties).values(toInsert).returning();
+    return created;
+  }
+
+  async getPartyAlliance(scenarioId: number, partyId: number): Promise<Alliance | undefined> {
+    const result = await db
+      .select({ alliance: alliances })
+      .from(allianceParties)
+      .innerJoin(alliances, eq(allianceParties.allianceId, alliances.id))
+      .where(and(eq(allianceParties.partyId, partyId), eq(alliances.scenarioId, scenarioId)));
+    return result[0]?.alliance;
   }
 
   async seedDefaultAdmin(): Promise<void> {
