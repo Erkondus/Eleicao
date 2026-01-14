@@ -374,6 +374,56 @@ export class DatabaseStorage implements IStorage {
       cargos: cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! })),
     };
   }
+
+  async searchTseCandidates(query: string, filters?: {
+    year?: number;
+    uf?: string;
+    cargo?: number;
+  }): Promise<{
+    nmCandidato: string | null;
+    nmUrnaCandidato: string | null;
+    nrCandidato: number | null;
+    sgPartido: string | null;
+    nmPartido: string | null;
+    nrPartido: number | null;
+    anoEleicao: number | null;
+    sgUf: string | null;
+    dsCargo: string | null;
+    qtVotosNominais: number | null;
+  }[]> {
+    const conditions = [
+      sql`(LOWER(${tseCandidateVotes.nmCandidato}) LIKE ${'%' + query.toLowerCase() + '%'} OR LOWER(${tseCandidateVotes.nmUrnaCandidato}) LIKE ${'%' + query.toLowerCase() + '%'})`
+    ];
+    
+    if (filters?.year) {
+      conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    }
+    if (filters?.uf) {
+      conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    }
+    if (filters?.cargo) {
+      conditions.push(eq(tseCandidateVotes.cdCargo, filters.cargo));
+    }
+
+    const results = await db
+      .selectDistinct({
+        nmCandidato: tseCandidateVotes.nmCandidato,
+        nmUrnaCandidato: tseCandidateVotes.nmUrnaCandidato,
+        nrCandidato: tseCandidateVotes.nrCandidato,
+        sgPartido: tseCandidateVotes.sgPartido,
+        nmPartido: tseCandidateVotes.nmPartido,
+        nrPartido: tseCandidateVotes.nrPartido,
+        anoEleicao: tseCandidateVotes.anoEleicao,
+        sgUf: tseCandidateVotes.sgUf,
+        dsCargo: tseCandidateVotes.dsCargo,
+        qtVotosNominais: tseCandidateVotes.qtVotosNominais,
+      })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .limit(20);
+
+    return results;
+  }
 }
 
 export const storage = new DatabaseStorage();

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Users } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Search, Database, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { PageHeader } from "@/components/page-header";
 import { DataTable } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
@@ -30,6 +31,19 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Candidate, Party, InsertCandidate } from "@shared/schema";
+
+type TseCandidate = {
+  nmCandidato: string | null;
+  nmUrnaCandidato: string | null;
+  nrCandidato: number | null;
+  sgPartido: string | null;
+  nmPartido: string | null;
+  nrPartido: number | null;
+  anoEleicao: number | null;
+  sgUf: string | null;
+  dsCargo: string | null;
+  qtVotosNominais: number | null;
+};
 
 type CandidateWithParty = Candidate & { party?: Party };
 
@@ -39,6 +53,11 @@ export default function Candidates() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  const [tseSearchQuery, setTseSearchQuery] = useState("");
+  const [tseSearchResults, setTseSearchResults] = useState<TseCandidate[]>([]);
+  const [isTseSearching, setIsTseSearching] = useState(false);
+  const [showTseResults, setShowTseResults] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -101,6 +120,59 @@ export default function Candidates() {
     },
   });
 
+  const searchTseCandidates = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setTseSearchResults([]);
+      setShowTseResults(false);
+      return;
+    }
+    setIsTseSearching(true);
+    try {
+      const res = await fetch(`/api/tse/search?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const results = await res.json();
+        setTseSearchResults(results);
+        setShowTseResults(true);
+      }
+    } catch (error) {
+      console.error("TSE search error:", error);
+    } finally {
+      setIsTseSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const debounce = setTimeout(() => {
+      if (tseSearchQuery.length >= 2) {
+        searchTseCandidates(tseSearchQuery);
+      } else {
+        setTseSearchResults([]);
+        setShowTseResults(false);
+      }
+    }, 300);
+    return () => clearTimeout(debounce);
+  }, [tseSearchQuery, searchTseCandidates]);
+
+  function selectTseCandidate(tse: TseCandidate) {
+    const matchingParty = parties?.find(
+      (p) => p.abbreviation === tse.sgPartido || p.number === tse.nrPartido
+    );
+    setFormData({
+      name: tse.nmCandidato || "",
+      nickname: tse.nmUrnaCandidato || "",
+      number: tse.nrCandidato?.toString() || "",
+      partyId: matchingParty ? String(matchingParty.id) : "",
+      position: "vereador",
+      biography: "",
+    });
+    setShowTseResults(false);
+    setTseSearchQuery("");
+    toast({
+      title: "Dados importados",
+      description: `Candidato ${tse.nmUrnaCandidato || tse.nmCandidato} selecionado dos dados do TSE`,
+    });
+  }
+
   function resetForm() {
     setFormData({
       name: "",
@@ -112,6 +184,9 @@ export default function Candidates() {
     });
     setEditingCandidate(null);
     setIsDialogOpen(false);
+    setTseSearchQuery("");
+    setTseSearchResults([]);
+    setShowTseResults(false);
   }
 
   function handleEdit(candidate: Candidate) {
@@ -298,6 +373,71 @@ export default function Candidates() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!editingCandidate && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  Buscar nos Dados do TSE
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Digite o nome do candidato para buscar..."
+                    value={tseSearchQuery}
+                    onChange={(e) => setTseSearchQuery(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-tse-search"
+                  />
+                  {isTseSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {showTseResults && tseSearchResults.length > 0 && (
+                  <Card className="border shadow-md">
+                    <ScrollArea className="max-h-48">
+                      <div className="p-1">
+                        {tseSearchResults.map((tse, idx) => (
+                          <button
+                            key={`${tse.nrCandidato}-${tse.anoEleicao}-${idx}`}
+                            type="button"
+                            onClick={() => selectTseCandidate(tse)}
+                            className="w-full text-left p-2 rounded-md hover-elevate flex flex-col gap-1"
+                            data-testid={`tse-result-${idx}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-sm">
+                                {tse.nmUrnaCandidato || tse.nmCandidato}
+                              </span>
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {tse.nrCandidato}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                              <span>{tse.sgPartido}</span>
+                              <span>-</span>
+                              <span>{tse.dsCargo}</span>
+                              <span>-</span>
+                              <span>{tse.sgUf} {tse.anoEleicao}</span>
+                              {tse.qtVotosNominais && (
+                                <>
+                                  <span>-</span>
+                                  <span>{tse.qtVotosNominais.toLocaleString("pt-BR")} votos</span>
+                                </>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </Card>
+                )}
+                {showTseResults && tseSearchResults.length === 0 && tseSearchQuery.length >= 2 && !isTseSearching && (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum candidato encontrado nos dados importados do TSE.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">Nome Completo</Label>
               <Input

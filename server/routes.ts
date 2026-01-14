@@ -949,6 +949,24 @@ Responda em JSON com a seguinte estrutura:
     }
   });
 
+  app.get("/api/tse/search", requireAuth, async (req, res) => {
+    try {
+      const { q, year, uf, cargo } = req.query;
+      if (!q || typeof q !== "string" || q.length < 2) {
+        return res.json([]);
+      }
+      const candidates = await storage.searchTseCandidates(q, {
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        cargo: cargo ? parseInt(cargo as string) : undefined,
+      });
+      res.json(candidates);
+    } catch (error) {
+      console.error("TSE search error:", error);
+      res.status(500).json({ error: "Failed to search TSE candidates" });
+    }
+  });
+
   const processCSVImport = async (jobId: number, filePath: string) => {
     try {
       await storage.updateTseImportJob(jobId, { status: "running", startedAt: new Date() });
