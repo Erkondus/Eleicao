@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { useToast } from "@/hooks/use-toast";
@@ -240,11 +241,18 @@ export default function Scenarios() {
                         <PlayCircle className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <Button variant="ghost" size="icon" asChild data-testid={`button-alliances-scenario-${scenario.id}`}>
-                      <Link href={`/scenarios/${scenario.id}/alliances`}>
-                        <Handshake className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild data-testid={`button-alliances-scenario-${scenario.id}`}>
+                          <Link href={`/scenarios/${scenario.id}/alliances`}>
+                            <Handshake className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Federações e Coligações</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <Button
                       variant="ghost"
                       size="icon"
