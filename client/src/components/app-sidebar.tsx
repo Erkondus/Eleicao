@@ -11,6 +11,7 @@ import {
   LogOut,
   Shield,
   Upload,
+  BarChart3,
 } from "lucide-react";
 import {
   Sidebar,
@@ -38,6 +39,7 @@ const mainNavItems = [
 const simulationNavItems = [
   { title: "Simulações", url: "/simulations", icon: PlayCircle, permission: "run_simulations" },
   { title: "Previsões IA", url: "/predictions", icon: Brain, permission: "ai_predictions" },
+  { title: "Análise de Dados", url: "/data-analysis", icon: BarChart3, permission: null },
 ];
 
 const adminNavItems = [

@@ -1435,5 +1435,177 @@ Responda em JSON com a seguinte estrutura:
     }
   }
 
+  // Data Analysis endpoints
+  app.get("/api/analytics/summary", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType } = req.query;
+      const summary = await storage.getAnalyticsSummary({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+      });
+      res.json(summary);
+    } catch (error) {
+      console.error("Analytics summary error:", error);
+      res.status(500).json({ error: "Failed to fetch analytics summary" });
+    }
+  });
+
+  app.get("/api/analytics/votes-by-party", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, limit } = req.query;
+      const data = await storage.getVotesByParty({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        limit: limit ? parseInt(limit as string) : 20,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by party error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by party" });
+    }
+  });
+
+  app.get("/api/analytics/top-candidates", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, limit } = req.query;
+      const data = await storage.getTopCandidates({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        limit: limit ? parseInt(limit as string) : 20,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Top candidates error:", error);
+      res.status(500).json({ error: "Failed to fetch top candidates" });
+    }
+  });
+
+  app.get("/api/analytics/votes-by-state", requireAuth, async (req, res) => {
+    try {
+      const { year, electionType } = req.query;
+      const data = await storage.getVotesByState({
+        year: year ? parseInt(year as string) : undefined,
+        electionType: electionType as string | undefined,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by state error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by state" });
+    }
+  });
+
+  app.get("/api/analytics/votes-by-municipality", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, limit } = req.query;
+      const data = await storage.getVotesByMunicipality({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        limit: limit ? parseInt(limit as string) : 50,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by municipality error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by municipality" });
+    }
+  });
+
+  app.get("/api/analytics/election-years", requireAuth, async (req, res) => {
+    try {
+      const years = await storage.getAvailableElectionYears();
+      res.json(years);
+    } catch (error) {
+      console.error("Election years error:", error);
+      res.status(500).json({ error: "Failed to fetch election years" });
+    }
+  });
+
+  app.get("/api/analytics/states", requireAuth, async (req, res) => {
+    try {
+      const { year } = req.query;
+      const states = await storage.getAvailableStates(year ? parseInt(year as string) : undefined);
+      res.json(states);
+    } catch (error) {
+      console.error("States error:", error);
+      res.status(500).json({ error: "Failed to fetch states" });
+    }
+  });
+
+  app.get("/api/analytics/election-types", requireAuth, async (req, res) => {
+    try {
+      const { year } = req.query;
+      const types = await storage.getAvailableElectionTypes(year ? parseInt(year as string) : undefined);
+      res.json(types);
+    } catch (error) {
+      console.error("Election types error:", error);
+      res.status(500).json({ error: "Failed to fetch election types" });
+    }
+  });
+
+  app.get("/api/analytics/export/csv", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, reportType } = req.query;
+      const filters = {
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+      };
+
+      let data: any[];
+      let filename: string;
+
+      switch (reportType) {
+        case "parties":
+          data = await storage.getVotesByParty({ ...filters, limit: 10000 });
+          filename = "votos_por_partido.csv";
+          break;
+        case "candidates":
+          data = await storage.getTopCandidates({ ...filters, limit: 10000 });
+          filename = "candidatos_mais_votados.csv";
+          break;
+        case "states":
+          data = await storage.getVotesByState(filters);
+          filename = "votos_por_estado.csv";
+          break;
+        case "municipalities":
+          data = await storage.getVotesByMunicipality({ ...filters, limit: 10000 });
+          filename = "votos_por_municipio.csv";
+          break;
+        default:
+          return res.status(400).json({ error: "Invalid report type" });
+      }
+
+      if (data.length === 0) {
+        return res.status(404).json({ error: "No data found for the specified filters" });
+      }
+
+      const headers = Object.keys(data[0]);
+      const csvRows = [headers.join(",")];
+      for (const row of data) {
+        const values = headers.map((h) => {
+          const val = row[h];
+          if (val === null || val === undefined) return "";
+          const str = String(val);
+          return str.includes(",") || str.includes('"') || str.includes("\n")
+            ? `"${str.replace(/"/g, '""')}"`
+            : str;
+        });
+        csvRows.push(values.join(","));
+      }
+
+      await logAudit(req, "export", "analytics_csv", reportType as string, { filters, rowCount: data.length });
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send("\uFEFF" + csvRows.join("\n"));
+    } catch (error) {
+      console.error("Analytics CSV export error:", error);
+      res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
   return httpServer;
 }

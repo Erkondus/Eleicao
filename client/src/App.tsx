@@ -22,6 +22,7 @@ import Settings from "@/pages/settings";
 import Alliances from "@/pages/alliances";
 import TseImport from "@/pages/tse-import";
 import ScenarioCandidates from "@/pages/scenario-candidates";
+import DataAnalysis from "@/pages/data-analysis";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/users" component={Users} />
       <Route path="/settings" component={Settings} />
       <Route path="/tse-import" component={TseImport} />
+      <Route path="/data-analysis" component={DataAnalysis} />
       <Route component={NotFound} />
     </Switch>
   );

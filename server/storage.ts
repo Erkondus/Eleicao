@@ -497,6 +497,224 @@ export class DatabaseStorage implements IStorage {
       votes: votes ?? 0,
     });
   }
+
+  // Analytics methods
+  async getAnalyticsSummary(filters: { year?: number; uf?: string; electionType?: string }): Promise<{
+    totalVotes: number;
+    totalCandidates: number;
+    totalParties: number;
+    totalMunicipalities: number;
+  }> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [result] = await db
+      .select({
+        totalVotes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        totalCandidates: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+        totalParties: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})`,
+        totalMunicipalities: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.cdMunicipio})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause);
+
+    return {
+      totalVotes: Number(result?.totalVotes ?? 0),
+      totalCandidates: Number(result?.totalCandidates ?? 0),
+      totalParties: Number(result?.totalParties ?? 0),
+      totalMunicipalities: Number(result?.totalMunicipalities ?? 0),
+    };
+  }
+
+  async getVotesByParty(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+    party: string;
+    partyNumber: number | null;
+    votes: number;
+    candidateCount: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        party: tseCandidateVotes.sgPartido,
+        partyNumber: tseCandidateVotes.nrPartido,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(tseCandidateVotes.sgPartido, tseCandidateVotes.nrPartido)
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 20);
+
+    return results.map((r) => ({
+      party: r.party || "N/A",
+      partyNumber: r.partyNumber,
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+    }));
+  }
+
+  async getTopCandidates(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+    name: string;
+    nickname: string | null;
+    party: string | null;
+    number: number | null;
+    state: string | null;
+    position: string | null;
+    votes: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        name: tseCandidateVotes.nmCandidato,
+        nickname: tseCandidateVotes.nmUrnaCandidato,
+        party: tseCandidateVotes.sgPartido,
+        number: tseCandidateVotes.nrCandidato,
+        state: tseCandidateVotes.sgUf,
+        position: tseCandidateVotes.dsCargo,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(
+        tseCandidateVotes.nmCandidato,
+        tseCandidateVotes.nmUrnaCandidato,
+        tseCandidateVotes.sgPartido,
+        tseCandidateVotes.nrCandidato,
+        tseCandidateVotes.sgUf,
+        tseCandidateVotes.dsCargo
+      )
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 20);
+
+    return results.map((r) => ({
+      name: r.name || "N/A",
+      nickname: r.nickname,
+      party: r.party,
+      number: r.number,
+      state: r.state,
+      position: r.position,
+      votes: Number(r.votes),
+    }));
+  }
+
+  async getVotesByState(filters: { year?: number; electionType?: string }): Promise<{
+    state: string;
+    votes: number;
+    candidateCount: number;
+    partyCount: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        state: tseCandidateVotes.sgUf,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+        partyCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(tseCandidateVotes.sgUf)
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`);
+
+    return results.map((r) => ({
+      state: r.state || "N/A",
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+      partyCount: Number(r.partyCount),
+    }));
+  }
+
+  async getVotesByMunicipality(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+    municipality: string;
+    state: string | null;
+    votes: number;
+    candidateCount: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        municipality: tseCandidateVotes.nmMunicipio,
+        state: tseCandidateVotes.sgUf,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(tseCandidateVotes.nmMunicipio, tseCandidateVotes.sgUf)
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 50);
+
+    return results.map((r) => ({
+      municipality: r.municipality || "N/A",
+      state: r.state,
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+    }));
+  }
+
+  async getAvailableElectionYears(): Promise<number[]> {
+    const results = await db
+      .selectDistinct({ year: tseCandidateVotes.anoEleicao })
+      .from(tseCandidateVotes)
+      .where(sql`${tseCandidateVotes.anoEleicao} IS NOT NULL`)
+      .orderBy(sql`${tseCandidateVotes.anoEleicao} DESC`);
+
+    return results.map((r) => r.year!).filter(Boolean);
+  }
+
+  async getAvailableStates(year?: number): Promise<string[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.sgUf} IS NOT NULL`];
+    if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
+
+    const results = await db
+      .selectDistinct({ state: tseCandidateVotes.sgUf })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.sgUf);
+
+    return results.map((r) => r.state!).filter(Boolean);
+  }
+
+  async getAvailableElectionTypes(year?: number): Promise<string[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.nmTipoEleicao} IS NOT NULL`];
+    if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
+
+    const results = await db
+      .selectDistinct({ type: tseCandidateVotes.nmTipoEleicao })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.nmTipoEleicao);
+
+    return results.map((r) => r.type!).filter(Boolean);
+  }
 }
 
 export const storage = new DatabaseStorage();
