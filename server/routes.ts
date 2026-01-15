@@ -950,6 +950,281 @@ Responda em JSON com a seguinte estrutura:
     }
   });
 
+  // AI Assistant for natural language queries about electoral data
+  app.post("/api/ai/assistant", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { question, filters } = req.body;
+      
+      if (!question || typeof question !== "string" || question.length < 5) {
+        return res.status(400).json({ error: "Please provide a valid question (at least 5 characters)" });
+      }
+
+      if (question.length > 500) {
+        return res.status(400).json({ error: "Question is too long (max 500 characters)" });
+      }
+
+      // Fetch data based on filters to provide context to the AI
+      const summary = await storage.getAnalyticsSummary(filters || {});
+      const votesByParty = await storage.getVotesByParty({ ...(filters || {}), limit: 15 });
+      const topCandidates = await storage.getTopCandidates({ ...(filters || {}), limit: 10 });
+      const votesByState = await storage.getVotesByState(filters || {});
+
+      const dataContext = `
+DADOS ELEITORAIS DISPONÍVEIS:
+
+Resumo:
+- Total de Votos: ${summary.totalVotes.toLocaleString("pt-BR")}
+- Candidatos: ${summary.totalCandidates.toLocaleString("pt-BR")}
+- Partidos: ${summary.totalParties}
+- Municípios: ${summary.totalMunicipalities.toLocaleString("pt-BR")}
+
+Votos por Partido (Top 15):
+${votesByParty.map((p, i) => `${i + 1}. ${p.party} (${p.partyNumber}): ${p.votes.toLocaleString("pt-BR")} votos, ${p.candidateCount} candidatos`).join("\n")}
+
+Candidatos Mais Votados (Top 10):
+${topCandidates.map((c, i) => `${i + 1}. ${c.nickname || c.name} (${c.party}) - ${c.state}: ${c.votes.toLocaleString("pt-BR")} votos`).join("\n")}
+
+Votos por Estado:
+${votesByState.map((s) => `- ${s.state}: ${s.votes.toLocaleString("pt-BR")} votos, ${s.candidateCount} candidatos, ${s.partyCount} partidos`).join("\n")}
+
+Filtros Aplicados: ${JSON.stringify(filters || { info: "Todos os dados" })}
+`;
+
+      const openai = new OpenAI();
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um assistente especializado em análise de dados eleitorais brasileiros do TSE.
+Responda perguntas sobre os dados eleitorais usando APENAS as informações fornecidas abaixo.
+Seja preciso, cite números específicos quando disponíveis, e responda em português.
+Se não houver dados suficientes para responder, informe isso educadamente.
+Não invente dados que não estejam no contexto fornecido.`
+          },
+          {
+            role: "user",
+            content: `${dataContext}\n\nPERGUNTA DO USUÁRIO: ${question}`
+          }
+        ],
+        max_tokens: 1000,
+      });
+
+      const answer = completion.choices[0]?.message?.content;
+      if (!answer) {
+        throw new Error("No response from AI");
+      }
+
+      await logAudit(req, "ai_query", "assistant", undefined, { question, filters });
+
+      res.json({
+        question,
+        answer,
+        filters,
+        dataContext: {
+          totalVotes: summary.totalVotes,
+          totalParties: summary.totalParties,
+          totalCandidates: summary.totalCandidates,
+        },
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("AI Assistant error:", error);
+      res.status(500).json({ error: "Failed to process question" });
+    }
+  });
+
+  // AI Historical Prediction based on trends
+  app.post("/api/ai/predict-historical", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { filters, targetYear } = req.body;
+
+      // Get historical data
+      const availableYears = await storage.getAvailableElectionYears();
+      if (availableYears.length < 1) {
+        return res.status(400).json({ error: "Insufficient historical data for predictions" });
+      }
+
+      const historicalData: any[] = [];
+      for (const year of availableYears.slice(0, 4)) {
+        const data = await storage.getVotesByParty({ 
+          year, 
+          uf: filters?.uf, 
+          electionType: filters?.electionType,
+          limit: 20 
+        });
+        historicalData.push({ year, parties: data });
+      }
+
+      const openai = new OpenAI();
+      const prompt = `Você é um analista político especializado em tendências eleitorais brasileiras.
+Analise os dados históricos de votação abaixo e forneça previsões para futuras eleições.
+
+DADOS HISTÓRICOS:
+${historicalData.map((h) => `
+Ano ${h.year}:
+${h.parties.map((p: any) => `- ${p.party}: ${p.votes.toLocaleString("pt-BR")} votos (${p.candidateCount} candidatos)`).join("\n")}`).join("\n")}
+
+Anos Disponíveis: ${availableYears.join(", ")}
+Filtros: ${JSON.stringify(filters || {})}
+
+Responda em JSON com a estrutura:
+{
+  "analysis": "Análise detalhada das tendências observadas (2-3 parágrafos)",
+  "trends": [
+    {
+      "party": "sigla",
+      "trend": "crescimento" | "declínio" | "estável",
+      "changePercent": número,
+      "observation": "breve observação"
+    }
+  ],
+  "predictions": [
+    {
+      "party": "sigla",
+      "expectedPerformance": "forte" | "moderado" | "fraco",
+      "confidence": número_0_a_1,
+      "reasoning": "justificativa"
+    }
+  ],
+  "insights": ["insight 1", "insight 2", "insight 3"]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No response from AI");
+      }
+
+      const prediction = JSON.parse(content);
+      prediction.historicalYears = availableYears;
+      prediction.filters = filters;
+      prediction.generatedAt = new Date().toISOString();
+
+      await logAudit(req, "ai_prediction", "historical", undefined, { filters, years: availableYears });
+
+      res.json(prediction);
+    } catch (error: any) {
+      console.error("AI Historical Prediction error:", error);
+      res.status(500).json({ error: "Failed to generate historical prediction" });
+    }
+  });
+
+  // AI Anomaly Detection in voting data
+  app.post("/api/ai/anomalies", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { filters } = req.body;
+
+      // Get data for anomaly analysis
+      const votesByParty = await storage.getVotesByParty({ ...(filters || {}), limit: 30 });
+      const topCandidates = await storage.getTopCandidates({ ...(filters || {}), limit: 50 });
+      const votesByMunicipality = await storage.getVotesByMunicipality({ ...(filters || {}), limit: 100 });
+      const summary = await storage.getAnalyticsSummary(filters || {});
+
+      // Calculate basic statistics for anomaly detection
+      const partyVotes = votesByParty.map((p) => p.votes);
+      const avgVotes = partyVotes.length > 0 ? partyVotes.reduce((a, b) => a + b, 0) / partyVotes.length : 0;
+      const stdDev = partyVotes.length > 0 
+        ? Math.sqrt(partyVotes.map((v) => Math.pow(v - avgVotes, 2)).reduce((a, b) => a + b, 0) / partyVotes.length)
+        : 0;
+
+      const municipalityVotes = votesByMunicipality.map((m) => m.votes);
+      const avgMuniVotes = municipalityVotes.length > 0 ? municipalityVotes.reduce((a, b) => a + b, 0) / municipalityVotes.length : 0;
+      const muniStdDev = municipalityVotes.length > 0
+        ? Math.sqrt(municipalityVotes.map((v) => Math.pow(v - avgMuniVotes, 2)).reduce((a, b) => a + b, 0) / municipalityVotes.length)
+        : 0;
+
+      // Statistical flags
+      const statisticalFlags = {
+        partyOutliers: votesByParty.filter((p) => Math.abs(p.votes - avgVotes) > 2 * stdDev).map((p) => ({
+          party: p.party,
+          votes: p.votes,
+          zScore: stdDev > 0 ? (p.votes - avgVotes) / stdDev : 0,
+        })),
+        municipalityOutliers: votesByMunicipality.filter((m) => Math.abs(m.votes - avgMuniVotes) > 2.5 * muniStdDev).slice(0, 10).map((m) => ({
+          municipality: m.municipality,
+          state: m.state,
+          votes: m.votes,
+          zScore: muniStdDev > 0 ? (m.votes - avgMuniVotes) / muniStdDev : 0,
+        })),
+        candidateConcentration: topCandidates.slice(0, 5).map((c) => ({
+          candidate: c.nickname || c.name,
+          party: c.party,
+          votes: c.votes,
+          percentOfTotal: summary.totalVotes > 0 ? ((c.votes / summary.totalVotes) * 100).toFixed(2) : 0,
+        })),
+      };
+
+      const openai = new OpenAI();
+      const prompt = `Você é um especialista em detecção de anomalias em dados eleitorais brasileiros.
+Analise os dados estatísticos abaixo e identifique possíveis anomalias, padrões incomuns ou pontos que merecem investigação.
+NÃO afirme que há fraude - apenas aponte padrões estatisticamente incomuns que podem merecer verificação.
+
+DADOS ESTATÍSTICOS:
+Total de Votos: ${summary.totalVotes.toLocaleString("pt-BR")}
+Média de votos por partido: ${avgVotes.toLocaleString("pt-BR")}
+Desvio padrão (partidos): ${stdDev.toLocaleString("pt-BR")}
+
+Partidos com votação fora do padrão (>2 desvios):
+${JSON.stringify(statisticalFlags.partyOutliers, null, 2)}
+
+Municípios com votação atípica (>2.5 desvios):
+${JSON.stringify(statisticalFlags.municipalityOutliers, null, 2)}
+
+Concentração de votos (top 5 candidatos):
+${JSON.stringify(statisticalFlags.candidateConcentration, null, 2)}
+
+Responda em JSON:
+{
+  "overallRisk": "baixo" | "médio" | "alto",
+  "summary": "Resumo da análise em 1-2 parágrafos",
+  "anomalies": [
+    {
+      "type": "partido" | "município" | "candidato" | "distribuição",
+      "severity": "baixa" | "média" | "alta",
+      "description": "descrição da anomalia",
+      "recommendation": "recomendação de verificação"
+    }
+  ],
+  "observations": ["observação 1", "observação 2"]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No response from AI");
+      }
+
+      const analysis = JSON.parse(content);
+      analysis.statistics = {
+        avgVotesPerParty: avgVotes,
+        stdDevParty: stdDev,
+        avgVotesPerMunicipality: avgMuniVotes,
+        stdDevMunicipality: muniStdDev,
+      };
+      analysis.rawFlags = statisticalFlags;
+      analysis.filters = filters;
+      analysis.generatedAt = new Date().toISOString();
+
+      await logAudit(req, "ai_anomaly", "detection", undefined, { filters, riskLevel: analysis.overallRisk });
+
+      res.json(analysis);
+    } catch (error: any) {
+      console.error("AI Anomaly Detection error:", error);
+      res.status(500).json({ error: "Failed to detect anomalies" });
+    }
+  });
+
   app.get("/api/imports/tse", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const jobs = await storage.getTseImportJobs();

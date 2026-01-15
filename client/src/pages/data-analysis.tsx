@@ -1,12 +1,14 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import {
   BarChart,
   Bar,
@@ -37,6 +39,13 @@ import {
   Vote,
   Loader2,
   Filter,
+  Brain,
+  MessageSquare,
+  AlertTriangle,
+  Sparkles,
+  Send,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -60,6 +69,12 @@ export default function DataAnalysis() {
   const [selectedState, setSelectedState] = useState<string>("all");
   const [selectedElectionType, setSelectedElectionType] = useState<string>("all");
   const [exportLoading, setExportLoading] = useState<string | null>(null);
+  
+  // AI States
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState<{ question: string; answer: string } | null>(null);
+  const [historicalPrediction, setHistoricalPrediction] = useState<any>(null);
+  const [anomalyReport, setAnomalyReport] = useState<any>(null);
 
   const filters = useMemo(() => {
     const f: Record<string, string> = {};
@@ -137,6 +152,55 @@ export default function DataAnalysis() {
   }[]>({
     queryKey: [`/api/analytics/votes-by-municipality${queryString}`],
   });
+
+  // AI Mutations
+  const assistantMutation = useMutation({
+    mutationFn: async (question: string) => {
+      const res = await apiRequest("POST", "/api/ai/assistant", { question, filters });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setAiAnswer({ question: data.question, answer: data.answer });
+      toast({ title: "Resposta gerada", description: "O assistente respondeu sua pergunta." });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao processar pergunta.", variant: "destructive" });
+    },
+  });
+
+  const predictionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ai/predict-historical", { filters });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setHistoricalPrediction(data);
+      toast({ title: "Previsão gerada", description: "Análise de tendências concluída." });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao gerar previsão.", variant: "destructive" });
+    },
+  });
+
+  const anomalyMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ai/anomalies", { filters });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setAnomalyReport(data);
+      toast({ title: "Análise concluída", description: "Relatório de anomalias gerado." });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha na detecção de anomalias.", variant: "destructive" });
+    },
+  });
+
+  const handleAskQuestion = () => {
+    if (aiQuestion.trim().length >= 5) {
+      assistantMutation.mutate(aiQuestion);
+    }
+  };
 
   const handleExportCSV = async (reportType: string) => {
     setExportLoading(reportType);
@@ -382,7 +446,7 @@ export default function DataAnalysis() {
 
       {hasData && (
         <Tabs defaultValue="parties" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="parties" data-testid="tab-parties">
               <Building2 className="h-4 w-4 mr-2" />
               Partidos
@@ -398,6 +462,10 @@ export default function DataAnalysis() {
             <TabsTrigger value="municipalities" data-testid="tab-municipalities">
               <TrendingUp className="h-4 w-4 mr-2" />
               Municípios
+            </TabsTrigger>
+            <TabsTrigger value="ai" data-testid="tab-ai">
+              <Brain className="h-4 w-4 mr-2" />
+              IA
             </TabsTrigger>
           </TabsList>
 
@@ -695,6 +763,192 @@ export default function DataAnalysis() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="ai" className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    Assistente de IA
+                  </CardTitle>
+                  <CardDescription>
+                    Faça perguntas sobre os dados eleitorais em linguagem natural
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <Textarea
+                      placeholder="Ex: Quais partidos tiveram mais votos? Quem foi o candidato mais votado?"
+                      value={aiQuestion}
+                      onChange={(e) => setAiQuestion(e.target.value)}
+                      className="flex-1"
+                      data-testid="input-ai-question"
+                    />
+                    <Button
+                      onClick={handleAskQuestion}
+                      disabled={assistantMutation.isPending || aiQuestion.trim().length < 5}
+                      data-testid="button-ask-ai"
+                    >
+                      {assistantMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {aiAnswer && (
+                    <div className="p-4 rounded-lg bg-muted/50 space-y-2" data-testid="container-ai-answer">
+                      <p className="text-sm font-medium text-muted-foreground" data-testid="text-ai-question">
+                        Pergunta: {aiAnswer.question}
+                      </p>
+                      <p className="text-sm whitespace-pre-wrap" data-testid="text-ai-answer">{aiAnswer.answer}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-yellow-500" />
+                    Previsão Histórica
+                  </CardTitle>
+                  <CardDescription>
+                    Analise tendências baseadas em dados históricos
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button
+                    onClick={() => predictionMutation.mutate()}
+                    disabled={predictionMutation.isPending}
+                    className="w-full"
+                    data-testid="button-generate-prediction"
+                  >
+                    {predictionMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analisando...
+                      </>
+                    ) : (
+                      <>
+                        <TrendingUp className="h-4 w-4 mr-2" />
+                        Gerar Previsão
+                      </>
+                    )}
+                  </Button>
+                  {historicalPrediction && (
+                    <div className="space-y-4" data-testid="container-prediction">
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-sm whitespace-pre-wrap" data-testid="text-prediction-analysis">{historicalPrediction.analysis}</p>
+                      </div>
+                      {historicalPrediction.trends && (
+                        <div className="space-y-2" data-testid="container-prediction-trends">
+                          <p className="text-sm font-medium">Tendências:</p>
+                          {historicalPrediction.trends.slice(0, 5).map((trend: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-sm" data-testid={`item-trend-${i}`}>
+                              {trend.trend === "crescimento" && <TrendingUp className="h-4 w-4 text-green-500" />}
+                              {trend.trend === "declínio" && <TrendingDown className="h-4 w-4 text-red-500" />}
+                              {trend.trend === "estável" && <Minus className="h-4 w-4 text-gray-500" />}
+                              <span className="font-medium">{trend.party}</span>
+                              <span className="text-muted-foreground">{trend.observation}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {historicalPrediction.insights && (
+                        <div className="space-y-1" data-testid="container-prediction-insights">
+                          <p className="text-sm font-medium">Insights:</p>
+                          {historicalPrediction.insights.map((insight: string, i: number) => (
+                            <p key={i} className="text-sm text-muted-foreground" data-testid={`text-insight-${i}`}>• {insight}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-orange-500" />
+                    Detecção de Anomalias
+                  </CardTitle>
+                  <CardDescription>
+                    Identifique padrões incomuns nos dados de votação
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button
+                    onClick={() => anomalyMutation.mutate()}
+                    disabled={anomalyMutation.isPending}
+                    className="w-full"
+                    variant="outline"
+                    data-testid="button-detect-anomalies"
+                  >
+                    {anomalyMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analisando...
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        Detectar Anomalias
+                      </>
+                    )}
+                  </Button>
+                  {anomalyReport && (
+                    <div className="space-y-4" data-testid="container-anomaly">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Risco Geral:</span>
+                        <Badge
+                          variant={
+                            anomalyReport.overallRisk === "alto" ? "destructive" :
+                            anomalyReport.overallRisk === "médio" ? "secondary" : "outline"
+                          }
+                          data-testid="badge-anomaly-risk"
+                        >
+                          {anomalyReport.overallRisk?.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-sm whitespace-pre-wrap" data-testid="text-anomaly-summary">{anomalyReport.summary}</p>
+                      </div>
+                      {anomalyReport.anomalies && anomalyReport.anomalies.length > 0 && (
+                        <div className="space-y-2" data-testid="container-anomaly-list">
+                          <p className="text-sm font-medium">Anomalias Detectadas:</p>
+                          {anomalyReport.anomalies.slice(0, 5).map((anomaly: any, i: number) => (
+                            <div key={i} className="p-2 rounded border text-sm" data-testid={`item-anomaly-${i}`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline" className="text-xs">{anomaly.type}</Badge>
+                                <Badge
+                                  variant={anomaly.severity === "alta" ? "destructive" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {anomaly.severity}
+                                </Badge>
+                              </div>
+                              <p className="text-muted-foreground">{anomaly.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {anomalyReport.observations && (
+                        <div className="space-y-1" data-testid="container-anomaly-observations">
+                          <p className="text-sm font-medium">Observações:</p>
+                          {anomalyReport.observations.map((obs: string, i: number) => (
+                            <p key={i} className="text-sm text-muted-foreground" data-testid={`text-observation-${i}`}>• {obs}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       )}
