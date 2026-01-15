@@ -205,16 +205,23 @@ export default function ScenarioCandidates() {
     }
 
     if (matchingCandidate && matchingParty) {
+      // Soma os votos de todos os registros do candidato no ano selecionado
+      const yearFilter = selectedYear && selectedYear !== "all" ? parseInt(selectedYear) : tse.anoEleicao;
+      const candidateRecords = tseSearchResults.filter(
+        (r) => r.nrCandidato === tse.nrCandidato && r.anoEleicao === yearFilter
+      );
+      const totalVotes = candidateRecords.reduce((sum, r) => sum + (r.qtVotosNominais || 0), 0);
+
       setFormData({
         candidateId: String(matchingCandidate.id),
         partyId: String(matchingParty.id),
         ballotNumber: String(tse.nrCandidato || matchingCandidate.number),
         nickname: tse.nmUrnaCandidato || "",
-        votes: String(tse.qtVotosNominais || 0),
+        votes: String(totalVotes),
       });
       toast({
         title: "Dados importados",
-        description: `Candidato ${tse.nmUrnaCandidato || tse.nmCandidato} selecionado`,
+        description: `Candidato ${tse.nmUrnaCandidato || tse.nmCandidato} selecionado com ${totalVotes.toLocaleString("pt-BR")} votos em ${yearFilter}`,
       });
     } else {
       toast({
