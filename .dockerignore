@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.gitignore
+*.md
+.env
+.env.*
+uploads/*
+!uploads/.gitkeep
+.replit
+replit.nix
+.upm
+.cache
