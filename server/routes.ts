@@ -1019,6 +1019,10 @@ Responda em JSON com a seguinte estrutura:
         return res.status(400).json({ error: "URL must be from TSE domain (cdn.tse.jus.br or dadosabertos.tse.jus.br)" });
       }
 
+      if (!url.toLowerCase().endsWith(".zip")) {
+        return res.status(400).json({ error: "URL must point to a .zip file" });
+      }
+
       const filename = path.basename(url);
       const job = await storage.createTseImportJob({
         filename: `[URL] ${filename}`,
@@ -1103,7 +1107,7 @@ Responda em JSON com a seguinte estrutura:
       console.error("URL import error:", error);
       await storage.updateTseImportJob(jobId, {
         status: "failed",
-        finishedAt: new Date(),
+        completedAt: new Date(),
         errorMessage: error.message || "Unknown error",
       });
     }
@@ -1214,7 +1218,8 @@ Responda em JSON com a seguinte estrutura:
       } catch (err: any) {
         errorCount++;
         await storage.createTseImportError({
-          jobId,
+          importJobId: jobId,
+          errorType: "parse_error",
           rowNumber: rowCount,
           errorMessage: err.message || "Parse error",
           rawData: JSON.stringify(row).substring(0, 1000),
@@ -1228,9 +1233,9 @@ Responda em JSON com a seguinte estrutura:
 
     await storage.updateTseImportJob(jobId, {
       status: "completed",
-      finishedAt: new Date(),
+      completedAt: new Date(),
       processedRows: rowCount,
-      errorRows: errorCount,
+      errorCount: errorCount,
     });
   };
 

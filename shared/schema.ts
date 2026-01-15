@@ -253,6 +253,7 @@ export const tseImportJobs = pgTable("tse_import_jobs", {
   totalRows: integer("total_rows").default(0),
   processedRows: integer("processed_rows").default(0),
   errorCount: integer("error_count").default(0),
+  errorMessage: text("error_message"),
   electionYear: integer("election_year"),
   electionType: text("election_type"),
   uf: text("uf"),

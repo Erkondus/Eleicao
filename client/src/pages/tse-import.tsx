@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database, Link, Download } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,8 @@ export default function TseImport() {
   const [electionYear, setElectionYear] = useState<string>("");
   const [uf, setUf] = useState<string>("");
   const [errorsDialogJob, setErrorsDialogJob] = useState<TseImportJob | null>(null);
+  const [urlInput, setUrlInput] = useState<string>("");
+  const [urlYear, setUrlYear] = useState<string>("");
 
   const { data: jobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery<TseImportJob[]>({
     queryKey: ["/api/imports/tse"],
@@ -94,6 +97,39 @@ export default function TseImport() {
     },
   });
 
+  const urlImportMutation = useMutation({
+    mutationFn: async (data: { url: string; electionYear?: string }) => {
+      return apiRequest("POST", "/api/imports/tse/url", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Download iniciado", description: "O arquivo está sendo baixado e processado." });
+      setUrlInput("");
+      setUrlYear("");
+      queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro na importação", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleUrlImport = () => {
+    if (!urlInput) {
+      toast({ title: "Digite uma URL", variant: "destructive" });
+      return;
+    }
+    urlImportMutation.mutate({ url: urlInput, electionYear: urlYear || undefined });
+  };
+
+  const generateTseUrl = (year: string) => {
+    return `https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_candidato_munzona/votacao_candidato_munzona_${year}.zip`;
+  };
+
+  const handleQuickImport = (year: string) => {
+    const url = generateTseUrl(year);
+    setUrlInput(url);
+    setUrlYear(year);
+  };
+
   const handleUpload = () => {
     if (!selectedFile) {
       toast({ title: "Selecione um arquivo", variant: "destructive" });
@@ -112,6 +148,10 @@ export default function TseImport() {
     switch (status) {
       case "pending":
         return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>;
+      case "downloading":
+        return <Badge variant="default"><Download className="h-3 w-3 mr-1 animate-pulse" />Baixando</Badge>;
+      case "extracting":
+        return <Badge variant="default"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Extraindo</Badge>;
       case "running":
         return <Badge variant="default"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Processando</Badge>;
       case "completed":
@@ -228,6 +268,80 @@ export default function TseImport() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link className="h-5 w-5" />
+              Importar via URL do TSE
+            </CardTitle>
+            <CardDescription>
+              Baixe e importe arquivos ZIP diretamente do repositório do TSE
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Importação Rápida</Label>
+              <div className="flex flex-wrap gap-2">
+                {[2024, 2022, 2020, 2018].map((year) => (
+                  <Button
+                    key={year}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleQuickImport(String(year))}
+                    data-testid={`button-quick-import-${year}`}
+                  >
+                    {year}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="url-input">URL do Arquivo ZIP</Label>
+              <Input
+                id="url-input"
+                type="url"
+                placeholder="https://cdn.tse.jus.br/estatistica/..."
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                data-testid="input-tse-url"
+              />
+              <p className="text-xs text-muted-foreground">
+                Cole a URL de um arquivo .zip do repositório de dados abertos do TSE
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Ano da Eleição</Label>
+              <Select value={urlYear} onValueChange={setUrlYear}>
+                <SelectTrigger data-testid="select-url-year">
+                  <SelectValue placeholder="Selecione o ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ELECTION_YEARS.map((year) => (
+                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              onClick={handleUrlImport}
+              disabled={!urlInput || urlImportMutation.isPending}
+              className="w-full"
+              data-testid="button-import-url"
+            >
+              {urlImportMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Iniciando...</>
+              ) : (
+                <><Download className="h-4 w-4 mr-2" />Baixar e Importar</>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-1">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
