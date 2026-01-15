@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Building2 } from "lucide-react";
+import { Plus, Edit, Trash2, Building2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -214,6 +214,18 @@ export default function Parties() {
             : undefined
         }
       />
+
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          onClick={() => window.open("/api/parties/export/csv", "_blank")}
+          disabled={!parties || parties.length === 0}
+          data-testid="button-export-parties-csv"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Exportar CSV
+        </Button>
+      </div>
 
       <Card>
         <CardContent className="p-6">

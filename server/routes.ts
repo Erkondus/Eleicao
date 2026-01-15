@@ -260,6 +260,25 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/parties/export/csv", requireAuth, async (req, res) => {
+    try {
+      const parties = await storage.getParties();
+      
+      const csvHeader = "Numero;Sigla;Nome;Cor;Coligacao;Ativo;Criado_Em\n";
+      const csvRows = parties.map(p => 
+        `${p.number};"${p.abbreviation}";"${p.name}";"${p.color}";"${p.coalition || ''}";"${p.active ? 'Sim' : 'Nao'}";"${p.createdAt}"`
+      ).join("\n");
+      
+      const csv = csvHeader + csvRows;
+      
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=partidos.csv");
+      res.send("\uFEFF" + csv);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to export parties" });
+    }
+  });
+
   app.post("/api/parties", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
       const party = await storage.createParty({
