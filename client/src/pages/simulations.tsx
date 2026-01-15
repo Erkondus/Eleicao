@@ -90,8 +90,11 @@ export default function Simulations() {
         candidateVotes,
       });
       
-      const result = response as SimulationResult;
-      setSimulationResult(result);
+      const result = response as unknown as SimulationResult;
+      setSimulationResult({
+        ...result,
+        partyResults: result.partyResults ?? [],
+      });
       toast({ title: "Simulação concluída", description: "Os resultados foram calculados com sucesso" });
     } catch (error) {
       toast({ title: "Erro", description: "Falha ao calcular simulação", variant: "destructive" });
@@ -119,12 +122,12 @@ export default function Simulations() {
     },
   });
 
-  const chartData = simulationResult?.partyResults.map((pr) => ({
+  const chartData = (simulationResult?.partyResults ?? []).map((pr) => ({
     name: (pr as any).abbreviation || pr.partyName.substring(0, 5),
     vagas: pr.totalSeats,
     votos: pr.totalVotes,
     color: (pr as any).color || "#003366",
-  })) || [];
+  }));
 
   return (
     <div className="space-y-6">
@@ -360,7 +363,7 @@ export default function Simulations() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {simulationResult.partyResults.map((pr, idx) => (
+                      {(simulationResult.partyResults ?? []).map((pr, idx) => (
                         <TableRow key={pr.partyId}>
                           <TableCell className="font-mono">{idx + 1}</TableCell>
                           <TableCell>
@@ -423,7 +426,7 @@ export default function Simulations() {
 
               <TabsContent value="elected" className="mt-4">
                 <div className="space-y-4">
-                  {simulationResult.partyResults.filter((pr) => pr.totalSeats > 0).map((pr) => (
+                  {(simulationResult.partyResults ?? []).filter((pr) => pr.totalSeats > 0).map((pr) => (
                     <div key={pr.partyId} className="border rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <div
