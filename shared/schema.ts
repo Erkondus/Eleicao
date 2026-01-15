@@ -352,3 +352,26 @@ export type InsertTseCandidateVote = z.infer<typeof insertTseCandidateVoteSchema
 export type TseCandidateVote = typeof tseCandidateVotes.$inferSelect;
 export type InsertTseImportError = z.infer<typeof insertTseImportErrorSchema>;
 export type TseImportError = typeof tseImportErrors.$inferSelect;
+
+// Saved Reports
+export const savedReports = pgTable("saved_reports", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  filters: jsonb("filters").notNull(),
+  columns: jsonb("columns").notNull(),
+  chartType: text("chart_type").default("bar"),
+  sortBy: text("sort_by"),
+  sortOrder: text("sort_order").default("desc"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const savedReportsRelations = relations(savedReports, ({ one }) => ({
+  createdByUser: one(users, { fields: [savedReports.createdBy], references: [users.id] }),
+}));
+
+export const insertSavedReportSchema = createInsertSchema(savedReports).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSavedReport = z.infer<typeof insertSavedReportSchema>;
+export type SavedReport = typeof savedReports.$inferSelect;

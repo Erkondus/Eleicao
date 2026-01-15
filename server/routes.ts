@@ -1882,5 +1882,162 @@ Responda em JSON:
     }
   });
 
+  // Advanced filter endpoints
+  app.get("/api/analytics/positions", requireAuth, async (req, res) => {
+    try {
+      const { year, uf } = req.query;
+      const positions = await storage.getAvailablePositions({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+      });
+      res.json(positions);
+    } catch (error) {
+      console.error("Positions error:", error);
+      res.status(500).json({ error: "Failed to fetch positions" });
+    }
+  });
+
+  app.get("/api/analytics/parties-list", requireAuth, async (req, res) => {
+    try {
+      const { year, uf } = req.query;
+      const parties = await storage.getAvailableParties({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+      });
+      res.json(parties);
+    } catch (error) {
+      console.error("Parties list error:", error);
+      res.status(500).json({ error: "Failed to fetch parties" });
+    }
+  });
+
+  app.get("/api/analytics/advanced", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, position, party, minVotes, maxVotes, limit } = req.query;
+      const result = await storage.getAdvancedAnalytics({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        position: position as string | undefined,
+        party: party as string | undefined,
+        minVotes: minVotes ? parseInt(minVotes as string) : undefined,
+        maxVotes: maxVotes ? parseInt(maxVotes as string) : undefined,
+        limit: limit ? parseInt(limit as string) : 100,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Advanced analytics error:", error);
+      res.status(500).json({ error: "Failed to fetch advanced analytics" });
+    }
+  });
+
+  app.post("/api/analytics/compare", requireAuth, async (req, res) => {
+    try {
+      const { years, states, groupBy } = req.body;
+      if (!groupBy || !["party", "state", "position"].includes(groupBy)) {
+        return res.status(400).json({ error: "Invalid groupBy parameter" });
+      }
+      const result = await storage.getComparisonData({
+        years: years?.map((y: string | number) => typeof y === "string" ? parseInt(y) : y),
+        states,
+        groupBy,
+      });
+      await logAudit(req, "compare", "analytics", undefined, { years, states, groupBy });
+      res.json(result);
+    } catch (error) {
+      console.error("Comparison error:", error);
+      res.status(500).json({ error: "Failed to get comparison data" });
+    }
+  });
+
+  // Saved Reports CRUD
+  app.get("/api/reports", requireAuth, async (req, res) => {
+    try {
+      const reports = await storage.getSavedReports(req.user?.id);
+      res.json(reports);
+    } catch (error) {
+      console.error("Get reports error:", error);
+      res.status(500).json({ error: "Failed to fetch reports" });
+    }
+  });
+
+  app.get("/api/reports/:id", requireAuth, async (req, res) => {
+    try {
+      const report = await storage.getSavedReportById(parseInt(req.params.id));
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error("Get report error:", error);
+      res.status(500).json({ error: "Failed to fetch report" });
+    }
+  });
+
+  app.post("/api/reports", requireAuth, async (req, res) => {
+    try {
+      const { name, description, filters, columns, chartType, sortBy, sortOrder } = req.body;
+      if (!name || !filters || !columns) {
+        return res.status(400).json({ error: "Name, filters and columns are required" });
+      }
+      const report = await storage.createSavedReport({
+        name,
+        description,
+        filters,
+        columns,
+        chartType: chartType || "bar",
+        sortBy,
+        sortOrder: sortOrder || "desc",
+        createdBy: req.user?.id,
+      });
+      await logAudit(req, "create", "saved_report", String(report.id), { name });
+      res.status(201).json(report);
+    } catch (error) {
+      console.error("Create report error:", error);
+      res.status(500).json({ error: "Failed to create report" });
+    }
+  });
+
+  app.put("/api/reports/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getSavedReportById(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      const { name, description, filters, columns, chartType, sortBy, sortOrder } = req.body;
+      const report = await storage.updateSavedReport(id, {
+        name,
+        description,
+        filters,
+        columns,
+        chartType,
+        sortBy,
+        sortOrder,
+      });
+      await logAudit(req, "update", "saved_report", String(id), { name });
+      res.json(report);
+    } catch (error) {
+      console.error("Update report error:", error);
+      res.status(500).json({ error: "Failed to update report" });
+    }
+  });
+
+  app.delete("/api/reports/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getSavedReportById(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      await storage.deleteSavedReport(id);
+      await logAudit(req, "delete", "saved_report", String(id), { name: existing.name });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete report error:", error);
+      res.status(500).json({ error: "Failed to delete report" });
+    }
+  });
+
   return httpServer;
 }

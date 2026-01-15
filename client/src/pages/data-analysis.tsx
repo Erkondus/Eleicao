@@ -7,6 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -46,7 +52,16 @@ import {
   Send,
   TrendingDown,
   Minus,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  FolderOpen,
+  Trash2,
+  GitCompare,
+  SlidersHorizontal,
+  ZoomIn,
 } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -56,6 +71,52 @@ const CHART_COLORS = [
   "#2ecc71", "#27ae60", "#1e8449", "#145a32", "#0d3d22",
   "#9b59b6", "#8e44ad", "#7d3c98", "#6c3483", "#5b2c6f",
 ];
+
+function CustomTooltip({ active, payload, label, type }: any) {
+  if (!active || !payload || !payload.length) return null;
+  
+  const data = payload[0].payload;
+  
+  return (
+    <div className="bg-background border rounded-lg shadow-lg p-3 min-w-[200px]" data-testid="chart-tooltip">
+      <p className="font-semibold text-sm border-b pb-2 mb-2">{label || data.party || data.name || data.state}</p>
+      {type === "party" && (
+        <>
+          <p className="text-sm"><span className="text-muted-foreground">Votos:</span> {formatNumber(data.votes)}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Candidatos:</span> {formatNumber(data.candidateCount)}</p>
+          {data.partyNumber && <p className="text-sm"><span className="text-muted-foreground">Número:</span> {data.partyNumber}</p>}
+        </>
+      )}
+      {type === "candidate" && (
+        <>
+          <p className="text-sm"><span className="text-muted-foreground">Nome:</span> {data.name}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Partido:</span> {data.party}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Votos:</span> {formatNumber(data.votes)}</p>
+          {data.position && <p className="text-sm"><span className="text-muted-foreground">Cargo:</span> {data.position}</p>}
+          {data.state && <p className="text-sm"><span className="text-muted-foreground">Estado:</span> {data.state}</p>}
+        </>
+      )}
+      {type === "state" && (
+        <>
+          <p className="text-sm"><span className="text-muted-foreground">Votos:</span> {formatNumber(data.votes)}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Candidatos:</span> {formatNumber(data.candidateCount)}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Partidos:</span> {formatNumber(data.partyCount)}</p>
+        </>
+      )}
+      {type === "municipality" && (
+        <>
+          <p className="text-sm"><span className="text-muted-foreground">Município:</span> {data.municipality}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Estado:</span> {data.state}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Votos:</span> {formatNumber(data.votes)}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Candidatos:</span> {formatNumber(data.candidateCount)}</p>
+        </>
+      )}
+      {!type && (
+        <p className="text-sm"><span className="text-muted-foreground">Valor:</span> {formatNumber(payload[0].value)}</p>
+      )}
+    </div>
+  );
+}
 
 function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -68,7 +129,24 @@ export default function DataAnalysis() {
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedState, setSelectedState] = useState<string>("all");
   const [selectedElectionType, setSelectedElectionType] = useState<string>("all");
+  const [selectedPosition, setSelectedPosition] = useState<string>("all");
+  const [selectedParty, setSelectedParty] = useState<string>("all");
+  const [minVotes, setMinVotes] = useState<string>("");
+  const [maxVotes, setMaxVotes] = useState<string>("");
   const [exportLoading, setExportLoading] = useState<string | null>(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  
+  // Comparison States
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareYears, setCompareYears] = useState<number[]>([]);
+  const [compareStates, setCompareStates] = useState<string[]>([]);
+  const [compareGroupBy, setCompareGroupBy] = useState<"party" | "state" | "position">("party");
+  
+  // Saved Reports States
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [reportName, setReportName] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
+  const [selectedReport, setSelectedReport] = useState<number | null>(null);
   
   // AI States
   const [aiQuestion, setAiQuestion] = useState("");
@@ -81,8 +159,12 @@ export default function DataAnalysis() {
     if (selectedYear !== "all") f.year = selectedYear;
     if (selectedState !== "all") f.uf = selectedState;
     if (selectedElectionType !== "all") f.electionType = selectedElectionType;
+    if (selectedPosition !== "all") f.position = selectedPosition;
+    if (selectedParty !== "all") f.party = selectedParty;
+    if (minVotes) f.minVotes = minVotes;
+    if (maxVotes) f.maxVotes = maxVotes;
     return f;
-  }, [selectedYear, selectedState, selectedElectionType]);
+  }, [selectedYear, selectedState, selectedElectionType, selectedPosition, selectedParty, minVotes, maxVotes]);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams(filters);
@@ -103,6 +185,26 @@ export default function DataAnalysis() {
 
   const { data: electionTypes, isLoading: typesLoading } = useQuery<string[]>({
     queryKey: [`/api/analytics/election-types${statesQuery}`],
+  });
+
+  const { data: positions } = useQuery<string[]>({
+    queryKey: [`/api/analytics/positions${statesQuery}`],
+  });
+
+  const { data: partiesList } = useQuery<{ party: string; number: number }[]>({
+    queryKey: [`/api/analytics/parties-list${statesQuery}`],
+  });
+
+  const { data: savedReports, refetch: refetchReports } = useQuery<{
+    id: number;
+    name: string;
+    description: string | null;
+    filters: Record<string, string>;
+    columns: string[];
+    chartType: string;
+    createdAt: string;
+  }[]>({
+    queryKey: ["/api/reports"],
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<{
@@ -202,6 +304,64 @@ export default function DataAnalysis() {
     }
   };
 
+  // Comparison mutation
+  const compareMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/analytics/compare", {
+        years: compareYears,
+        states: compareStates,
+        groupBy: compareGroupBy,
+      });
+      return res.json();
+    },
+  });
+
+  // Save report mutation
+  const saveReportMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/reports", {
+        name: reportName,
+        description: reportDescription,
+        filters,
+        columns: ["name", "party", "votes", "position"],
+        chartType: "bar",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Relatório salvo", description: "Relatório salvo com sucesso." });
+      setShowSaveDialog(false);
+      setReportName("");
+      setReportDescription("");
+      refetchReports();
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao salvar relatório.", variant: "destructive" });
+    },
+  });
+
+  const deleteReportMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/reports/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Relatório excluído", description: "Relatório excluído com sucesso." });
+      refetchReports();
+    },
+  });
+
+  const loadReport = (report: { filters: Record<string, string> }) => {
+    if (report.filters.year) setSelectedYear(report.filters.year);
+    if (report.filters.uf) setSelectedState(report.filters.uf);
+    if (report.filters.electionType) setSelectedElectionType(report.filters.electionType);
+    if (report.filters.position) setSelectedPosition(report.filters.position);
+    if (report.filters.party) setSelectedParty(report.filters.party);
+    if (report.filters.minVotes) setMinVotes(report.filters.minVotes);
+    if (report.filters.maxVotes) setMaxVotes(report.filters.maxVotes);
+    toast({ title: "Relatório carregado", description: "Filtros aplicados com sucesso." });
+  };
+
   const handleExportCSV = async (reportType: string) => {
     setExportLoading(reportType);
     try {
@@ -292,12 +452,41 @@ export default function DataAnalysis() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Filter className="h-4 w-4" />
-            Filtros
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Filter className="h-4 w-4" />
+              Filtros
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {savedReports && savedReports.length > 0 && (
+                <Select value={selectedReport?.toString() ?? ""} onValueChange={(v) => {
+                  const report = savedReports.find(r => r.id === parseInt(v));
+                  if (report) {
+                    setSelectedReport(parseInt(v));
+                    loadReport(report);
+                  }
+                }}>
+                  <SelectTrigger className="w-48" data-testid="select-saved-report">
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Carregar relatório" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedReports.map((report) => (
+                      <SelectItem key={report.id} value={String(report.id)}>
+                        {report.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setShowSaveDialog(true)} data-testid="button-save-report">
+                <Save className="h-4 w-4 mr-2" />
+                Salvar
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">Ano da Eleição</label>
@@ -348,8 +537,299 @@ export default function DataAnalysis() {
               </Select>
             </div>
           </div>
+
+          <Collapsible open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full" data-testid="button-advanced-filters">
+                <SlidersHorizontal className="h-4 w-4 mr-2" />
+                Filtros Avançados
+                {showAdvancedFilters ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Cargo</label>
+                  <Select value={selectedPosition} onValueChange={setSelectedPosition}>
+                    <SelectTrigger data-testid="select-position">
+                      <SelectValue placeholder="Selecione o cargo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os cargos</SelectItem>
+                      {(positions ?? []).map((pos) => (
+                        <SelectItem key={pos} value={pos}>
+                          {pos}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Partido</label>
+                  <Select value={selectedParty} onValueChange={setSelectedParty}>
+                    <SelectTrigger data-testid="select-party">
+                      <SelectValue placeholder="Selecione o partido" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os partidos</SelectItem>
+                      {(partiesList ?? []).map((p) => (
+                        <SelectItem key={p.party} value={p.party}>
+                          {p.party} ({p.number})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Votos Mínimos</label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={minVotes}
+                    onChange={(e) => setMinVotes(e.target.value)}
+                    data-testid="input-min-votes"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Votos Máximos</label>
+                  <Input
+                    type="number"
+                    placeholder="Sem limite"
+                    value={maxVotes}
+                    onChange={(e) => setMaxVotes(e.target.value)}
+                    data-testid="input-max-votes"
+                  />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          <div className="flex items-center justify-between border-t pt-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="compare-mode"
+                  checked={compareMode}
+                  onCheckedChange={setCompareMode}
+                  data-testid="switch-compare-mode"
+                />
+                <Label htmlFor="compare-mode" className="flex items-center gap-1">
+                  <GitCompare className="h-4 w-4" />
+                  Modo Comparação
+                </Label>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedYear("all");
+                setSelectedState("all");
+                setSelectedElectionType("all");
+                setSelectedPosition("all");
+                setSelectedParty("all");
+                setMinVotes("");
+                setMaxVotes("");
+                setSelectedReport(null);
+              }}
+              data-testid="button-clear-filters"
+            >
+              Limpar Filtros
+            </Button>
+          </div>
+
+          {compareMode && (
+            <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
+              <p className="text-sm font-medium">Selecione anos ou estados para comparar:</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">Anos para comparar</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(years ?? []).map((year) => (
+                      <div key={year} className="flex items-center gap-1">
+                        <Checkbox
+                          id={`year-${year}`}
+                          checked={compareYears.includes(year)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setCompareYears([...compareYears, year]);
+                            } else {
+                              setCompareYears(compareYears.filter(y => y !== year));
+                            }
+                          }}
+                          data-testid={`checkbox-year-${year}`}
+                        />
+                        <label htmlFor={`year-${year}`} className="text-sm">{year}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">Estados para comparar</label>
+                  <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                    {(states ?? []).slice(0, 10).map((state) => (
+                      <div key={state} className="flex items-center gap-1">
+                        <Checkbox
+                          id={`state-${state}`}
+                          checked={compareStates.includes(state)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setCompareStates([...compareStates, state]);
+                            } else {
+                              setCompareStates(compareStates.filter(s => s !== state));
+                            }
+                          }}
+                          data-testid={`checkbox-state-${state}`}
+                        />
+                        <label htmlFor={`state-${state}`} className="text-sm">{state}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">Agrupar por</label>
+                  <Select value={compareGroupBy} onValueChange={(v) => setCompareGroupBy(v as "party" | "state" | "position")}>
+                    <SelectTrigger className="w-40" data-testid="select-compare-group-by">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="party">Partido</SelectItem>
+                      <SelectItem value="state">Estado</SelectItem>
+                      <SelectItem value="position">Cargo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={() => compareMutation.mutate()}
+                  disabled={compareMutation.isPending || (compareYears.length === 0 && compareStates.length === 0)}
+                  data-testid="button-compare"
+                >
+                  {compareMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <GitCompare className="h-4 w-4 mr-2" />}
+                  Comparar
+                </Button>
+              </div>
+              {compareMutation.data && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium mb-2">Resultado da Comparação:</p>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={compareMutation.data.flatMap((d: any) => d.data.slice(0, 5).map((item: any) => ({ ...item, group: d.label })))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="key" />
+                        <YAxis tickFormatter={formatNumber} />
+                        <Tooltip
+                          formatter={(value: number) => [formatNumber(value), "Votos"]}
+                          labelFormatter={(label) => `${label}`}
+                        />
+                        <Legend />
+                        <Bar dataKey="votes" fill="#003366" name="Votos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Salvar Relatório</DialogTitle>
+            <DialogDescription>
+              Salve os filtros atuais como um relatório para acesso rápido
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="report-name">Nome do Relatório</Label>
+              <Input
+                id="report-name"
+                value={reportName}
+                onChange={(e) => setReportName(e.target.value)}
+                placeholder="Ex: Vereadores SP 2024"
+                data-testid="input-report-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="report-description">Descrição (opcional)</Label>
+              <Textarea
+                id="report-description"
+                value={reportDescription}
+                onChange={(e) => setReportDescription(e.target.value)}
+                placeholder="Descreva o relatório..."
+                data-testid="input-report-description"
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p>Filtros que serão salvos:</p>
+              <ul className="list-disc list-inside mt-1">
+                {Object.entries(filters).map(([key, value]) => (
+                  <li key={key}>{key}: {value}</li>
+                ))}
+                {Object.keys(filters).length === 0 && <li>Nenhum filtro aplicado</li>}
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSaveDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => saveReportMutation.mutate()}
+              disabled={saveReportMutation.isPending || !reportName.trim()}
+              data-testid="button-confirm-save-report"
+            >
+              {saveReportMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {savedReports && savedReports.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FolderOpen className="h-4 w-4" />
+              Relatórios Salvos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {savedReports.map((report) => (
+                <div
+                  key={report.id}
+                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate cursor-pointer"
+                  onClick={() => loadReport(report)}
+                  data-testid={`card-report-${report.id}`}
+                >
+                  <div>
+                    <p className="font-medium text-sm">{report.name}</p>
+                    {report.description && (
+                      <p className="text-xs text-muted-foreground">{report.description}</p>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteReportMutation.mutate(report.id);
+                    }}
+                    data-testid={`button-delete-report-${report.id}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -517,7 +997,7 @@ export default function DataAnalysis() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis type="number" tickFormatter={formatNumber} />
                         <YAxis type="category" dataKey="party" width={60} />
-                        <Tooltip formatter={(value: number) => formatNumber(value)} />
+                        <Tooltip content={<CustomTooltip type="party" />} />
                         <Bar dataKey="votes" fill="#003366" name="Votos" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -550,7 +1030,8 @@ export default function DataAnalysis() {
                             <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => formatNumber(value)} />
+                        <Tooltip content={<CustomTooltip type="party" />} />
+                        <Legend />
                       </PieChart>
                     </ResponsiveContainer>
                   )}
@@ -606,13 +1087,7 @@ export default function DataAnalysis() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="nickname" angle={-45} textAnchor="end" height={80} interval={0} fontSize={10} />
                       <YAxis tickFormatter={formatNumber} />
-                      <Tooltip
-                        formatter={(value: number) => formatNumber(value)}
-                        labelFormatter={(label) => {
-                          const candidate = (topCandidates ?? []).find((c) => c.nickname === label);
-                          return candidate ? `${candidate.name} (${candidate.party})` : label;
-                        }}
-                      />
+                      <Tooltip content={<CustomTooltip type="candidate" />} />
                       <Bar dataKey="votes" fill="#FFD700" name="Votos" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -669,7 +1144,7 @@ export default function DataAnalysis() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="state" />
                         <YAxis tickFormatter={formatNumber} />
-                        <Tooltip formatter={(value: number) => formatNumber(value)} />
+                        <Tooltip content={<CustomTooltip type="state" />} />
                         <Area type="monotone" dataKey="votes" stroke="#003366" fill="#003366" fillOpacity={0.3} name="Votos" />
                       </AreaChart>
                     </ResponsiveContainer>

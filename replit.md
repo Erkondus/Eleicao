@@ -4,6 +4,13 @@
 SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
 
 ## Mudanças Recentes
+- **2026-01-15**: Filtros avançados: cargo, partido específico, faixa de votos (min/max)
+- **2026-01-15**: Sistema de relatórios salvos para acesso rápido
+- **2026-01-15**: Modo de comparação entre eleições/estados com visualizações
+- **2026-01-15**: Tooltips interativos detalhados nos gráficos
+- **2026-01-15**: Assistente de IA para perguntas em linguagem natural sobre dados eleitorais
+- **2026-01-15**: Análise de tendências históricas com previsões de IA
+- **2026-01-15**: Detecção de anomalias estatísticas nos dados de votação
 - **2026-01-15**: Seção de Análise de Dados com relatórios personalizados e visualizações
 - **2026-01-15**: Filtros por ano, estado e tipo de eleição para análises
 - **2026-01-15**: Gráficos (barras, pizza, área) para distribuição de votos
@@ -77,7 +84,15 @@ SimulaVoto é um sistema web completo para simular resultados eleitorais proporc
 - `GET /api/analytics/election-years` - Anos eleitorais disponíveis
 - `GET /api/analytics/states` - Estados disponíveis
 - `GET /api/analytics/election-types` - Tipos de eleição disponíveis
+- `GET /api/analytics/positions` - Cargos disponíveis
+- `GET /api/analytics/parties-list` - Lista de partidos disponíveis
+- `GET /api/analytics/advanced` - Análise avançada com múltiplos filtros
+- `POST /api/analytics/compare` - Comparação entre anos/estados
 - `GET /api/analytics/export/csv` - Exportação de relatórios em CSV
+- `GET/POST/PUT/DELETE /api/reports` - CRUD de relatórios salvos
+- `POST /api/ai/assistant` - Assistente IA para perguntas sobre dados
+- `POST /api/ai/predict-historical` - Previsões baseadas em histórico
+- `POST /api/ai/anomalies` - Detecção de anomalias estatísticas
 - `POST /api/imports/tse/url` - Importação via URL do TSE
 
 ### Sistema Eleitoral Brasileiro

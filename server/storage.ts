@@ -14,6 +14,7 @@ import {
   type TseCandidateVote, type InsertTseCandidateVote, tseCandidateVotes,
   type TseImportError, type InsertTseImportError, tseImportErrors,
   type ScenarioCandidate, type InsertScenarioCandidate, scenarioCandidates,
+  type SavedReport, type InsertSavedReport, savedReports,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -714,6 +715,230 @@ export class DatabaseStorage implements IStorage {
       .orderBy(tseCandidateVotes.nmTipoEleicao);
 
     return results.map((r) => r.type!).filter(Boolean);
+  }
+
+  async getAvailablePositions(filters: { year?: number; uf?: string }): Promise<string[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.dsCargo} IS NOT NULL`];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+
+    const results = await db
+      .selectDistinct({ position: tseCandidateVotes.dsCargo })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.dsCargo);
+
+    return results.map((r) => r.position!).filter(Boolean);
+  }
+
+  async getAvailableParties(filters: { year?: number; uf?: string }): Promise<{ party: string; number: number }[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.sgPartido} IS NOT NULL`];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+
+    const results = await db
+      .selectDistinct({ 
+        party: tseCandidateVotes.sgPartido,
+        number: tseCandidateVotes.nrPartido
+      })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.sgPartido);
+
+    return results.filter(r => r.party).map(r => ({ party: r.party!, number: r.number || 0 }));
+  }
+
+  async getAdvancedAnalytics(filters: {
+    year?: number;
+    uf?: string;
+    electionType?: string;
+    position?: string;
+    party?: string;
+    minVotes?: number;
+    maxVotes?: number;
+    limit?: number;
+  }): Promise<{
+    candidates: {
+      name: string;
+      nickname: string | null;
+      party: string | null;
+      number: number | null;
+      state: string | null;
+      position: string | null;
+      municipality: string | null;
+      votes: number;
+    }[];
+    summary: {
+      totalVotes: number;
+      candidateCount: number;
+      avgVotes: number;
+    };
+  }> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    if (filters.party) conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const candidateResults = await db
+      .select({
+        name: tseCandidateVotes.nmCandidato,
+        nickname: tseCandidateVotes.nmUrnaCandidato,
+        party: tseCandidateVotes.sgPartido,
+        number: tseCandidateVotes.nrCandidato,
+        state: tseCandidateVotes.sgUf,
+        position: tseCandidateVotes.dsCargo,
+        municipality: tseCandidateVotes.nmMunicipio,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(
+        tseCandidateVotes.nmCandidato,
+        tseCandidateVotes.nmUrnaCandidato,
+        tseCandidateVotes.sgPartido,
+        tseCandidateVotes.nrCandidato,
+        tseCandidateVotes.sgUf,
+        tseCandidateVotes.dsCargo,
+        tseCandidateVotes.nmMunicipio
+      )
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 100);
+
+    let candidates = candidateResults.map((r) => ({
+      name: r.name || "N/A",
+      nickname: r.nickname,
+      party: r.party,
+      number: r.number,
+      state: r.state,
+      position: r.position,
+      municipality: r.municipality,
+      votes: Number(r.votes),
+    }));
+
+    if (filters.minVotes !== undefined) {
+      candidates = candidates.filter(c => c.votes >= filters.minVotes!);
+    }
+    if (filters.maxVotes !== undefined) {
+      candidates = candidates.filter(c => c.votes <= filters.maxVotes!);
+    }
+
+    const totalVotes = candidates.reduce((sum, c) => sum + c.votes, 0);
+    const candidateCount = candidates.length;
+    const avgVotes = candidateCount > 0 ? Math.round(totalVotes / candidateCount) : 0;
+
+    return {
+      candidates,
+      summary: { totalVotes, candidateCount, avgVotes },
+    };
+  }
+
+  async getComparisonData(params: {
+    years?: number[];
+    states?: string[];
+    groupBy: "party" | "state" | "position";
+  }): Promise<{
+    label: string;
+    data: { key: string; votes: number; candidateCount: number }[];
+  }[]> {
+    const results: { label: string; data: { key: string; votes: number; candidateCount: number }[] }[] = [];
+
+    if (params.years && params.years.length > 0) {
+      for (const year of params.years) {
+        let groupByField;
+        if (params.groupBy === "party") groupByField = tseCandidateVotes.sgPartido;
+        else if (params.groupBy === "state") groupByField = tseCandidateVotes.sgUf;
+        else groupByField = tseCandidateVotes.dsCargo;
+
+        const yearData = await db
+          .select({
+            key: groupByField,
+            votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+            candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+          })
+          .from(tseCandidateVotes)
+          .where(eq(tseCandidateVotes.anoEleicao, year))
+          .groupBy(groupByField)
+          .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+          .limit(10);
+
+        results.push({
+          label: String(year),
+          data: yearData.map(d => ({
+            key: d.key || "N/A",
+            votes: Number(d.votes),
+            candidateCount: Number(d.candidateCount),
+          })),
+        });
+      }
+    }
+
+    if (params.states && params.states.length > 0) {
+      for (const state of params.states) {
+        let groupByField;
+        if (params.groupBy === "party") groupByField = tseCandidateVotes.sgPartido;
+        else if (params.groupBy === "position") groupByField = tseCandidateVotes.dsCargo;
+        else groupByField = tseCandidateVotes.anoEleicao;
+
+        const stateData = await db
+          .select({
+            key: groupByField,
+            votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+            candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+          })
+          .from(tseCandidateVotes)
+          .where(eq(tseCandidateVotes.sgUf, state))
+          .groupBy(groupByField)
+          .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+          .limit(10);
+
+        results.push({
+          label: state,
+          data: stateData.map(d => ({
+            key: String(d.key) || "N/A",
+            votes: Number(d.votes),
+            candidateCount: Number(d.candidateCount),
+          })),
+        });
+      }
+    }
+
+    return results;
+  }
+
+  // Saved Reports CRUD
+  async getSavedReports(userId?: string): Promise<SavedReport[]> {
+    if (userId) {
+      return db.select().from(savedReports).where(eq(savedReports.createdBy, userId)).orderBy(sql`${savedReports.updatedAt} DESC`);
+    }
+    return db.select().from(savedReports).orderBy(sql`${savedReports.updatedAt} DESC`);
+  }
+
+  async getSavedReportById(id: number): Promise<SavedReport | undefined> {
+    const [report] = await db.select().from(savedReports).where(eq(savedReports.id, id));
+    return report;
+  }
+
+  async createSavedReport(data: InsertSavedReport): Promise<SavedReport> {
+    const [created] = await db.insert(savedReports).values(data).returning();
+    return created;
+  }
+
+  async updateSavedReport(id: number, data: Partial<InsertSavedReport>): Promise<SavedReport | undefined> {
+    const [updated] = await db
+      .update(savedReports)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(savedReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSavedReport(id: number): Promise<boolean> {
+    const result = await db.delete(savedReports).where(eq(savedReports.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 
