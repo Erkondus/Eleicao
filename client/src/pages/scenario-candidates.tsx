@@ -50,6 +50,13 @@ type TseCandidate = {
   qtVotosNominais: number | null;
 };
 
+type TseStats = {
+  totalRecords: number;
+  years: number[];
+  ufs: string[];
+  cargos: { code: number; name: string }[];
+};
+
 export default function ScenarioCandidates() {
   const { scenarioId } = useParams<{ scenarioId: string }>();
   const { hasPermission } = useAuth();
@@ -61,6 +68,7 @@ export default function ScenarioCandidates() {
   const [tseSearchResults, setTseSearchResults] = useState<TseCandidate[]>([]);
   const [isTseSearching, setIsTseSearching] = useState(false);
   const [showTseResults, setShowTseResults] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<string>("");
 
   const [formData, setFormData] = useState({
     candidateId: "",
@@ -86,6 +94,10 @@ export default function ScenarioCandidates() {
 
   const { data: parties } = useQuery<Party[]>({
     queryKey: ["/api/parties"],
+  });
+
+  const { data: tseStats } = useQuery<TseStats>({
+    queryKey: ["/api/tse/stats"],
   });
 
   const addMutation = useMutation({
@@ -129,7 +141,7 @@ export default function ScenarioCandidates() {
     },
   });
 
-  const searchTseCandidates = useCallback(async (query: string) => {
+  const searchTseCandidates = useCallback(async (query: string, year?: string) => {
     if (query.length < 2) {
       setTseSearchResults([]);
       setShowTseResults(false);
@@ -137,7 +149,9 @@ export default function ScenarioCandidates() {
     }
     setIsTseSearching(true);
     try {
-      const res = await fetch(`/api/tse/search?q=${encodeURIComponent(query)}`);
+      const params = new URLSearchParams({ q: query });
+      if (year) params.append("year", year);
+      const res = await fetch(`/api/tse/search?${params.toString()}`, { credentials: "include" });
       if (res.ok) {
         const results = await res.json();
         setTseSearchResults(results);
@@ -153,14 +167,15 @@ export default function ScenarioCandidates() {
   useEffect(() => {
     const debounce = setTimeout(() => {
       if (tseSearchQuery.length >= 2) {
-        searchTseCandidates(tseSearchQuery);
+        const yearFilter = selectedYear && selectedYear !== "all" ? selectedYear : undefined;
+        searchTseCandidates(tseSearchQuery, yearFilter);
       } else {
         setTseSearchResults([]);
         setShowTseResults(false);
       }
     }, 300);
     return () => clearTimeout(debounce);
-  }, [tseSearchQuery, searchTseCandidates]);
+  }, [tseSearchQuery, selectedYear, searchTseCandidates]);
 
   async function selectTseCandidate(tse: TseCandidate) {
     const matchingParty = parties?.find(
@@ -224,6 +239,7 @@ export default function ScenarioCandidates() {
     setTseSearchQuery("");
     setTseSearchResults([]);
     setShowTseResults(false);
+    setSelectedYear("");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -402,18 +418,36 @@ export default function ScenarioCandidates() {
                 <Database className="h-4 w-4" />
                 Buscar nos Dados do TSE
               </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Digite o nome do candidato para buscar..."
-                  value={tseSearchQuery}
-                  onChange={(e) => setTseSearchQuery(e.target.value)}
-                  className="pl-9"
-                  data-testid="input-tse-search-scenario"
-                />
-                {isTseSearching && (
-                  <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
+              <div className="flex gap-2">
+                <Select
+                  value={selectedYear}
+                  onValueChange={setSelectedYear}
+                >
+                  <SelectTrigger className="w-32" data-testid="select-tse-year">
+                    <SelectValue placeholder="Ano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os anos</SelectItem>
+                    {(tseStats?.years ?? []).map((year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Digite o nome do candidato..."
+                    value={tseSearchQuery}
+                    onChange={(e) => setTseSearchQuery(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-tse-search-scenario"
+                  />
+                  {isTseSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
               </div>
               {showTseResults && tseSearchResults.length > 0 && (
                 <Card className="border shadow-md">
