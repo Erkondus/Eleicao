@@ -5,9 +5,13 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
 import multer from "multer";
-import { createReadStream } from "fs";
+import { createReadStream, createWriteStream } from "fs";
+import { unlink, mkdir } from "fs/promises";
 import { parse } from "csv-parse";
 import iconv from "iconv-lite";
+import unzipper from "unzipper";
+import { pipeline } from "stream/promises";
+import path from "path";
 import { storage } from "./storage";
 import type { User, InsertTseCandidateVote } from "@shared/schema";
 import OpenAI from "openai";
@@ -1002,6 +1006,233 @@ Responda em JSON com a seguinte estrutura:
       res.status(500).json({ error: "Failed to start import" });
     }
   });
+
+  app.post("/api/imports/tse/url", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { url, electionYear, electionType, uf } = req.body;
+      
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      if (!url.startsWith("https://cdn.tse.jus.br/") && !url.startsWith("https://dadosabertos.tse.jus.br/")) {
+        return res.status(400).json({ error: "URL must be from TSE domain (cdn.tse.jus.br or dadosabertos.tse.jus.br)" });
+      }
+
+      const filename = path.basename(url);
+      const job = await storage.createTseImportJob({
+        filename: `[URL] ${filename}`,
+        fileSize: 0,
+        status: "pending",
+        electionYear: electionYear ? parseInt(electionYear) : null,
+        electionType: electionType || null,
+        uf: uf || null,
+        createdBy: req.user?.id || null,
+      });
+
+      await logAudit(req, "create", "tse_import_url", String(job.id), { url, filename });
+
+      processURLImport(job.id, url);
+
+      res.json({ jobId: job.id, message: "URL import started" });
+    } catch (error) {
+      console.error("TSE URL import error:", error);
+      res.status(500).json({ error: "Failed to start URL import" });
+    }
+  });
+
+  const processURLImport = async (jobId: number, url: string) => {
+    const tmpDir = `/tmp/tse-import-${jobId}`;
+    let csvPath: string | null = null;
+
+    try {
+      await storage.updateTseImportJob(jobId, { status: "downloading", startedAt: new Date() });
+      await mkdir(tmpDir, { recursive: true });
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+      }
+
+      const contentLength = response.headers.get("content-length");
+      if (contentLength) {
+        await storage.updateTseImportJob(jobId, { fileSize: parseInt(contentLength) });
+      }
+
+      const zipPath = path.join(tmpDir, "data.zip");
+      const fileStream = createWriteStream(zipPath);
+      
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      const reader = response.body.getReader();
+      let downloadedBytes = 0;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fileStream.write(value);
+        downloadedBytes += value.length;
+      }
+      
+      fileStream.end();
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on("finish", resolve);
+        fileStream.on("error", reject);
+      });
+
+      await storage.updateTseImportJob(jobId, { status: "extracting" });
+
+      const directory = await unzipper.Open.file(zipPath);
+      const csvFile = directory.files.find(f => f.path.endsWith(".csv") || f.path.endsWith(".txt"));
+      
+      if (!csvFile) {
+        throw new Error("No CSV/TXT file found in ZIP");
+      }
+
+      csvPath = path.join(tmpDir, "data.csv");
+      await pipeline(csvFile.stream(), createWriteStream(csvPath));
+
+      await storage.updateTseImportJob(jobId, { status: "running" });
+      await processCSVImportInternal(jobId, csvPath);
+
+      await unlink(zipPath).catch(() => {});
+      await unlink(csvPath).catch(() => {});
+    } catch (error: any) {
+      console.error("URL import error:", error);
+      await storage.updateTseImportJob(jobId, {
+        status: "failed",
+        finishedAt: new Date(),
+        errorMessage: error.message || "Unknown error",
+      });
+    }
+  };
+
+  const processCSVImportInternal = async (jobId: number, filePath: string) => {
+    const records: InsertTseCandidateVote[] = [];
+    let rowCount = 0;
+    let errorCount = 0;
+    const BATCH_SIZE = 1000;
+
+    const fieldMap: { [key: number]: keyof InsertTseCandidateVote } = {
+      0: "dtGeracao",
+      1: "hhGeracao",
+      2: "anoEleicao",
+      3: "cdTipoEleicao",
+      4: "nmTipoEleicao",
+      5: "nrTurno",
+      6: "cdEleicao",
+      7: "dsEleicao",
+      8: "dtEleicao",
+      9: "tpAbrangencia",
+      10: "sgUf",
+      11: "sgUe",
+      12: "nmUe",
+      13: "cdMunicipio",
+      14: "nmMunicipio",
+      15: "nrZona",
+      16: "cdCargo",
+      17: "dsCargo",
+      18: "sqCandidato",
+      19: "nrCandidato",
+      20: "nmCandidato",
+      21: "nmUrnaCandidato",
+      22: "nmSocialCandidato",
+      23: "cdSituacaoCandidatura",
+      24: "dsSituacaoCandidatura",
+      25: "cdDetalheSituacaoCand",
+      26: "dsDetalheSituacaoCand",
+      27: "cdSituacaoJulgamento",
+      28: "dsSituacaoJulgamento",
+      29: "cdSituacaoCassacao",
+      30: "dsSituacaoCassacao",
+      31: "cdSituacaoDconstDiploma",
+      32: "dsSituacaoDconstDiploma",
+      33: "tpAgremiacao",
+      34: "nrPartido",
+      35: "sgPartido",
+      36: "nmPartido",
+      37: "nrFederacao",
+      38: "nmFederacao",
+      39: "sgFederacao",
+      40: "dsComposicaoFederacao",
+      41: "sqColigacao",
+      42: "nmColigacao",
+      43: "dsComposicaoColigacao",
+      44: "stVotoEmTransito",
+      45: "qtVotosNominais",
+      46: "nmTipoDestinacaoVotos",
+      47: "qtVotosNominaisValidos",
+      48: "cdSitTotTurno",
+      49: "dsSitTotTurno",
+    };
+
+    const parseValue = (value: string, field: string): any => {
+      if (value === "#NULO" || value === "#NE" || value === "") {
+        return null;
+      }
+      if (field.startsWith("qt") || field.startsWith("nr") || field.startsWith("cd") || field.startsWith("sq")) {
+        const num = parseInt(value, 10);
+        return isNaN(num) ? null : num;
+      }
+      return value;
+    };
+
+    const parser = createReadStream(filePath)
+      .pipe(iconv.decodeStream("latin1"))
+      .pipe(parse({
+        delimiter: ";",
+        quote: '"',
+        relax_quotes: true,
+        relax_column_count: true,
+        skip_empty_lines: true,
+        from_line: 2,
+      }));
+
+    for await (const row of parser) {
+      try {
+        rowCount++;
+        const record: Partial<InsertTseCandidateVote> = {};
+
+        for (const [index, field] of Object.entries(fieldMap)) {
+          const value = row[parseInt(index)];
+          if (value !== undefined) {
+            (record as any)[field] = parseValue(value, field);
+          }
+        }
+
+        if (record.anoEleicao && record.nrCandidato) {
+          records.push(record as InsertTseCandidateVote);
+        }
+
+        if (records.length >= BATCH_SIZE) {
+          await storage.bulkInsertTseCandidateVotes(records);
+          await storage.updateTseImportJob(jobId, { processedRows: rowCount });
+          records.length = 0;
+        }
+      } catch (err: any) {
+        errorCount++;
+        await storage.createTseImportError({
+          jobId,
+          rowNumber: rowCount,
+          errorMessage: err.message || "Parse error",
+          rawData: JSON.stringify(row).substring(0, 1000),
+        });
+      }
+    }
+
+    if (records.length > 0) {
+      await storage.bulkInsertTseCandidateVotes(records);
+    }
+
+    await storage.updateTseImportJob(jobId, {
+      status: "completed",
+      finishedAt: new Date(),
+      processedRows: rowCount,
+      errorRows: errorCount,
+    });
+  };
 
   app.get("/api/tse/candidates", requireAuth, async (req, res) => {
     try {
