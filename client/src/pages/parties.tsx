@@ -218,7 +218,23 @@ export default function Parties() {
       <div className="flex justify-end">
         <Button
           variant="outline"
-          onClick={() => window.open("/api/parties/export/csv", "_blank")}
+          onClick={async () => {
+            try {
+              const response = await fetch("/api/parties/export/csv", { credentials: "include" });
+              if (!response.ok) throw new Error("Falha ao exportar");
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "partidos.csv";
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+            } catch {
+              toast({ title: "Erro", description: "Falha ao exportar CSV", variant: "destructive" });
+            }
+          }}
           disabled={!parties || parties.length === 0}
           data-testid="button-export-parties-csv"
         >
