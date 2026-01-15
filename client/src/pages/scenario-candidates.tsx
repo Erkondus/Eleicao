@@ -101,7 +101,7 @@ export default function ScenarioCandidates() {
   });
 
   const addMutation = useMutation({
-    mutationFn: async (data: { candidateId: number; partyId: number; ballotNumber: number; nickname?: string }) => {
+    mutationFn: async (data: { candidateId: number; partyId: number; ballotNumber: number; nickname?: string; votes?: number }) => {
       return apiRequest("POST", `/api/scenarios/${scenarioId}/candidates`, data);
     },
     onSuccess: () => {
@@ -205,12 +205,8 @@ export default function ScenarioCandidates() {
     }
 
     if (matchingCandidate && matchingParty) {
-      // Soma os votos de todos os registros do candidato no ano selecionado
-      const yearFilter = selectedYear && selectedYear !== "all" ? parseInt(selectedYear) : tse.anoEleicao;
-      const candidateRecords = tseSearchResults.filter(
-        (r) => r.nrCandidato === tse.nrCandidato && r.anoEleicao === yearFilter
-      );
-      const totalVotes = candidateRecords.reduce((sum, r) => sum + (r.qtVotosNominais || 0), 0);
+      // Os votos já vêm somados do backend (agregado por candidato/ano)
+      const totalVotes = tse.qtVotosNominais || 0;
 
       setFormData({
         candidateId: String(matchingCandidate.id),
@@ -221,7 +217,7 @@ export default function ScenarioCandidates() {
       });
       toast({
         title: "Dados importados",
-        description: `Candidato ${tse.nmUrnaCandidato || tse.nmCandidato} selecionado com ${totalVotes.toLocaleString("pt-BR")} votos em ${yearFilter}`,
+        description: `Candidato ${tse.nmUrnaCandidato || tse.nmCandidato} selecionado com ${totalVotes.toLocaleString("pt-BR")} votos em ${tse.anoEleicao}`,
       });
     } else {
       toast({
@@ -256,6 +252,7 @@ export default function ScenarioCandidates() {
       partyId: parseInt(formData.partyId, 10),
       ballotNumber: parseInt(formData.ballotNumber, 10),
       nickname: formData.nickname || undefined,
+      votes: parseInt(formData.votes, 10) || 0,
     });
   }
 

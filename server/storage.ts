@@ -73,7 +73,7 @@ export interface IStorage {
   createScenarioCandidate(data: InsertScenarioCandidate): Promise<ScenarioCandidate>;
   updateScenarioCandidate(id: number, data: Partial<InsertScenarioCandidate>): Promise<ScenarioCandidate | undefined>;
   deleteScenarioCandidate(id: number): Promise<boolean>;
-  addCandidateToScenario(scenarioId: number, candidateId: number, partyId: number, ballotNumber: number, nickname?: string): Promise<ScenarioCandidate>;
+  addCandidateToScenario(scenarioId: number, candidateId: number, partyId: number, ballotNumber: number, nickname?: string, votes?: number): Promise<ScenarioCandidate>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -413,8 +413,9 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(tseCandidateVotes.cdCargo, filters.cargo));
     }
 
+    // Agrupa por candidato e soma votos
     const results = await db
-      .selectDistinct({
+      .select({
         nmCandidato: tseCandidateVotes.nmCandidato,
         nmUrnaCandidato: tseCandidateVotes.nmUrnaCandidato,
         nrCandidato: tseCandidateVotes.nrCandidato,
@@ -424,10 +425,22 @@ export class DatabaseStorage implements IStorage {
         anoEleicao: tseCandidateVotes.anoEleicao,
         sgUf: tseCandidateVotes.sgUf,
         dsCargo: tseCandidateVotes.dsCargo,
-        qtVotosNominais: tseCandidateVotes.qtVotosNominais,
+        qtVotosNominais: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
       })
       .from(tseCandidateVotes)
       .where(and(...conditions))
+      .groupBy(
+        tseCandidateVotes.nmCandidato,
+        tseCandidateVotes.nmUrnaCandidato,
+        tseCandidateVotes.nrCandidato,
+        tseCandidateVotes.sgPartido,
+        tseCandidateVotes.nmPartido,
+        tseCandidateVotes.nrPartido,
+        tseCandidateVotes.anoEleicao,
+        tseCandidateVotes.sgUf,
+        tseCandidateVotes.dsCargo
+      )
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
       .limit(20);
 
     return results;
@@ -473,7 +486,7 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async addCandidateToScenario(scenarioId: number, candidateId: number, partyId: number, ballotNumber: number, nickname?: string): Promise<ScenarioCandidate> {
+  async addCandidateToScenario(scenarioId: number, candidateId: number, partyId: number, ballotNumber: number, nickname?: string, votes?: number): Promise<ScenarioCandidate> {
     return this.createScenarioCandidate({
       scenarioId,
       candidateId,
@@ -481,7 +494,7 @@ export class DatabaseStorage implements IStorage {
       ballotNumber,
       nickname,
       status: "active",
-      votes: 0,
+      votes: votes ?? 0,
     });
   }
 }

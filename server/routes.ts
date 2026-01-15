@@ -538,7 +538,7 @@ export async function registerRoutes(
   app.post("/api/scenarios/:id/candidates", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
       const scenarioId = parseInt(req.params.id);
-      const { candidateId, partyId, ballotNumber, nickname } = req.body;
+      const { candidateId, partyId, ballotNumber, nickname, votes } = req.body;
       
       if (!candidateId || !partyId || !ballotNumber) {
         return res.status(400).json({ error: "candidateId, partyId, and ballotNumber are required" });
@@ -549,9 +549,10 @@ export async function registerRoutes(
         candidateId,
         partyId,
         ballotNumber,
-        nickname
+        nickname,
+        votes
       );
-      await logAudit(req, "create", "scenario_candidate", String(scenarioCandidate.id), { scenarioId, candidateId, ballotNumber });
+      await logAudit(req, "create", "scenario_candidate", String(scenarioCandidate.id), { scenarioId, candidateId, ballotNumber, votes });
       res.json(scenarioCandidate);
     } catch (error) {
       res.status(500).json({ error: "Failed to add candidate to scenario" });
