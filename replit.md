@@ -4,6 +4,11 @@
 SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
 
 ## Mudanças Recentes
+- **2026-01-15**: Seção de Análise de Dados com relatórios personalizados e visualizações
+- **2026-01-15**: Filtros por ano, estado e tipo de eleição para análises
+- **2026-01-15**: Gráficos (barras, pizza, área) para distribuição de votos
+- **2026-01-15**: Exportação de relatórios em CSV e PDF
+- **2026-01-15**: Importação via URL direta do TSE (cdn.tse.jus.br)
 - **2026-01-14**: Sistema de importação de dados CSV do TSE (até 5GB) com streaming e progresso
 - **2026-01-14**: Tabelas para armazenar todos os 50 campos do layout de candidatos do TSE
 - **2026-01-14**: Suporte a Federações (2022+) e Coligações (pré-2022) - afetam distribuição de vagas
@@ -64,6 +69,16 @@ SimulaVoto é um sistema web completo para simular resultados eleitorais proporc
 - `POST /api/predictions` - Previsões com IA (admin/analyst)
 - `GET /api/audit` - Logs de auditoria (admin)
 - `GET /api/stats` - Estatísticas do dashboard
+- `GET /api/analytics/summary` - Resumo analítico (votos, candidatos, partidos, municípios)
+- `GET /api/analytics/votes-by-party` - Votos agregados por partido
+- `GET /api/analytics/top-candidates` - Candidatos mais votados
+- `GET /api/analytics/votes-by-state` - Votos por estado
+- `GET /api/analytics/votes-by-municipality` - Votos por município
+- `GET /api/analytics/election-years` - Anos eleitorais disponíveis
+- `GET /api/analytics/states` - Estados disponíveis
+- `GET /api/analytics/election-types` - Tipos de eleição disponíveis
+- `GET /api/analytics/export/csv` - Exportação de relatórios em CSV
+- `POST /api/imports/tse/url` - Importação via URL do TSE
 
 ### Sistema Eleitoral Brasileiro
 O sistema implementa o cálculo proporcional brasileiro:
