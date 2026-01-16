@@ -1392,7 +1392,12 @@ Responda em JSON:
     let csvPath: string | null = null;
 
     try {
-      await storage.updateTseImportJob(jobId, { status: "downloading", startedAt: new Date() });
+      await storage.updateTseImportJob(jobId, { 
+        status: "downloading", 
+        stage: "downloading",
+        startedAt: new Date(),
+        updatedAt: new Date()
+      });
       await mkdir(tmpDir, { recursive: true });
 
       const response = await fetch(url);
@@ -1401,8 +1406,9 @@ Responda em JSON:
       }
 
       const contentLength = response.headers.get("content-length");
-      if (contentLength) {
-        await storage.updateTseImportJob(jobId, { fileSize: parseInt(contentLength) });
+      const totalBytes = contentLength ? parseInt(contentLength) : 0;
+      if (totalBytes > 0) {
+        await storage.updateTseImportJob(jobId, { fileSize: totalBytes });
       }
 
       const zipPath = path.join(tmpDir, "data.zip");
@@ -1414,13 +1420,29 @@ Responda em JSON:
 
       const reader = response.body.getReader();
       let downloadedBytes = 0;
+      let lastProgressUpdate = Date.now();
+      const PROGRESS_UPDATE_INTERVAL = 2000;
       
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         fileStream.write(value);
         downloadedBytes += value.length;
+        
+        const now = Date.now();
+        if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
+          await storage.updateTseImportJob(jobId, { 
+            downloadedBytes,
+            updatedAt: new Date()
+          });
+          lastProgressUpdate = now;
+        }
       }
+      
+      await storage.updateTseImportJob(jobId, { 
+        downloadedBytes,
+        updatedAt: new Date()
+      });
       
       fileStream.end();
       await new Promise<void>((resolve, reject) => {
@@ -1428,7 +1450,11 @@ Responda em JSON:
         fileStream.on("error", reject);
       });
 
-      await storage.updateTseImportJob(jobId, { status: "extracting" });
+      await storage.updateTseImportJob(jobId, { 
+        status: "extracting",
+        stage: "extracting",
+        updatedAt: new Date()
+      });
 
       const directory = await unzipper.Open.file(zipPath);
       
@@ -1452,7 +1478,11 @@ Responda em JSON:
       csvPath = path.join(tmpDir, "data.csv");
       await pipeline(csvFile.stream(), createWriteStream(csvPath));
 
-      await storage.updateTseImportJob(jobId, { status: "running" });
+      await storage.updateTseImportJob(jobId, { 
+        status: "processing",
+        stage: "processing",
+        updatedAt: new Date()
+      });
       await processCSVImportInternal(jobId, csvPath);
 
       await unlink(zipPath).catch(() => {});
@@ -1461,7 +1491,9 @@ Responda em JSON:
       console.error("URL import error:", error);
       await storage.updateTseImportJob(jobId, {
         status: "failed",
+        stage: "failed",
         completedAt: new Date(),
+        updatedAt: new Date(),
         errorMessage: error.message || "Unknown error",
       });
     }
@@ -1574,7 +1606,10 @@ Responda em JSON:
 
         if (records.length >= BATCH_SIZE) {
           await storage.bulkInsertTseCandidateVotes(records);
-          await storage.updateTseImportJob(jobId, { processedRows: rowCount });
+          await storage.updateTseImportJob(jobId, { 
+            processedRows: rowCount,
+            updatedAt: new Date()
+          });
           records.length = 0;
         }
       } catch (err: any) {
@@ -1595,7 +1630,9 @@ Responda em JSON:
 
     await storage.updateTseImportJob(jobId, {
       status: "completed",
+      stage: "completed",
       completedAt: new Date(),
+      updatedAt: new Date(),
       processedRows: rowCount,
       errorCount: errorCount,
     });
@@ -1646,7 +1683,12 @@ Responda em JSON:
 
   const processCSVImport = async (jobId: number, filePath: string) => {
     try {
-      await storage.updateTseImportJob(jobId, { status: "running", startedAt: new Date() });
+      await storage.updateTseImportJob(jobId, { 
+        status: "processing", 
+        stage: "processing",
+        startedAt: new Date(),
+        updatedAt: new Date()
+      });
       
       const job = await storage.getTseImportJob(jobId);
       const cargoFilter = job?.cargoFilter;
@@ -1760,7 +1802,10 @@ Responda em JSON:
 
           if (records.length >= BATCH_SIZE) {
             await storage.bulkInsertTseCandidateVotes(records);
-            await storage.updateTseImportJob(jobId, { processedRows: rowCount });
+            await storage.updateTseImportJob(jobId, { 
+              processedRows: rowCount,
+              updatedAt: new Date()
+            });
             records.length = 0;
           }
         } catch (err: any) {
@@ -1781,10 +1826,12 @@ Responda em JSON:
 
       await storage.updateTseImportJob(jobId, {
         status: "completed",
+        stage: "completed",
         totalRows: rowCount,
         processedRows: rowCount,
         errorCount,
         completedAt: new Date(),
+        updatedAt: new Date(),
       });
 
       console.log(`TSE Import ${jobId} completed: ${rowCount} rows, ${errorCount} errors`);
@@ -1792,8 +1839,10 @@ Responda em JSON:
       console.error(`TSE Import ${jobId} failed:`, error);
       await storage.updateTseImportJob(jobId, {
         status: "failed",
+        stage: "failed",
         errorCount: 1,
         completedAt: new Date(),
+        updatedAt: new Date(),
       });
       await storage.createTseImportError({
         importJobId: jobId,

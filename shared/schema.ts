@@ -250,6 +250,8 @@ export const tseImportJobs = pgTable("tse_import_jobs", {
   filename: text("filename").notNull(),
   fileSize: bigint("file_size", { mode: "number" }).notNull(),
   status: text("status").notNull().default("pending"),
+  stage: text("stage").default("pending"),
+  downloadedBytes: bigint("downloaded_bytes", { mode: "number" }).default(0),
   totalRows: integer("total_rows").default(0),
   processedRows: integer("processed_rows").default(0),
   errorCount: integer("error_count").default(0),
@@ -260,6 +262,7 @@ export const tseImportJobs = pgTable("tse_import_jobs", {
   cargoFilter: integer("cargo_filter"),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   createdBy: varchar("created_by").references(() => users.id),
 });
