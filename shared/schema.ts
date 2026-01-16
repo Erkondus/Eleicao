@@ -257,6 +257,7 @@ export const tseImportJobs = pgTable("tse_import_jobs", {
   electionYear: integer("election_year"),
   electionType: text("election_type"),
   uf: text("uf"),
+  cargoFilter: integer("cargo_filter"),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),

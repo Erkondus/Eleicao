@@ -1263,8 +1263,9 @@ Responda em JSON:
 
       const electionYear = req.body.electionYear ? parseInt(req.body.electionYear) : null;
       const uf = req.body.uf || null;
-
       const electionType = req.body.electionType || null;
+      const parsedCargo = req.body.cargoFilter ? parseInt(req.body.cargoFilter) : NaN;
+      const cargoFilter = !isNaN(parsedCargo) ? parsedCargo : null;
       
       const existingImport = await storage.findExistingImport(
         req.file.originalname,
@@ -1301,6 +1302,7 @@ Responda em JSON:
         electionYear,
         electionType,
         uf,
+        cargoFilter,
         createdBy: req.user?.id || null,
       });
 
@@ -1317,7 +1319,7 @@ Responda em JSON:
 
   app.post("/api/imports/tse/url", requireAuth, requireRole("admin"), async (req, res) => {
     try {
-      const { url, electionYear, electionType, uf } = req.body;
+      const { url, electionYear, electionType, uf, cargoFilter } = req.body;
       
       if (!url || typeof url !== "string") {
         return res.status(400).json({ error: "URL is required" });
@@ -1370,6 +1372,7 @@ Responda em JSON:
         electionYear: parsedYear,
         electionType: electionType || null,
         uf: uf || null,
+        cargoFilter: cargoFilter && !isNaN(parseInt(cargoFilter)) ? parseInt(cargoFilter) : null,
         createdBy: req.user?.id || null,
       });
 
@@ -1428,7 +1431,19 @@ Responda em JSON:
       await storage.updateTseImportJob(jobId, { status: "extracting" });
 
       const directory = await unzipper.Open.file(zipPath);
-      const csvFile = directory.files.find(f => f.path.endsWith(".csv") || f.path.endsWith(".txt"));
+      
+      const csvFiles = directory.files.filter(f => 
+        (f.path.endsWith(".csv") || f.path.endsWith(".txt")) && !f.path.startsWith("__MACOSX")
+      );
+      
+      if (csvFiles.length === 0) {
+        throw new Error("No CSV/TXT file found in ZIP");
+      }
+      
+      const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
+      const csvFile = brasilFile || csvFiles[0];
+      
+      console.log(`Found ${csvFiles.length} CSV files, using: ${csvFile.path}${brasilFile ? " (prioritized _BRASIL file)" : ""}`);
       
       if (!csvFile) {
         throw new Error("No CSV/TXT file found in ZIP");
@@ -1453,8 +1468,12 @@ Responda em JSON:
   };
 
   const processCSVImportInternal = async (jobId: number, filePath: string) => {
+    const job = await storage.getTseImportJob(jobId);
+    const cargoFilter = job?.cargoFilter;
+    
     const records: InsertTseCandidateVote[] = [];
     let rowCount = 0;
+    let filteredCount = 0;
     let errorCount = 0;
     const BATCH_SIZE = 1000;
 
@@ -1546,7 +1565,11 @@ Responda em JSON:
         }
 
         if (record.anoEleicao && record.nrCandidato) {
-          records.push(record as InsertTseCandidateVote);
+          if (cargoFilter && record.cdCargo !== cargoFilter) {
+            filteredCount++;
+          } else {
+            records.push(record as InsertTseCandidateVote);
+          }
         }
 
         if (records.length >= BATCH_SIZE) {
@@ -1624,9 +1647,13 @@ Responda em JSON:
   const processCSVImport = async (jobId: number, filePath: string) => {
     try {
       await storage.updateTseImportJob(jobId, { status: "running", startedAt: new Date() });
+      
+      const job = await storage.getTseImportJob(jobId);
+      const cargoFilter = job?.cargoFilter;
 
       const records: InsertTseCandidateVote[] = [];
       let rowCount = 0;
+      let filteredCount = 0;
       let errorCount = 0;
       const BATCH_SIZE = 1000;
 
@@ -1725,7 +1752,11 @@ Responda em JSON:
             }
           }
 
-          records.push(record);
+          if (cargoFilter && record.cdCargo !== cargoFilter) {
+            filteredCount++;
+          } else {
+            records.push(record);
+          }
 
           if (records.length >= BATCH_SIZE) {
             await storage.bulkInsertTseCandidateVotes(records);

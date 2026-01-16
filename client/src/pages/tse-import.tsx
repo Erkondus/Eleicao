@@ -43,15 +43,28 @@ const UFS = [
 
 const ELECTION_YEARS = Array.from({ length: 30 }, (_, i) => 2024 - i * 2).filter(y => y >= 1998);
 
+const CARGOS = [
+  { code: 1, name: "Presidente" },
+  { code: 3, name: "Governador" },
+  { code: 5, name: "Senador" },
+  { code: 6, name: "Deputado Federal" },
+  { code: 7, name: "Deputado Estadual" },
+  { code: 8, name: "Deputado Distrital" },
+  { code: 11, name: "Prefeito" },
+  { code: 13, name: "Vereador" },
+];
+
 export default function TseImport() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [electionYear, setElectionYear] = useState<string>("");
   const [uf, setUf] = useState<string>("");
+  const [cargoFilter, setCargoFilter] = useState<string>("");
   const [errorsDialogJob, setErrorsDialogJob] = useState<TseImportJob | null>(null);
   const [urlInput, setUrlInput] = useState<string>("");
   const [urlYear, setUrlYear] = useState<string>("");
+  const [urlCargo, setUrlCargo] = useState<string>("");
 
   const { data: jobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery<TseImportJob[]>({
     queryKey: ["/api/imports/tse"],
@@ -93,6 +106,7 @@ export default function TseImport() {
       setSelectedFile(null);
       setElectionYear("");
       setUf("");
+      setCargoFilter("");
       queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
     },
     onError: (error: Error) => {
@@ -107,7 +121,7 @@ export default function TseImport() {
   });
 
   const urlImportMutation = useMutation({
-    mutationFn: async (data: { url: string; electionYear?: string }) => {
+    mutationFn: async (data: { url: string; electionYear?: string; cargoFilter?: string }) => {
       const response = await fetch("/api/imports/tse/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,6 +141,7 @@ export default function TseImport() {
       toast({ title: "Download iniciado", description: "O arquivo está sendo baixado e processado." });
       setUrlInput("");
       setUrlYear("");
+      setUrlCargo("");
       queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
     },
     onError: (error: Error) => {
@@ -145,7 +160,11 @@ export default function TseImport() {
       toast({ title: "Digite uma URL", variant: "destructive" });
       return;
     }
-    urlImportMutation.mutate({ url: urlInput, electionYear: urlYear || undefined });
+    urlImportMutation.mutate({ 
+      url: urlInput, 
+      electionYear: urlYear || undefined,
+      cargoFilter: urlCargo && urlCargo !== "all" ? urlCargo : undefined
+    });
   };
 
   const generateTseUrl = (year: string) => {
@@ -168,6 +187,7 @@ export default function TseImport() {
     formData.append("file", selectedFile);
     if (electionYear) formData.append("electionYear", electionYear);
     if (uf) formData.append("uf", uf);
+    if (cargoFilter && cargoFilter !== "all") formData.append("cargoFilter", cargoFilter);
 
     uploadMutation.mutate(formData);
   };
@@ -281,6 +301,24 @@ export default function TseImport() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label>Cargo (opcional)</Label>
+              <Select value={cargoFilter} onValueChange={setCargoFilter}>
+                <SelectTrigger data-testid="select-cargo">
+                  <SelectValue placeholder="Todos os cargos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os cargos</SelectItem>
+                  {CARGOS.map((cargo) => (
+                    <SelectItem key={cargo.code} value={String(cargo.code)}>{cargo.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Selecione para importar apenas dados de um cargo específico
+              </p>
+            </div>
+
             <Button
               onClick={handleUpload}
               disabled={!selectedFile || uploadMutation.isPending}
@@ -351,6 +389,24 @@ export default function TseImport() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cargo (opcional)</Label>
+              <Select value={urlCargo} onValueChange={setUrlCargo}>
+                <SelectTrigger data-testid="select-url-cargo">
+                  <SelectValue placeholder="Todos os cargos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os cargos</SelectItem>
+                  {CARGOS.map((cargo) => (
+                    <SelectItem key={cargo.code} value={String(cargo.code)}>{cargo.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Selecione para importar apenas dados de um cargo específico
+              </p>
             </div>
 
             <Button
