@@ -68,7 +68,13 @@ export default function TseImport() {
 
   const { data: jobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery<TseImportJob[]>({
     queryKey: ["/api/imports/tse"],
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const data = query.state.data as TseImportJob[] | undefined;
+      const hasActive = data?.some(job => 
+        ["pending", "downloading", "extracting", "running", "processing"].includes(job.status)
+      );
+      return hasActive ? 2000 : 10000;
+    },
   });
 
   const { data: stats } = useQuery<{
@@ -201,6 +207,7 @@ export default function TseImport() {
       case "extracting":
         return <Badge variant="default"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Extraindo</Badge>;
       case "running":
+      case "processing":
         return <Badge variant="default"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Processando</Badge>;
       case "completed":
         return <Badge variant="outline" className="text-green-600 border-green-600"><CheckCircle className="h-3 w-3 mr-1" />Concluído</Badge>;
@@ -209,6 +216,97 @@ export default function TseImport() {
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
+  };
+
+  const formatElapsedTime = (startDate: string | Date | null) => {
+    if (!startDate) return "";
+    const start = new Date(startDate).getTime();
+    const now = Date.now();
+    const elapsed = Math.floor((now - start) / 1000);
+    
+    if (elapsed < 60) return `${elapsed}s`;
+    if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+    return `${Math.floor(elapsed / 3600)}h ${Math.floor((elapsed % 3600) / 60)}m`;
+  };
+
+  const getProgressDisplay = (job: TseImportJob) => {
+    const downloadedBytes = (job as any).downloadedBytes || 0;
+    
+    if (job.status === "downloading") {
+      if (job.fileSize > 0) {
+        const percent = Math.min(100, (downloadedBytes / job.fileSize) * 100);
+        return (
+          <div className="w-32 space-y-1">
+            <Progress value={percent} className="h-2" />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{percent.toFixed(0)}%</span>
+              <span>{formatFileSize(downloadedBytes)} / {formatFileSize(job.fileSize)}</span>
+            </div>
+            {job.startedAt && (
+              <p className="text-xs text-muted-foreground">{formatElapsedTime(job.startedAt)}</p>
+            )}
+          </div>
+        );
+      }
+      return (
+        <div className="w-32 space-y-1">
+          <Progress value={0} className="h-2 animate-pulse" />
+          <p className="text-xs text-muted-foreground">Iniciando download...</p>
+        </div>
+      );
+    }
+
+    if (job.status === "extracting") {
+      return (
+        <div className="w-32 space-y-1">
+          <Progress value={100} className="h-2 animate-pulse" />
+          <p className="text-xs text-muted-foreground">Extraindo ZIP...</p>
+          {job.startedAt && (
+            <p className="text-xs text-muted-foreground">{formatElapsedTime(job.startedAt)}</p>
+          )}
+        </div>
+      );
+    }
+
+    if (job.status === "running" || job.status === "processing") {
+      const processed = job.processedRows || 0;
+      return (
+        <div className="w-32 space-y-1">
+          <div className="flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+            <span className="text-sm font-medium">{processed.toLocaleString("pt-BR")}</span>
+          </div>
+          <p className="text-xs text-muted-foreground">linhas processadas</p>
+          {job.startedAt && (
+            <p className="text-xs text-muted-foreground">{formatElapsedTime(job.startedAt)}</p>
+          )}
+        </div>
+      );
+    }
+
+    if (job.status === "completed") {
+      const duration = job.startedAt && job.completedAt 
+        ? Math.floor((new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime()) / 1000)
+        : null;
+      return (
+        <div className="space-y-1">
+          <span className="text-sm font-medium text-green-600">
+            {(job.processedRows || 0).toLocaleString("pt-BR")} linhas
+          </span>
+          {duration !== null && (
+            <p className="text-xs text-muted-foreground">
+              em {duration < 60 ? `${duration}s` : `${Math.floor(duration / 60)}m ${duration % 60}s`}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (job.status === "failed") {
+      return <span className="text-sm text-destructive">Erro</span>;
+    }
+
+    return <span className="text-sm text-muted-foreground">-</span>;
   };
 
   const formatFileSize = (bytes: number) => {
@@ -527,18 +625,7 @@ export default function TseImport() {
                     <TableCell>{job.uf || "-"}</TableCell>
                     <TableCell>{getStatusBadge(job.status)}</TableCell>
                     <TableCell>
-                      {job.status === "running" && job.totalRows && job.totalRows > 0 ? (
-                        <div className="w-24">
-                          <Progress value={(job.processedRows || 0) / job.totalRows * 100} className="h-2" />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {((job.processedRows || 0) / job.totalRows * 100).toFixed(0)}%
-                          </p>
-                        </div>
-                      ) : job.status === "completed" ? (
-                        <span className="text-sm">{(job.processedRows || 0).toLocaleString("pt-BR")} linhas</span>
-                      ) : (
-                        "-"
-                      )}
+                      {getProgressDisplay(job)}
                     </TableCell>
                     <TableCell>
                       {(job.errorCount || 0) > 0 ? (
