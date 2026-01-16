@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -248,7 +248,7 @@ export type AIPrediction = {
 export const tseImportJobs = pgTable("tse_import_jobs", {
   id: serial("id").primaryKey(),
   filename: text("filename").notNull(),
-  fileSize: integer("file_size").notNull(),
+  fileSize: bigint("file_size", { mode: "number" }).notNull(),
   status: text("status").notNull().default("pending"),
   totalRows: integer("total_rows").default(0),
   processedRows: integer("processed_rows").default(0),
