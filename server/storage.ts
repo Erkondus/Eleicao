@@ -317,6 +317,59 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
 
+  async findExistingImport(
+    filename: string, 
+    electionYear?: number | null, 
+    uf?: string | null,
+    electionType?: string | null
+  ): Promise<{ job: TseImportJob; isInProgress: boolean } | undefined> {
+    const filenameCondition = eq(tseImportJobs.filename, filename);
+    
+    const baseConditions = [filenameCondition];
+    
+    if (electionYear) {
+      baseConditions.push(eq(tseImportJobs.electionYear, electionYear));
+    }
+    
+    if (uf) {
+      baseConditions.push(eq(tseImportJobs.uf, uf));
+    }
+
+    if (electionType) {
+      baseConditions.push(eq(tseImportJobs.electionType, electionType));
+    }
+    
+    const inProgressStatuses = ["pending", "downloading", "extracting", "running"];
+    
+    const [inProgressJob] = await db.select()
+      .from(tseImportJobs)
+      .where(and(
+        ...baseConditions,
+        sql`${tseImportJobs.status} IN ('pending', 'downloading', 'extracting', 'running')`
+      ))
+      .orderBy(desc(tseImportJobs.createdAt))
+      .limit(1);
+    
+    if (inProgressJob) {
+      return { job: inProgressJob, isInProgress: true };
+    }
+    
+    const [completedJob] = await db.select()
+      .from(tseImportJobs)
+      .where(and(
+        ...baseConditions,
+        eq(tseImportJobs.status, "completed")
+      ))
+      .orderBy(desc(tseImportJobs.completedAt))
+      .limit(1);
+    
+    if (completedJob) {
+      return { job: completedJob, isInProgress: false };
+    }
+    
+    return undefined;
+  }
+
   async createTseImportJob(job: InsertTseImportJob): Promise<TseImportJob> {
     const [created] = await db.insert(tseImportJobs).values(job).returning();
     return created;

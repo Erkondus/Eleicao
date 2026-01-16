@@ -81,6 +81,9 @@ export default function TseImport() {
       });
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 409) {
+          throw new Error(error.message || "Dados já importados");
+        }
         throw new Error(error.error || "Upload failed");
       }
       return response.json();
@@ -93,13 +96,32 @@ export default function TseImport() {
       queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
     },
     onError: (error: Error) => {
-      toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
+      const isInProgress = error.message.includes("sendo processado");
+      const isDuplicate = error.message.includes("já foi importado");
+      toast({ 
+        title: isInProgress ? "Importação em andamento" : (isDuplicate ? "Dados já importados" : "Erro no upload"), 
+        description: error.message, 
+        variant: "destructive" 
+      });
     },
   });
 
   const urlImportMutation = useMutation({
     mutationFn: async (data: { url: string; electionYear?: string }) => {
-      return apiRequest("POST", "/api/imports/tse/url", data);
+      const response = await fetch("/api/imports/tse/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        if (response.status === 409) {
+          throw new Error(error.message || "Dados já importados");
+        }
+        throw new Error(error.error || "Falha na importação");
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({ title: "Download iniciado", description: "O arquivo está sendo baixado e processado." });
@@ -108,7 +130,13 @@ export default function TseImport() {
       queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
     },
     onError: (error: Error) => {
-      toast({ title: "Erro na importação", description: error.message, variant: "destructive" });
+      const isInProgress = error.message.includes("sendo processada");
+      const isDuplicate = error.message.includes("já foram importados");
+      toast({ 
+        title: isInProgress ? "Importação em andamento" : (isDuplicate ? "Dados já importados" : "Erro na importação"), 
+        description: error.message, 
+        variant: "destructive" 
+      });
     },
   });
 

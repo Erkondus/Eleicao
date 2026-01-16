@@ -1261,13 +1261,46 @@ Responda em JSON:
         return res.status(400).json({ error: "No file uploaded" });
       }
 
+      const electionYear = req.body.electionYear ? parseInt(req.body.electionYear) : null;
+      const uf = req.body.uf || null;
+
+      const electionType = req.body.electionType || null;
+      
+      const existingImport = await storage.findExistingImport(
+        req.file.originalname,
+        electionYear,
+        uf,
+        electionType
+      );
+
+      if (existingImport) {
+        if (existingImport.isInProgress) {
+          return res.status(409).json({ 
+            error: "Importação em andamento",
+            message: `Este arquivo já está sendo processado. Aguarde a conclusão da importação atual.`,
+            existingJob: existingImport.job,
+            isInProgress: true
+          });
+        } else {
+          const importDate = existingImport.job.completedAt 
+            ? new Date(existingImport.job.completedAt).toLocaleDateString("pt-BR") 
+            : "data desconhecida";
+          return res.status(409).json({ 
+            error: "Dados já importados",
+            message: `Este arquivo já foi importado com sucesso em ${importDate}. Foram processados ${existingImport.job.processedRows?.toLocaleString("pt-BR") || 0} registros.`,
+            existingJob: existingImport.job,
+            isInProgress: false
+          });
+        }
+      }
+
       const job = await storage.createTseImportJob({
         filename: req.file.originalname,
         fileSize: req.file.size,
         status: "pending",
-        electionYear: req.body.electionYear ? parseInt(req.body.electionYear) : null,
-        electionType: req.body.electionType || null,
-        uf: req.body.uf || null,
+        electionYear,
+        electionType,
+        uf,
         createdBy: req.user?.id || null,
       });
 
@@ -1299,11 +1332,42 @@ Responda em JSON:
       }
 
       const filename = path.basename(url);
+      const fullFilename = `[URL] ${filename}`;
+      const parsedYear = electionYear ? parseInt(electionYear) : null;
+
+      const existingImport = await storage.findExistingImport(
+        fullFilename,
+        parsedYear,
+        uf || null,
+        electionType || null
+      );
+
+      if (existingImport) {
+        if (existingImport.isInProgress) {
+          return res.status(409).json({ 
+            error: "Importação em andamento",
+            message: `Esta URL já está sendo processada. Aguarde a conclusão da importação atual.`,
+            existingJob: existingImport.job,
+            isInProgress: true
+          });
+        } else {
+          const importDate = existingImport.job.completedAt 
+            ? new Date(existingImport.job.completedAt).toLocaleDateString("pt-BR") 
+            : "data desconhecida";
+          return res.status(409).json({ 
+            error: "Dados já importados",
+            message: `Estes dados do TSE já foram importados com sucesso em ${importDate}. Foram processados ${existingImport.job.processedRows?.toLocaleString("pt-BR") || 0} registros.`,
+            existingJob: existingImport.job,
+            isInProgress: false
+          });
+        }
+      }
+
       const job = await storage.createTseImportJob({
-        filename: `[URL] ${filename}`,
+        filename: fullFilename,
         fileSize: 0,
         status: "pending",
-        electionYear: electionYear ? parseInt(electionYear) : null,
+        electionYear: parsedYear,
         electionType: electionType || null,
         uf: uf || null,
         createdBy: req.user?.id || null,
