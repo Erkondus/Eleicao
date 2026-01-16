@@ -230,7 +230,7 @@ export default function TseImport() {
   };
 
   const getProgressDisplay = (job: TseImportJob) => {
-    const downloadedBytes = (job as any).downloadedBytes || 0;
+    const downloadedBytes = Number(job.downloadedBytes) || 0;
     
     if (job.status === "downloading") {
       if (job.fileSize > 0) {

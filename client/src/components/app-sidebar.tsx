@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Building2,
@@ -12,7 +13,10 @@ import {
   Shield,
   Upload,
   BarChart3,
+  Loader2,
+  Download,
 } from "lucide-react";
+import type { TseImportJob } from "@shared/schema";
 import {
   Sidebar,
   SidebarContent,
@@ -47,6 +51,54 @@ const adminNavItems = [
   { title: "Auditoria", url: "/audit", icon: ClipboardList, permission: "view_audit" },
   { title: "Usuários", url: "/users", icon: Shield, permission: "manage_users" },
 ];
+
+function ImportStatusIndicator() {
+  const { data: jobs } = useQuery<TseImportJob[]>({
+    queryKey: ["/api/imports/tse"],
+    refetchInterval: (query) => {
+      const data = query.state.data as TseImportJob[] | undefined;
+      const hasActive = data?.some(job => 
+        ["pending", "downloading", "extracting", "running", "processing"].includes(job.status)
+      );
+      return hasActive ? 2000 : 30000;
+    },
+  });
+
+  const activeJobs = jobs?.filter(job => 
+    ["pending", "downloading", "extracting", "running", "processing"].includes(job.status)
+  ) || [];
+
+  if (activeJobs.length === 0) return null;
+
+  const downloadingCount = activeJobs.filter(j => j.status === "downloading").length;
+  const processingCount = activeJobs.filter(j => 
+    ["extracting", "running", "processing"].includes(j.status)
+  ).length;
+
+  return (
+    <div className="mx-2 mb-2 p-2 rounded-md bg-primary/10 border border-primary/20" data-testid="indicator-active-imports">
+      <Link href="/tse-import" data-testid="link-active-imports">
+        <div className="flex items-center gap-2 cursor-pointer hover:opacity-80">
+          {downloadingCount > 0 ? (
+            <Download className="h-4 w-4 text-primary animate-pulse" />
+          ) : (
+            <Loader2 className="h-4 w-4 text-primary animate-spin" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-primary" data-testid="text-active-import-count">
+              {activeJobs.length} importação{activeJobs.length > 1 ? "ões" : ""} ativa{activeJobs.length > 1 ? "s" : ""}
+            </p>
+            <p className="text-xs text-muted-foreground truncate" data-testid="text-import-status-detail">
+              {downloadingCount > 0 && `${downloadingCount} baixando`}
+              {downloadingCount > 0 && processingCount > 0 && ", "}
+              {processingCount > 0 && `${processingCount} processando`}
+            </p>
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+}
 
 export function AppSidebar() {
   const [location] = useLocation();
@@ -139,6 +191,7 @@ export function AppSidebar() {
               Administração
             </SidebarGroupLabel>
             <SidebarGroupContent>
+              <ImportStatusIndicator />
               <SidebarMenu>
                 {filterByPermission(adminNavItems).map((item) => (
                   <SidebarMenuItem key={item.title}>
