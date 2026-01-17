@@ -20,6 +20,9 @@ import {
   type ProjectionReportRecord, type InsertProjectionReport, projectionReports,
   type ValidationRunRecord, type InsertValidationRun, importValidationRuns,
   type ValidationIssueRecord, type InsertValidationIssue, importValidationIssues,
+  type ForecastRun, type InsertForecastRun, forecastRuns,
+  type ForecastResult, type InsertForecastResult, forecastResults,
+  type SwingRegion, type InsertSwingRegion, forecastSwingRegions,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -141,6 +144,38 @@ export interface IStorage {
   getValidationIssue(id: number): Promise<ValidationIssueRecord | undefined>;
   updateValidationIssue(id: number, data: Partial<InsertValidationIssue>): Promise<ValidationIssueRecord | undefined>;
   getValidationIssueCounts(runId: number): Promise<{ type: string; severity: string; count: number }[]>;
+
+  // Forecast methods
+  createForecastRun(data: InsertForecastRun): Promise<ForecastRun>;
+  getForecastRun(id: number): Promise<ForecastRun | undefined>;
+  getForecastRuns(filters?: { targetYear?: number; status?: string }): Promise<ForecastRun[]>;
+  updateForecastRun(id: number, data: Partial<InsertForecastRun>): Promise<ForecastRun | undefined>;
+  deleteForecastRun(id: number): Promise<boolean>;
+  
+  createForecastResult(data: InsertForecastResult): Promise<ForecastResult>;
+  createForecastResults(data: InsertForecastResult[]): Promise<ForecastResult[]>;
+  getForecastResults(runId: number, filters?: { resultType?: string; region?: string }): Promise<ForecastResult[]>;
+  
+  createSwingRegion(data: InsertSwingRegion): Promise<SwingRegion>;
+  createSwingRegions(data: InsertSwingRegion[]): Promise<SwingRegion[]>;
+  getSwingRegions(runId: number): Promise<SwingRegion[]>;
+  
+  // Historical data for forecasting
+  getHistoricalVotesByParty(filters: { years: number[]; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    state: string | null;
+    position: string | null;
+    totalVotes: number;
+    candidateCount: number;
+  }[]>;
+  
+  getHistoricalTrends(filters: { party?: string; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    voteShare: number;
+    seats?: number;
+  }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1472,6 +1507,179 @@ export class DatabaseStorage implements IStorage {
       .where(eq(importValidationIssues.runId, runId))
       .groupBy(importValidationIssues.type, importValidationIssues.severity);
     return result;
+  }
+
+  // Forecast methods
+  async createForecastRun(data: InsertForecastRun): Promise<ForecastRun> {
+    const [run] = await db.insert(forecastRuns).values(data).returning();
+    return run;
+  }
+
+  async getForecastRun(id: number): Promise<ForecastRun | undefined> {
+    const [run] = await db.select().from(forecastRuns).where(eq(forecastRuns.id, id));
+    return run;
+  }
+
+  async getForecastRuns(filters?: { targetYear?: number; status?: string }): Promise<ForecastRun[]> {
+    const conditions: SQL[] = [];
+    
+    if (filters?.targetYear) {
+      conditions.push(eq(forecastRuns.targetYear, filters.targetYear));
+    }
+    if (filters?.status) {
+      conditions.push(eq(forecastRuns.status, filters.status));
+    }
+    
+    const query = conditions.length > 0
+      ? db.select().from(forecastRuns).where(and(...conditions))
+      : db.select().from(forecastRuns);
+    
+    return query.orderBy(desc(forecastRuns.createdAt));
+  }
+
+  async updateForecastRun(id: number, data: Partial<InsertForecastRun>): Promise<ForecastRun | undefined> {
+    const [updated] = await db
+      .update(forecastRuns)
+      .set(data)
+      .where(eq(forecastRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteForecastRun(id: number): Promise<boolean> {
+    const result = await db.delete(forecastRuns).where(eq(forecastRuns.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async createForecastResult(data: InsertForecastResult): Promise<ForecastResult> {
+    const [result] = await db.insert(forecastResults).values(data).returning();
+    return result;
+  }
+
+  async createForecastResults(data: InsertForecastResult[]): Promise<ForecastResult[]> {
+    if (data.length === 0) return [];
+    return db.insert(forecastResults).values(data).returning();
+  }
+
+  async getForecastResults(runId: number, filters?: { resultType?: string; region?: string }): Promise<ForecastResult[]> {
+    const conditions: SQL[] = [eq(forecastResults.runId, runId)];
+    
+    if (filters?.resultType) {
+      conditions.push(eq(forecastResults.resultType, filters.resultType));
+    }
+    if (filters?.region) {
+      conditions.push(eq(forecastResults.region, filters.region));
+    }
+    
+    return db
+      .select()
+      .from(forecastResults)
+      .where(and(...conditions))
+      .orderBy(desc(forecastResults.predictedVoteShare));
+  }
+
+  async createSwingRegion(data: InsertSwingRegion): Promise<SwingRegion> {
+    const [region] = await db.insert(forecastSwingRegions).values(data).returning();
+    return region;
+  }
+
+  async createSwingRegions(data: InsertSwingRegion[]): Promise<SwingRegion[]> {
+    if (data.length === 0) return [];
+    return db.insert(forecastSwingRegions).values(data).returning();
+  }
+
+  async getSwingRegions(runId: number): Promise<SwingRegion[]> {
+    return db
+      .select()
+      .from(forecastSwingRegions)
+      .where(eq(forecastSwingRegions.runId, runId))
+      .orderBy(desc(forecastSwingRegions.volatilityScore));
+  }
+
+  async getHistoricalVotesByParty(filters: { years: number[]; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    state: string | null;
+    position: string | null;
+    totalVotes: number;
+    candidateCount: number;
+  }[]> {
+    const conditions: SQL[] = [];
+    
+    if (filters.years.length > 0) {
+      conditions.push(sql`${tseCandidateVotes.anoEleicao} = ANY(${filters.years})`);
+    }
+    if (filters.position) {
+      conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    }
+    if (filters.state) {
+      conditions.push(eq(tseCandidateVotes.sgUf, filters.state));
+    }
+    
+    const result = await db
+      .select({
+        year: tseCandidateVotes.anoEleicao,
+        party: tseCandidateVotes.sgPartido,
+        state: tseCandidateVotes.sgUf,
+        position: tseCandidateVotes.dsCargo,
+        totalVotes: sql<number>`SUM(${tseCandidateVotes.qtVotosNominais})::int`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.nrCandidato})::int`,
+      })
+      .from(tseCandidateVotes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(
+        tseCandidateVotes.anoEleicao, 
+        tseCandidateVotes.sgPartido, 
+        tseCandidateVotes.sgUf, 
+        tseCandidateVotes.dsCargo
+      )
+      .orderBy(tseCandidateVotes.anoEleicao, desc(sql`SUM(${tseCandidateVotes.qtVotosNominais})`));
+    
+    return result.map(r => ({
+      year: r.year || 0,
+      party: r.party || "",
+      state: r.state,
+      position: r.position,
+      totalVotes: r.totalVotes,
+      candidateCount: r.candidateCount,
+    }));
+  }
+
+  async getHistoricalTrends(filters: { party?: string; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    voteShare: number;
+    seats?: number;
+  }[]> {
+    const conditions: SQL[] = [];
+    
+    if (filters.party) {
+      conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
+    }
+    if (filters.position) {
+      conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    }
+    if (filters.state) {
+      conditions.push(eq(tseCandidateVotes.sgUf, filters.state));
+    }
+    
+    const voteTotals = await db
+      .select({
+        year: tseCandidateVotes.anoEleicao,
+        party: tseCandidateVotes.sgPartido,
+        votes: sql<number>`SUM(${tseCandidateVotes.qtVotosNominais})::int`,
+        totalVotesInYear: sql<number>`SUM(SUM(${tseCandidateVotes.qtVotosNominais})) OVER (PARTITION BY ${tseCandidateVotes.anoEleicao})::int`,
+      })
+      .from(tseCandidateVotes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(tseCandidateVotes.anoEleicao, tseCandidateVotes.sgPartido)
+      .orderBy(tseCandidateVotes.anoEleicao);
+    
+    return voteTotals.map(r => ({
+      year: r.year || 0,
+      party: r.party || "",
+      voteShare: r.totalVotesInYear > 0 ? (r.votes / r.totalVotesInYear) * 100 : 0,
+    }));
   }
 }
 

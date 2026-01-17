@@ -576,3 +576,132 @@ export type ValidationRunRecord = typeof importValidationRuns.$inferSelect;
 export const insertValidationIssueSchema = createInsertSchema(importValidationIssues).omit({ id: true, createdAt: true });
 export type InsertValidationIssue = z.infer<typeof insertValidationIssueSchema>;
 export type ValidationIssueRecord = typeof importValidationIssues.$inferSelect;
+
+// Election Forecast Runs - stores forecast model runs and metadata
+export const forecastRuns = pgTable("forecast_runs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  targetYear: integer("target_year").notNull(), // Year being predicted
+  targetElectionType: text("target_election_type"), // e.g., 'Eleições Gerais', 'Eleições Municipais'
+  targetPosition: text("target_position"), // e.g., 'Deputado Federal', 'Senador'
+  targetState: text("target_state"), // Optional: specific state or 'BR' for national
+  historicalYearsUsed: jsonb("historical_years_used").$type<number[]>().default([]), // Which election years were analyzed
+  modelParameters: jsonb("model_parameters"), // Monte Carlo iterations, confidence thresholds, etc.
+  sentimentData: jsonb("sentiment_data"), // Snapshot of sentiment analysis inputs
+  status: text("status").notNull().default("pending"), // pending, running, completed, failed
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  totalSimulations: integer("total_simulations").default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("forecast_runs_target_year_idx").on(table.targetYear),
+  index("forecast_runs_status_idx").on(table.status),
+  index("forecast_runs_created_at_idx").on(table.createdAt),
+]);
+
+export const forecastRunsRelations = relations(forecastRuns, ({ one, many }) => ({
+  createdByUser: one(users, { fields: [forecastRuns.createdBy], references: [users.id] }),
+  results: many(forecastResults),
+  swingRegions: many(forecastSwingRegions),
+}));
+
+// Forecast Results - predictions by party/candidate with confidence intervals
+export const forecastResults = pgTable("forecast_results", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").references(() => forecastRuns.id, { onDelete: "cascade" }).notNull(),
+  resultType: text("result_type").notNull(), // 'party', 'candidate', 'coalition'
+  entityId: integer("entity_id"), // FK to parties or candidates table
+  entityName: text("entity_name").notNull(), // Party abbreviation or candidate name
+  region: text("region"), // State or region code
+  position: text("position"), // Cargo being contested
+  
+  // Vote predictions with confidence intervals
+  predictedVoteShare: decimal("predicted_vote_share", { precision: 7, scale: 4 }), // Percentage (e.g., 15.2345)
+  voteShareLower: decimal("vote_share_lower", { precision: 7, scale: 4 }), // 95% CI lower bound
+  voteShareUpper: decimal("vote_share_upper", { precision: 7, scale: 4 }), // 95% CI upper bound
+  predictedVotes: integer("predicted_votes"), // Absolute vote count
+  votesLower: integer("votes_lower"),
+  votesUpper: integer("votes_upper"),
+  
+  // Seat predictions (for proportional elections)
+  predictedSeats: integer("predicted_seats"),
+  seatsLower: integer("seats_lower"),
+  seatsUpper: integer("seats_upper"),
+  
+  // Win probability (for majoritarian elections or candidate success)
+  winProbability: decimal("win_probability", { precision: 5, scale: 4 }),
+  electedProbability: decimal("elected_probability", { precision: 5, scale: 4 }), // Probability of being elected
+  
+  // Historical trend data
+  historicalTrend: jsonb("historical_trend"), // { years: [2018, 2020, 2022], voteShares: [10.5, 12.3, 14.1] }
+  trendDirection: text("trend_direction"), // 'rising', 'falling', 'stable'
+  trendStrength: decimal("trend_strength", { precision: 5, scale: 4 }), // Coefficient
+  
+  // Factors influencing prediction
+  influenceFactors: jsonb("influence_factors"), // [{ factor: 'sentiment', weight: 0.15, impact: 'positive' }]
+  
+  confidence: decimal("confidence", { precision: 5, scale: 4 }), // Overall confidence in prediction
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("forecast_results_run_idx").on(table.runId),
+  index("forecast_results_type_idx").on(table.resultType),
+  index("forecast_results_entity_idx").on(table.entityName),
+  index("forecast_results_region_idx").on(table.region),
+]);
+
+export const forecastResultsRelations = relations(forecastResults, ({ one }) => ({
+  run: one(forecastRuns, { fields: [forecastResults.runId], references: [forecastRuns.id] }),
+}));
+
+// Forecast Swing Regions - volatile regions that could determine outcomes
+export const forecastSwingRegions = pgTable("forecast_swing_regions", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").references(() => forecastRuns.id, { onDelete: "cascade" }).notNull(),
+  region: text("region").notNull(), // State code
+  regionName: text("region_name").notNull(), // Full state name
+  position: text("position"), // Which position makes this a swing region
+  
+  // Margin between leading candidates/parties
+  marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }), // How close the race is
+  marginVotes: integer("margin_votes"),
+  
+  // Volatility metrics
+  volatilityScore: decimal("volatility_score", { precision: 5, scale: 4 }), // Historical volatility
+  swingMagnitude: decimal("swing_magnitude", { precision: 5, scale: 2 }), // Expected swing size
+  
+  // Key competing entities
+  leadingEntity: text("leading_entity"), // Currently leading party/candidate
+  challengingEntity: text("challenging_entity"), // Closest challenger
+  
+  // Sentiment and trend factors
+  sentimentBalance: decimal("sentiment_balance", { precision: 5, scale: 4 }), // -1 to 1, positive favors incumbent
+  recentTrendShift: decimal("recent_trend_shift", { precision: 5, scale: 4 }), // Recent momentum change
+  
+  // Risk assessment
+  outcomeUncertainty: decimal("outcome_uncertainty", { precision: 5, scale: 4 }), // How uncertain the outcome is
+  keyFactors: jsonb("key_factors"), // Factors making this region volatile
+  
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("swing_regions_run_idx").on(table.runId),
+  index("swing_regions_region_idx").on(table.region),
+  index("swing_regions_volatility_idx").on(table.volatilityScore),
+]);
+
+export const swingRegionsRelations = relations(forecastSwingRegions, ({ one }) => ({
+  run: one(forecastRuns, { fields: [forecastSwingRegions.runId], references: [forecastRuns.id] }),
+}));
+
+export const insertForecastRunSchema = createInsertSchema(forecastRuns).omit({ id: true, createdAt: true });
+export type InsertForecastRun = z.infer<typeof insertForecastRunSchema>;
+export type ForecastRun = typeof forecastRuns.$inferSelect;
+
+export const insertForecastResultSchema = createInsertSchema(forecastResults).omit({ id: true, createdAt: true });
+export type InsertForecastResult = z.infer<typeof insertForecastResultSchema>;
+export type ForecastResult = typeof forecastResults.$inferSelect;
+
+export const insertSwingRegionSchema = createInsertSchema(forecastSwingRegions).omit({ id: true, createdAt: true });
+export type InsertSwingRegion = z.infer<typeof insertSwingRegionSchema>;
+export type SwingRegion = typeof forecastSwingRegions.$inferSelect;
