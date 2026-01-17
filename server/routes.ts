@@ -2132,6 +2132,57 @@ Responda em JSON:
     }
   });
 
+  // ==================== DRILL-DOWN ANALYTICS ROUTES ====================
+
+  app.get("/api/analytics/drill-down/candidates-by-party", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, party, position, limit } = req.query;
+      if (!party) {
+        return res.status(400).json({ error: "Party parameter is required" });
+      }
+      const candidates = await storage.getCandidatesByParty({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        party: party as string,
+        position: position as string | undefined,
+        limit: limit ? parseInt(limit as string) : 100,
+      });
+      res.json(candidates);
+    } catch (error) {
+      console.error("Candidates by party error:", error);
+      res.status(500).json({ error: "Failed to fetch candidates by party" });
+    }
+  });
+
+  app.get("/api/analytics/drill-down/party-by-state", requireAuth, async (req, res) => {
+    try {
+      const { year, party, position } = req.query;
+      const data = await storage.getPartyPerformanceByState({
+        year: year ? parseInt(year as string) : undefined,
+        party: party as string | undefined,
+        position: position as string | undefined,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Party by state error:", error);
+      res.status(500).json({ error: "Failed to fetch party performance by state" });
+    }
+  });
+
+  app.get("/api/analytics/drill-down/votes-by-position", requireAuth, async (req, res) => {
+    try {
+      const { year, uf } = req.query;
+      const data = await storage.getVotesByPosition({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by position error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by position" });
+    }
+  });
+
   // Saved Reports CRUD
   app.get("/api/reports", requireAuth, async (req, res) => {
     try {

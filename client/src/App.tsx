@@ -25,6 +25,7 @@ import ScenarioCandidates from "@/pages/scenario-candidates";
 import DataAnalysis from "@/pages/data-analysis";
 import ElectoralDashboard from "@/pages/electoral-dashboard";
 import SemanticSearch from "@/pages/semantic-search";
+import InteractiveDashboard from "@/pages/interactive-dashboard";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -45,6 +46,7 @@ function Router() {
       <Route path="/data-analysis" component={DataAnalysis} />
       <Route path="/electoral-dashboard" component={ElectoralDashboard} />
       <Route path="/semantic-search" component={SemanticSearch} />
+      <Route path="/interactive-dashboard" component={InteractiveDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

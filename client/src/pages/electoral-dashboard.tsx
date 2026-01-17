@@ -616,7 +616,7 @@ export default function ElectoralDashboard() {
                 <Database className="h-12 w-12 mb-2 opacity-50" />
                 <p>Nenhuma importação registrada</p>
                 <Link href="/tse-import">
-                  <Button variant="link" size="sm" className="mt-2" data-testid="button-start-import-small">
+                  <Button variant="ghost" size="sm" className="mt-2" data-testid="button-start-import-small">
                     Iniciar importação
                   </Button>
                 </Link>
