@@ -150,27 +150,28 @@ export class DatabaseStorage implements IStorage {
     for (const partyData of uniqueParties) {
       if (!partyData.nrPartido || !partyData.sgPartido) continue;
 
-      const existingParty = await this.getPartyByNumber(partyData.nrPartido);
-      
-      if (existingParty) {
-        existing++;
-      } else {
-        try {
-          await this.createParty({
-            name: partyData.nmPartido || partyData.sgPartido,
-            abbreviation: partyData.sgPartido,
-            number: partyData.nrPartido,
-            color: this.generatePartyColor(partyData.nrPartido),
-            active: true,
-          });
+      try {
+        // Use ON CONFLICT DO NOTHING to handle race conditions
+        const result = await db.insert(parties).values({
+          name: partyData.nmPartido || partyData.sgPartido,
+          abbreviation: partyData.sgPartido,
+          number: partyData.nrPartido,
+          color: this.generatePartyColor(partyData.nrPartido),
+          active: true,
+        }).onConflictDoNothing({ target: parties.number }).returning();
+
+        if (result.length > 0) {
           created++;
           console.log(`Created party: ${partyData.sgPartido} (${partyData.nrPartido})`);
-        } catch (error: any) {
-          if (error.code === '23505') {
-            existing++;
-          } else {
-            console.error(`Failed to create party ${partyData.sgPartido}:`, error.message);
-          }
+        } else {
+          existing++;
+        }
+      } catch (error: any) {
+        // Handle abbreviation uniqueness conflict (different party with same abbreviation)
+        if (error.code === '23505') {
+          existing++;
+        } else {
+          console.error(`Failed to create party ${partyData.sgPartido}:`, error.message);
         }
       }
     }

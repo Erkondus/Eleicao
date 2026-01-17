@@ -1628,6 +1628,10 @@ Responda em JSON:
       await storage.bulkInsertTseCandidateVotes(records);
     }
 
+    // Sync parties from imported data before marking as complete
+    const partiesResult = await storage.syncPartiesFromTseImport(jobId);
+    console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.existing} existing`);
+
     await storage.updateTseImportJob(jobId, {
       status: "completed",
       stage: "completed",
@@ -1823,6 +1827,10 @@ Responda em JSON:
       if (records.length > 0) {
         await storage.bulkInsertTseCandidateVotes(records);
       }
+
+      // Sync parties from imported data before marking as complete
+      const partiesResult = await storage.syncPartiesFromTseImport(jobId);
+      console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.existing} existing`);
 
       await storage.updateTseImportJob(jobId, {
         status: "completed",
