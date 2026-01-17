@@ -24,6 +24,7 @@ import TseImport from "@/pages/tse-import";
 import ScenarioCandidates from "@/pages/scenario-candidates";
 import DataAnalysis from "@/pages/data-analysis";
 import ElectoralDashboard from "@/pages/electoral-dashboard";
+import SemanticSearch from "@/pages/semantic-search";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/tse-import" component={TseImport} />
       <Route path="/data-analysis" component={DataAnalysis} />
       <Route path="/electoral-dashboard" component={ElectoralDashboard} />
+      <Route path="/semantic-search" component={SemanticSearch} />
       <Route component={NotFound} />
     </Switch>
   );

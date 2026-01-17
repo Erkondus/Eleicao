@@ -16,6 +16,7 @@ import {
   Loader2,
   Download,
   PieChart,
+  Search,
 } from "lucide-react";
 import type { TseImportJob } from "@shared/schema";
 import {
@@ -46,6 +47,7 @@ const simulationNavItems = [
   { title: "Previsões IA", url: "/predictions", icon: Brain, permission: "ai_predictions" },
   { title: "Dashboard Eleitoral", url: "/electoral-dashboard", icon: PieChart, permission: null },
   { title: "Análise de Dados", url: "/data-analysis", icon: BarChart3, permission: null },
+  { title: "Busca Semântica", url: "/semantic-search", icon: Search, permission: "ai_predictions" },
 ];
 
 const adminNavItems = [

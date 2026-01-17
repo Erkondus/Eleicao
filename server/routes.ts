@@ -1646,6 +1646,18 @@ Responda em JSON:
       processedRows: rowCount,
       errorCount: errorCount,
     });
+
+    // Trigger embedding generation for semantic search (if API key configured)
+    if (process.env.OPENAI_API_KEY) {
+      console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
+      generateEmbeddingsForImportJob(jobId)
+        .then(result => {
+          console.log(`TSE Import ${jobId}: Embeddings generated - ${result.processed} processed, ${result.skipped} skipped, ${result.errors} errors`);
+        })
+        .catch(error => {
+          console.error(`TSE Import ${jobId}: Embedding generation failed:`, error);
+        });
+    }
   };
 
   app.get("/api/tse/candidates", requireAuth, async (req, res) => {
@@ -1849,6 +1861,18 @@ Responda em JSON:
       });
 
       console.log(`TSE Import ${jobId} completed: ${rowCount} rows, ${errorCount} errors`);
+
+      // Trigger embedding generation for semantic search (if API key configured)
+      if (process.env.OPENAI_API_KEY) {
+        console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
+        generateEmbeddingsForImportJob(jobId)
+          .then(result => {
+            console.log(`TSE Import ${jobId}: Embeddings generated - ${result.processed} processed, ${result.skipped} skipped, ${result.errors} errors`);
+          })
+          .catch(error => {
+            console.error(`TSE Import ${jobId}: Embedding generation failed:`, error);
+          });
+      }
     } catch (error: any) {
       console.error(`TSE Import ${jobId} failed:`, error);
       await storage.updateTseImportJob(jobId, {
@@ -2260,7 +2284,7 @@ Responda em JSON:
   app.post("/api/semantic-search/generate-embeddings/:importJobId", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const importJobId = parseInt(req.params.importJobId);
-      const job = await storage.getTseImportJobById(importJobId);
+      const job = await storage.getTseImportJob(importJobId);
       
       if (!job) {
         return res.status(404).json({ error: "Import job not found" });
