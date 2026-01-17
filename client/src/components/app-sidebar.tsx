@@ -15,6 +15,7 @@ import {
   BarChart3,
   Loader2,
   Download,
+  PieChart,
 } from "lucide-react";
 import type { TseImportJob } from "@shared/schema";
 import {
@@ -43,6 +44,7 @@ const mainNavItems = [
 const simulationNavItems = [
   { title: "Simulações", url: "/simulations", icon: PlayCircle, permission: "run_simulations" },
   { title: "Previsões IA", url: "/predictions", icon: Brain, permission: "ai_predictions" },
+  { title: "Dashboard Eleitoral", url: "/electoral-dashboard", icon: PieChart, permission: null },
   { title: "Análise de Dados", url: "/data-analysis", icon: BarChart3, permission: null },
 ];
 

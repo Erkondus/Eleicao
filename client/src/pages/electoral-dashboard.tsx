@@ -103,6 +103,7 @@ function CustomPieTooltip({ active, payload }: any) {
 
 export default function ElectoralDashboard() {
   const [selectedYear, setSelectedYear] = useState<string>("all");
+  const [selectedState, setSelectedState] = useState<string | null>(null);
 
   const yearQuery = selectedYear !== "all" ? `?year=${selectedYear}` : "";
 
@@ -193,6 +194,11 @@ export default function ElectoralDashboard() {
     return `rgba(0, 51, 102, ${intensity})`;
   };
 
+  const selectedStateData = useMemo(() => {
+    if (!selectedState || !votesByState) return null;
+    return votesByState.find(s => s.state === selectedState) || null;
+  }, [selectedState, votesByState]);
+
   const importStats = useMemo(() => {
     if (!importJobs) return { total: 0, completed: 0, failed: 0, active: 0, totalRows: 0, totalSize: 0 };
     return {
@@ -230,9 +236,9 @@ export default function ElectoralDashboard() {
               <SelectValue placeholder="Ano" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os anos</SelectItem>
+              <SelectItem value="all" data-testid="select-year-all">Todos os anos</SelectItem>
               {years?.map(year => (
-                <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                <SelectItem key={year} value={String(year)} data-testid={`select-year-${year}`}>{year}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -331,21 +337,33 @@ export default function ElectoralDashboard() {
           </CardHeader>
           <CardContent>
             {stateLoading ? (
-              <div className="flex items-center justify-center h-[400px]">
+              <div className="flex items-center justify-center h-[400px]" data-testid="loading-map">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <div className="relative">
-                <svg viewBox="50 30 500 580" className="w-full h-[400px]" data-testid="brazil-map-svg">
+                <svg viewBox="50 30 500 580" className="w-full h-[300px]" data-testid="brazil-map-svg">
                   {Object.entries(BRAZIL_STATES).map(([code, state]) => (
                     <Tooltip key={code}>
                       <TooltipTrigger asChild>
-                        <g className="cursor-pointer transition-opacity hover:opacity-80">
+                        <g 
+                          className="cursor-pointer"
+                          onClick={() => setSelectedState(selectedState === code ? null : code)}
+                          data-testid={`map-state-group-${code}`}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${state.name}: ${formatNumber(stateVotesMap[code] || 0)} votos`}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              setSelectedState(selectedState === code ? null : code);
+                            }
+                          }}
+                        >
                           <path
                             d={state.path}
                             fill={getStateColor(code)}
-                            stroke="#fff"
-                            strokeWidth="1"
+                            stroke={selectedState === code ? "#FFD700" : "#fff"}
+                            strokeWidth={selectedState === code ? "3" : "1"}
                             data-testid={`map-state-${code}`}
                           />
                           <text
@@ -356,30 +374,83 @@ export default function ElectoralDashboard() {
                             fontSize="10"
                             fill={stateVotesMap[code] ? "#fff" : "#666"}
                             fontWeight="bold"
+                            data-testid={`text-state-code-${code}`}
                           >
                             {code}
                           </text>
                         </g>
                       </TooltipTrigger>
-                      <TooltipContent>
+                      <TooltipContent data-testid={`tooltip-state-${code}`}>
                         <div className="text-sm">
                           <p className="font-semibold">{state.name} ({code})</p>
                           <p>Votos: {formatNumber(stateVotesMap[code] || 0)}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Clique para detalhes</p>
                         </div>
                       </TooltipContent>
                     </Tooltip>
                   ))}
                 </svg>
-                <div className="absolute bottom-2 left-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded" style={{ backgroundColor: "rgba(0, 51, 102, 0.2)" }} />
-                    <span>Menos votos</span>
+                <div className="flex items-center justify-between mt-2" data-testid="map-legend">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded" style={{ backgroundColor: "rgba(0, 51, 102, 0.2)" }} data-testid="legend-color-min" />
+                      <span data-testid="legend-label-min">Menos votos</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded" style={{ backgroundColor: "rgba(0, 51, 102, 0.9)" }} data-testid="legend-color-max" />
+                      <span data-testid="legend-label-max">Mais votos</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded" style={{ backgroundColor: "rgba(0, 51, 102, 0.9)" }} />
-                    <span>Mais votos</span>
-                  </div>
+                  {selectedState && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setSelectedState(null)}
+                      data-testid="button-clear-selection"
+                    >
+                      Limpar seleção
+                    </Button>
+                  )}
                 </div>
+                {selectedState && selectedStateData && (
+                  <Card className="mt-4" data-testid="state-detail-panel">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-lg" data-testid="text-selected-state-name">
+                          {BRAZIL_STATES[selectedState]?.name} ({selectedState})
+                        </h4>
+                        <Badge variant="secondary" data-testid="badge-selected-state">{selectedState}</Badge>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-2xl font-bold" data-testid="text-state-votes">
+                            {formatNumber(selectedStateData.votes)}
+                          </p>
+                          <p className="text-xs text-muted-foreground" data-testid="label-state-votes">Votos</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold" data-testid="text-state-candidates">
+                            {formatNumber(selectedStateData.candidateCount)}
+                          </p>
+                          <p className="text-xs text-muted-foreground" data-testid="label-state-candidates">Candidatos</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold" data-testid="text-state-parties">
+                            {formatNumber(selectedStateData.partyCount)}
+                          </p>
+                          <p className="text-xs text-muted-foreground" data-testid="label-state-parties">Partidos</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                {selectedState && !selectedStateData && (
+                  <Card className="mt-4" data-testid="state-no-data">
+                    <CardContent className="pt-4 text-center text-muted-foreground">
+                      <p>Sem dados disponíveis para {BRAZIL_STATES[selectedState]?.name}</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
           </CardContent>
@@ -395,31 +466,33 @@ export default function ElectoralDashboard() {
           </CardHeader>
           <CardContent>
             {partyLoading ? (
-              <div className="flex items-center justify-center h-[350px]">
+              <div className="flex items-center justify-center h-[350px]" data-testid="loading-party-chart">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : partyChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={partyChartData}
-                    dataKey="votes"
-                    nameKey="party"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={120}
-                    label={({ party, percentage }) => `${party} (${percentage.toFixed(1)}%)`}
-                    labelLine={false}
-                  >
-                    {partyChartData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip content={<CustomPieTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div data-testid="chart-party-pie">
+                <ResponsiveContainer width="100%" height={350}>
+                  <PieChart>
+                    <Pie
+                      data={partyChartData}
+                      dataKey="votes"
+                      nameKey="party"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={120}
+                      label={({ party, percentage }) => `${party} (${percentage.toFixed(1)}%)`}
+                      labelLine={false}
+                    >
+                      {partyChartData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip content={<CustomPieTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-[350px] text-muted-foreground">
+              <div className="flex flex-col items-center justify-center h-[350px] text-muted-foreground" data-testid="empty-party-chart">
                 <Building2 className="h-12 w-12 mb-2 opacity-50" />
                 <p>Sem dados de partidos</p>
               </div>
@@ -439,34 +512,36 @@ export default function ElectoralDashboard() {
           </CardHeader>
           <CardContent>
             {candidatesLoading ? (
-              <div className="flex items-center justify-center h-[300px]">
+              <div className="flex items-center justify-center h-[300px]" data-testid="loading-candidates-chart">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : candidateChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={candidateChartData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" tickFormatter={formatNumber} />
-                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
-                  <RechartsTooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-background border rounded-lg shadow-lg p-3">
-                          <p className="font-semibold">{data.fullName}</p>
-                          <p className="text-sm"><span className="text-muted-foreground">Partido:</span> {data.party}</p>
-                          <p className="text-sm"><span className="text-muted-foreground">Estado:</span> {data.state}</p>
-                          <p className="text-sm"><span className="text-muted-foreground">Votos:</span> {formatNumber(data.votes)}</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="votes" fill="#003366" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div data-testid="chart-candidates-bar">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={candidateChartData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                    <XAxis type="number" tickFormatter={formatNumber} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-background border rounded-lg shadow-lg p-3" data-testid="tooltip-candidate">
+                            <p className="font-semibold">{data.fullName}</p>
+                            <p className="text-sm"><span className="text-muted-foreground">Partido:</span> {data.party}</p>
+                            <p className="text-sm"><span className="text-muted-foreground">Estado:</span> {data.state}</p>
+                            <p className="text-sm"><span className="text-muted-foreground">Votos:</span> {formatNumber(data.votes)}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="votes" fill="#003366" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+              <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground" data-testid="empty-candidates-chart">
                 <Users className="h-12 w-12 mb-2 opacity-50" />
                 <p>Sem dados de candidatos</p>
               </div>
@@ -490,7 +565,7 @@ export default function ElectoralDashboard() {
           </CardHeader>
           <CardContent className="space-y-4">
             {importsLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-3" data-testid="loading-imports">
                 {[1, 2, 3].map(i => (
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
@@ -537,11 +612,11 @@ export default function ElectoralDashboard() {
                 </div>
               </>
             ) : (
-              <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+              <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground" data-testid="empty-imports">
                 <Database className="h-12 w-12 mb-2 opacity-50" />
                 <p>Nenhuma importação registrada</p>
                 <Link href="/tse-import">
-                  <Button variant="link" size="sm" className="mt-2">
+                  <Button variant="link" size="sm" className="mt-2" data-testid="button-start-import-small">
                     Iniciar importação
                   </Button>
                 </Link>

@@ -23,6 +23,7 @@ import Alliances from "@/pages/alliances";
 import TseImport from "@/pages/tse-import";
 import ScenarioCandidates from "@/pages/scenario-candidates";
 import DataAnalysis from "@/pages/data-analysis";
+import ElectoralDashboard from "@/pages/electoral-dashboard";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/tse-import" component={TseImport} />
       <Route path="/data-analysis" component={DataAnalysis} />
+      <Route path="/electoral-dashboard" component={ElectoralDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
