@@ -1,20 +1,43 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-
 RUN npm ci
 
 COPY . .
-
 RUN npm run build
 
-RUN chmod +x docker-entrypoint.sh
+FROM node:20-alpine AS runner
 
-EXPOSE 5000
+WORKDIR /app
+
+RUN apk add --no-cache dumb-init
 
 ENV NODE_ENV=production
 ENV PORT=5000
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/drizzle.config.ts ./
+COPY --from=builder /app/shared ./shared
+COPY --from=builder /app/server ./server
+COPY docker-entrypoint.sh ./
+
+RUN npm ci --only=production && npm cache clean --force
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 expressjs && \
+    chown -R expressjs:nodejs /app
+
+RUN chmod +x docker-entrypoint.sh
+
+USER expressjs
+
+EXPOSE 5000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["./docker-entrypoint.sh"]

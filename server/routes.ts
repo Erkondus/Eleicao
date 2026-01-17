@@ -139,6 +139,29 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const stats = await storage.getStats();
+      res.json({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        version: "1.0.0",
+        database: "connected",
+        stats: {
+          users: stats.totalUsers,
+          parties: stats.totalParties,
+        }
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        database: "disconnected",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   app.post("/api/auth/login", (req, res, next) => {
     passport.authenticate("local", async (err: any, user: User | false, info: any) => {
       if (err) {
