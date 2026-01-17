@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
+import { SQL } from "drizzle-orm";
 import {
   type User, type InsertUser, users,
   type Party, type InsertParty, parties,
@@ -16,6 +17,7 @@ import {
   type ScenarioCandidate, type InsertScenarioCandidate, scenarioCandidates,
   type SavedReport, type InsertSavedReport, savedReports,
   type AiPrediction, aiPredictions,
+  type ProjectionReportRecord, type InsertProjectionReport, projectionReports,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -1295,6 +1297,60 @@ export class DatabaseStorage implements IStorage {
       .delete(aiPredictions)
       .where(sql`${aiPredictions.validUntil} < NOW()`);
     return result.rowCount ?? 0;
+  }
+
+  // Projection Reports CRUD
+  async getProjectionReports(filters?: { status?: string; targetYear?: number; scope?: string }): Promise<ProjectionReportRecord[]> {
+    let query = db.select().from(projectionReports);
+    
+    const conditions: SQL[] = [];
+    if (filters?.status) {
+      conditions.push(eq(projectionReports.status, filters.status));
+    }
+    if (filters?.targetYear) {
+      conditions.push(eq(projectionReports.targetYear, filters.targetYear));
+    }
+    if (filters?.scope) {
+      conditions.push(eq(projectionReports.scope, filters.scope));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return query.orderBy(desc(projectionReports.createdAt));
+  }
+
+  async getProjectionReportById(id: number): Promise<ProjectionReportRecord | undefined> {
+    const [report] = await db
+      .select()
+      .from(projectionReports)
+      .where(eq(projectionReports.id, id));
+    return report;
+  }
+
+  async createProjectionReport(data: InsertProjectionReport): Promise<ProjectionReportRecord> {
+    const [report] = await db
+      .insert(projectionReports)
+      .values(data)
+      .returning();
+    return report;
+  }
+
+  async updateProjectionReport(id: number, data: Partial<InsertProjectionReport>): Promise<ProjectionReportRecord | undefined> {
+    const [updated] = await db
+      .update(projectionReports)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(projectionReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectionReport(id: number): Promise<boolean> {
+    const result = await db
+      .delete(projectionReports)
+      .where(eq(projectionReports.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 

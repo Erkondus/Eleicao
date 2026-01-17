@@ -476,3 +476,45 @@ export const aiSentimentData = pgTable("ai_sentiment_data", {
 export const insertAiSentimentDataSchema = createInsertSchema(aiSentimentData).omit({ id: true, createdAt: true });
 export type InsertAiSentimentData = z.infer<typeof insertAiSentimentDataSchema>;
 export type AiSentimentData = typeof aiSentimentData.$inferSelect;
+
+// Projection Reports - Comprehensive Electoral Predictions
+export const projectionReports = pgTable("projection_reports", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  targetYear: integer("target_year").notNull(),
+  electionType: text("election_type").notNull(),
+  scope: text("scope").notNull(), // 'national' or 'state'
+  state: text("state"), // State code if scope is 'state'
+  
+  // Report data stored as JSON for flexibility
+  executiveSummary: text("executive_summary"),
+  methodology: text("methodology"),
+  dataQuality: jsonb("data_quality"),
+  turnoutProjection: jsonb("turnout_projection"),
+  partyProjections: jsonb("party_projections"),
+  candidateProjections: jsonb("candidate_projections"),
+  scenarios: jsonb("scenarios"),
+  riskAssessment: jsonb("risk_assessment"),
+  confidenceIntervals: jsonb("confidence_intervals"),
+  recommendations: jsonb("recommendations"),
+  
+  // Metadata
+  version: text("version").default("1.0"),
+  validUntil: timestamp("valid_until"),
+  status: text("status").notNull().default("draft"), // draft, published, archived
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("projection_reports_target_year_idx").on(table.targetYear),
+  index("projection_reports_scope_idx").on(table.scope),
+  index("projection_reports_status_idx").on(table.status),
+]);
+
+export const projectionReportsRelations = relations(projectionReports, ({ one }) => ({
+  createdByUser: one(users, { fields: [projectionReports.createdBy], references: [users.id] }),
+}));
+
+export const insertProjectionReportSchema = createInsertSchema(projectionReports).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertProjectionReport = z.infer<typeof insertProjectionReportSchema>;
+export type ProjectionReportRecord = typeof projectionReports.$inferSelect;

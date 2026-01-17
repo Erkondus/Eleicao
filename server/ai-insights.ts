@@ -1,7 +1,185 @@
 import OpenAI from "openai";
+import { z } from "zod";
 import { storage } from "./storage";
 
 const openai = new OpenAI();
+
+// Zod schema for AI projection report response validation
+const aiProjectionResponseSchema = z.object({
+  executiveSummary: z.string().optional().default("Análise não disponível."),
+  methodology: z.string().optional().default("Análise baseada em dados históricos."),
+  turnoutProjection: z.object({
+    expected: z.number().min(0).max(100).optional().default(75),
+    confidence: z.number().min(0).max(1).optional().default(0.5),
+    marginOfError: z.object({
+      lower: z.number().optional().default(70),
+      upper: z.number().optional().default(80)
+    }).optional().default({ lower: 70, upper: 80 }),
+    historicalBasis: z.array(z.object({
+      year: z.number(),
+      turnout: z.number()
+    })).optional().default([]),
+    factors: z.array(z.object({
+      factor: z.string(),
+      impact: z.number(),
+      description: z.string()
+    })).optional().default([])
+  }).optional().default({
+    expected: 75,
+    confidence: 0.5,
+    marginOfError: { lower: 70, upper: 80 },
+    historicalBasis: [],
+    factors: []
+  }),
+  partyProjections: z.array(z.object({
+    party: z.string(),
+    abbreviation: z.string(),
+    voteShare: z.object({
+      expected: z.number(),
+      min: z.number(),
+      max: z.number()
+    }),
+    seats: z.object({
+      expected: z.number(),
+      min: z.number(),
+      max: z.number()
+    }),
+    trend: z.enum(["growing", "declining", "stable"]).optional().default("stable"),
+    confidence: z.number().min(0).max(1).optional().default(0.7),
+    marginOfError: z.number().optional().default(3)
+  })).optional().default([]),
+  candidateProjections: z.array(z.object({
+    name: z.string(),
+    party: z.string(),
+    position: z.string().optional().default(""),
+    electionProbability: z.number().min(0).max(1),
+    projectedVotes: z.object({
+      expected: z.number(),
+      min: z.number(),
+      max: z.number()
+    }).optional().default({ expected: 0, min: 0, max: 0 }),
+    confidence: z.number().min(0).max(1).optional().default(0.7),
+    ranking: z.number().optional().default(0)
+  })).optional().default([]),
+  scenarios: z.array(z.object({
+    name: z.string(),
+    description: z.string(),
+    probability: z.number().min(0).max(1),
+    outcomes: z.array(z.object({
+      party: z.string(),
+      seats: z.number(),
+      voteShare: z.number()
+    })).optional().default([])
+  })).optional().default([]),
+  riskAssessment: z.object({
+    overallRisk: z.enum(["low", "medium", "high"]).optional().default("medium"),
+    risks: z.array(z.object({
+      risk: z.string(),
+      probability: z.number().min(0).max(1),
+      impact: z.enum(["low", "medium", "high"]).optional().default("medium"),
+      category: z.enum(["political", "economic", "social", "technical"]).optional().default("political"),
+      mitigation: z.string().optional().default("")
+    })).optional().default([])
+  }).optional().default({ overallRisk: "medium", risks: [] }),
+  confidenceIntervals: z.object({
+    overall: z.number().min(0).max(1).optional().default(0.7),
+    turnout: z.number().min(0).max(1).optional().default(0.75),
+    partyResults: z.number().min(0).max(1).optional().default(0.7),
+    seatDistribution: z.number().min(0).max(1).optional().default(0.65)
+  }).optional().default({ overall: 0.7, turnout: 0.75, partyResults: 0.7, seatDistribution: 0.65 }),
+  recommendations: z.array(z.string()).optional().default([])
+});
+
+// Comprehensive Projection Report Interface
+export interface ProjectionReport {
+  id?: number;
+  name: string;
+  targetYear: number;
+  electionType: string;
+  scope: "national" | "state";
+  state?: string;
+  
+  // Executive Summary
+  executiveSummary: string;
+  methodology: string;
+  dataQuality: {
+    completeness: number;
+    yearsAnalyzed: number;
+    totalRecordsAnalyzed: number;
+    lastUpdated: string;
+  };
+  
+  // Turnout Projections
+  turnoutProjection: {
+    expected: number;
+    confidence: number;
+    marginOfError: { lower: number; upper: number };
+    historicalBasis: { year: number; turnout: number }[];
+    factors: { factor: string; impact: number; description: string }[];
+  };
+  
+  // Party Projections
+  partyProjections: {
+    party: string;
+    abbreviation: string;
+    voteShare: { expected: number; min: number; max: number };
+    seats: { expected: number; min: number; max: number };
+    trend: "growing" | "declining" | "stable";
+    confidence: number;
+    marginOfError: number;
+  }[];
+  
+  // Candidate Projections (top candidates)
+  candidateProjections: {
+    name: string;
+    party: string;
+    position: string;
+    electionProbability: number;
+    projectedVotes: { expected: number; min: number; max: number };
+    confidence: number;
+    ranking: number;
+  }[];
+  
+  // Scenario Analysis
+  scenarios: {
+    name: string;
+    description: string;
+    probability: number;
+    outcomes: {
+      party: string;
+      seats: number;
+      voteShare: number;
+    }[];
+  }[];
+  
+  // Risk Assessment
+  riskAssessment: {
+    overallRisk: "low" | "medium" | "high";
+    risks: {
+      risk: string;
+      probability: number;
+      impact: "low" | "medium" | "high";
+      category: "political" | "economic" | "social" | "technical";
+      mitigation: string;
+    }[];
+  };
+  
+  // Confidence Intervals
+  confidenceIntervals: {
+    overall: number;
+    turnout: number;
+    partyResults: number;
+    seatDistribution: number;
+  };
+  
+  // Recommendations
+  recommendations: string[];
+  
+  // Metadata
+  generatedAt: string;
+  validUntil: string;
+  version: string;
+}
 
 export interface TurnoutPrediction {
   predictedTurnout: number;
@@ -598,4 +776,208 @@ Responda em JSON com a estrutura:
   result.generatedAt = new Date().toISOString();
   
   return result as ElectoralInsights;
+}
+
+// Generate comprehensive projection report
+export async function generateProjectionReport(params: {
+  name: string;
+  targetYear: number;
+  electionType: string;
+  scope: "national" | "state";
+  state?: string;
+  position?: string;
+}): Promise<ProjectionReport> {
+  const { name, targetYear, electionType, scope, state, position } = params;
+  
+  // Gather historical data
+  const availableYears = await storage.getAvailableElectionYears();
+  const historicalData: { year: number; totalVotes: number; candidates: number; parties: number }[] = [];
+  
+  for (const year of availableYears.slice(0, 6)) {
+    const summary = await storage.getAnalyticsSummary({ 
+      year, 
+      uf: scope === "state" ? state : undefined,
+      electionType 
+    });
+    historicalData.push({
+      year,
+      totalVotes: summary.totalVotes || 0,
+      candidates: summary.totalCandidates || 0,
+      parties: summary.totalParties || 0
+    });
+  }
+  
+  // Get party performance data
+  const votesByParty = await storage.getVotesByParty({
+    year: availableYears[0],
+    uf: scope === "state" ? state : undefined,
+    electionType
+  });
+  
+  // Get top candidates
+  const topCandidates = await storage.getTopCandidates({
+    year: availableYears[0],
+    uf: scope === "state" ? state : undefined,
+    limit: 20
+  });
+  
+  // Get votes by state for national scope
+  const votesByState = scope === "national" ? await storage.getVotesByState({ year: availableYears[0] }) : [];
+  
+  const totalRecords = historicalData.reduce((sum, d) => sum + d.candidates, 0);
+  
+  const prompt = `Você é um especialista em análise eleitoral brasileira e projeções de resultados eleitorais.
+Você deve gerar um relatório de projeção completo e detalhado para a eleição de ${targetYear}.
+
+CONTEXTO DA ANÁLISE:
+- Ano alvo: ${targetYear}
+- Tipo de eleição: ${electionType}
+- Escopo: ${scope === "national" ? "Nacional (todos os estados)" : `Estado: ${state}`}
+${position ? `- Cargo: ${position}` : ""}
+
+DADOS HISTÓRICOS DE VOTAÇÃO (base para projeções):
+${historicalData.map(d => `Ano ${d.year}: ${d.totalVotes.toLocaleString("pt-BR")} votos, ${d.candidates} candidatos, ${d.parties} partidos`).join("\n")}
+
+DESEMPENHO ATUAL DOS PARTIDOS (ano ${availableYears[0]}):
+${votesByParty.slice(0, 15).map((p, i) => `${i + 1}. ${p.party}: ${p.votes.toLocaleString("pt-BR")} votos (${((p.votes / (historicalData[0]?.totalVotes || 1)) * 100).toFixed(1)}%)`).join("\n")}
+
+TOP 20 CANDIDATOS MAIS VOTADOS:
+${topCandidates.slice(0, 20).map((c, i) => `${i + 1}. ${c.name} (${c.party || "N/D"}): ${c.votes.toLocaleString("pt-BR")} votos`).join("\n")}
+
+${scope === "national" && votesByState.length > 0 ? `
+VOTOS POR ESTADO:
+${votesByState.map(s => `${s.state}: ${s.votes.toLocaleString("pt-BR")} votos`).join("\n")}
+` : ""}
+
+Gere um RELATÓRIO DE PROJEÇÃO COMPLETO com margens de erro e intervalos de confiança.
+Use metodologia estatística rigorosa baseada em:
+1. Análise de tendências históricas
+2. Crescimento/declínio partidário
+3. Volatilidade eleitoral
+4. Fatores contextuais
+
+Responda em JSON com a estrutura EXATA:
+{
+  "executiveSummary": "resumo executivo completo (3-4 parágrafos)",
+  "methodology": "descrição da metodologia usada para as projeções",
+  "turnoutProjection": {
+    "expected": número_percentual_esperado (ex: 78.5),
+    "confidence": número_0_a_1,
+    "marginOfError": { "lower": número_percentual, "upper": número_percentual },
+    "historicalBasis": [{ "year": ano, "turnout": percentual }],
+    "factors": [{ "factor": "nome", "impact": -1_a_1, "description": "descrição" }]
+  },
+  "partyProjections": [
+    {
+      "party": "nome completo",
+      "abbreviation": "SIGLA",
+      "voteShare": { "expected": número, "min": número, "max": número },
+      "seats": { "expected": número, "min": número, "max": número },
+      "trend": "growing" | "declining" | "stable",
+      "confidence": número_0_a_1,
+      "marginOfError": número_percentual
+    }
+  ],
+  "candidateProjections": [
+    {
+      "name": "nome",
+      "party": "SIGLA",
+      "position": "cargo",
+      "electionProbability": número_0_a_1,
+      "projectedVotes": { "expected": número, "min": número, "max": número },
+      "confidence": número_0_a_1,
+      "ranking": número
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "nome do cenário",
+      "description": "descrição",
+      "probability": número_0_a_1,
+      "outcomes": [{ "party": "SIGLA", "seats": número, "voteShare": número }]
+    }
+  ],
+  "riskAssessment": {
+    "overallRisk": "low" | "medium" | "high",
+    "risks": [
+      {
+        "risk": "descrição",
+        "probability": número_0_a_1,
+        "impact": "low" | "medium" | "high",
+        "category": "political" | "economic" | "social" | "technical",
+        "mitigation": "estratégia"
+      }
+    ]
+  },
+  "confidenceIntervals": {
+    "overall": número_0_a_1,
+    "turnout": número_0_a_1,
+    "partyResults": número_0_a_1,
+    "seatDistribution": número_0_a_1
+  },
+  "recommendations": ["recomendação1", "recomendação2", ...]
+}`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("No response from AI");
+  }
+
+  let rawAiResult: unknown;
+  try {
+    rawAiResult = JSON.parse(content);
+  } catch (parseError) {
+    console.error("Failed to parse AI response as JSON:", parseError);
+    throw new Error("AI response was not valid JSON. Please try again.");
+  }
+  
+  // Validate AI response with Zod schema and apply safe defaults
+  const validationResult = aiProjectionResponseSchema.safeParse(rawAiResult);
+  if (!validationResult.success) {
+    console.error("AI response validation failed:", validationResult.error.issues);
+    // Use the default values from the schema as fallback
+    console.warn("Using default fallback values for invalid AI response");
+  }
+  
+  const safeAiResult = validationResult.success 
+    ? validationResult.data 
+    : aiProjectionResponseSchema.parse({});
+  
+  // Build the complete report
+  const now = new Date();
+  const validUntil = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // Valid for 7 days
+  
+  const report: ProjectionReport = {
+    name,
+    targetYear,
+    electionType,
+    scope,
+    state: scope === "state" ? state : undefined,
+    executiveSummary: safeAiResult.executiveSummary,
+    methodology: safeAiResult.methodology,
+    dataQuality: {
+      completeness: historicalData.length > 0 ? Math.min(historicalData.length / 6, 1) : 0,
+      yearsAnalyzed: historicalData.length,
+      totalRecordsAnalyzed: totalRecords,
+      lastUpdated: now.toISOString()
+    },
+    turnoutProjection: safeAiResult.turnoutProjection,
+    partyProjections: safeAiResult.partyProjections,
+    candidateProjections: safeAiResult.candidateProjections,
+    scenarios: safeAiResult.scenarios,
+    riskAssessment: safeAiResult.riskAssessment,
+    confidenceIntervals: safeAiResult.confidenceIntervals,
+    recommendations: safeAiResult.recommendations,
+    generatedAt: now.toISOString(),
+    validUntil: validUntil.toISOString(),
+    version: "1.0"
+  };
+  
+  return report;
 }

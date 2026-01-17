@@ -12,6 +12,7 @@ import iconv from "iconv-lite";
 import unzipper from "unzipper";
 import { pipeline } from "stream/promises";
 import path from "path";
+import { z } from "zod";
 import { storage } from "./storage";
 import type { User, InsertTseCandidateVote } from "@shared/schema";
 import OpenAI from "openai";
@@ -1443,6 +1444,244 @@ Responda em JSON:
     } catch (error: any) {
       console.error("AI Sentiment Analysis error:", error);
       res.status(500).json({ error: error.message || "Failed to analyze sentiment" });
+    }
+  });
+
+  // Projection Reports API - Query params validation schema
+  const projectionReportQuerySchema = z.object({
+    status: z.enum(["draft", "published", "archived"]).optional(),
+    scope: z.enum(["national", "state"]).optional(),
+    targetYear: z.string().optional().transform((val) => val ? parseInt(val) : undefined).pipe(
+      z.number().int().min(2000).max(2100).optional()
+    )
+  });
+
+  app.get("/api/projection-reports", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const validationResult = projectionReportQuerySchema.safeParse(req.query);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid query parameters", 
+          details: validationResult.error.issues 
+        });
+      }
+      
+      const { status, targetYear, scope } = validationResult.data;
+      
+      const reports = await storage.getProjectionReports({ status, targetYear, scope });
+      res.json(reports);
+    } catch (error) {
+      console.error("Failed to fetch projection reports:", error);
+      res.status(500).json({ error: "Failed to fetch projection reports" });
+    }
+  });
+
+  app.get("/api/projection-reports/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const report = await storage.getProjectionReportById(parseInt(req.params.id));
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error("Failed to fetch projection report:", error);
+      res.status(500).json({ error: "Failed to fetch projection report" });
+    }
+  });
+
+  // Zod schema for projection report creation
+  const createProjectionReportSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    targetYear: z.number().int().min(2000).max(2100),
+    electionType: z.string().min(1, "Election type is required"),
+    scope: z.enum(["national", "state"]),
+    state: z.string().optional(),
+    position: z.string().optional()
+  });
+
+  app.post("/api/projection-reports", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const validationResult = createProjectionReportSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: validationResult.error.issues 
+        });
+      }
+      
+      const { name, targetYear, electionType, scope, state, position } = validationResult.data;
+      
+      if (scope === "state" && !state) {
+        return res.status(400).json({ error: "State is required when scope is 'state'" });
+      }
+      
+      // Generate the projection report using AI
+      const { generateProjectionReport } = await import("./ai-insights");
+      const aiReport = await generateProjectionReport({
+        name,
+        targetYear,
+        electionType,
+        scope,
+        state: scope === "state" ? state : undefined,
+        position
+      });
+      
+      // Save to database
+      const savedReport = await storage.createProjectionReport({
+        name,
+        targetYear,
+        electionType,
+        scope,
+        state: scope === "state" ? state : null,
+        executiveSummary: aiReport.executiveSummary,
+        methodology: aiReport.methodology,
+        dataQuality: aiReport.dataQuality,
+        turnoutProjection: aiReport.turnoutProjection,
+        partyProjections: aiReport.partyProjections,
+        candidateProjections: aiReport.candidateProjections,
+        scenarios: aiReport.scenarios,
+        riskAssessment: aiReport.riskAssessment,
+        confidenceIntervals: aiReport.confidenceIntervals,
+        recommendations: aiReport.recommendations,
+        validUntil: new Date(aiReport.validUntil),
+        status: "draft",
+        createdBy: req.user?.id,
+      });
+      
+      await logAudit(req, "create", "projection_report", String(savedReport.id), { name, targetYear, scope });
+      
+      res.json(savedReport);
+    } catch (error: any) {
+      console.error("Failed to create projection report:", error);
+      res.status(500).json({ error: error.message || "Failed to create projection report" });
+    }
+  });
+
+  const updateProjectionReportSchema = z.object({
+    name: z.string().min(1).optional(),
+    status: z.enum(["draft", "published", "archived"]).optional()
+  });
+
+  app.put("/api/projection-reports/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      
+      const validationResult = updateProjectionReportSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: validationResult.error.issues 
+        });
+      }
+      
+      const { status, name } = validationResult.data;
+      
+      const updated = await storage.updateProjectionReport(id, { status, name });
+      if (!updated) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      await logAudit(req, "update", "projection_report", String(id), { status, name });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update projection report:", error);
+      res.status(500).json({ error: "Failed to update projection report" });
+    }
+  });
+
+  app.delete("/api/projection-reports/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteProjectionReport(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      await logAudit(req, "delete", "projection_report", String(id));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete projection report:", error);
+      res.status(500).json({ error: "Failed to delete projection report" });
+    }
+  });
+
+  // Export projection report as CSV
+  app.get("/api/projection-reports/:id/export/csv", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const report = await storage.getProjectionReportById(parseInt(req.params.id));
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      // Generate CSV content
+      let csv = "Relatório de Projeção Eleitoral\n";
+      csv += `Nome,${report.name}\n`;
+      csv += `Ano Alvo,${report.targetYear}\n`;
+      csv += `Tipo,${report.electionType}\n`;
+      csv += `Escopo,${report.scope === "national" ? "Nacional" : report.state}\n`;
+      csv += `Gerado em,${report.createdAt}\n\n`;
+      
+      // Turnout projection
+      const turnout = report.turnoutProjection as any;
+      if (turnout) {
+        csv += "PROJEÇÃO DE COMPARECIMENTO\n";
+        csv += `Esperado,${turnout.expected}%\n`;
+        csv += `Confiança,${(turnout.confidence * 100).toFixed(1)}%\n`;
+        csv += `Margem de Erro,${turnout.marginOfError?.lower}% - ${turnout.marginOfError?.upper}%\n\n`;
+      }
+      
+      // Party projections
+      const parties = report.partyProjections as any[];
+      if (parties && parties.length > 0) {
+        csv += "PROJEÇÕES POR PARTIDO\n";
+        csv += "Partido,Sigla,Votos Esperados (%),Votos Min (%),Votos Max (%),Cadeiras Esperadas,Cadeiras Min,Cadeiras Max,Tendência,Confiança,Margem de Erro\n";
+        for (const p of parties) {
+          csv += `${p.party},${p.abbreviation},${p.voteShare?.expected},${p.voteShare?.min},${p.voteShare?.max},${p.seats?.expected},${p.seats?.min},${p.seats?.max},${p.trend},${(p.confidence * 100).toFixed(1)}%,${p.marginOfError}%\n`;
+        }
+        csv += "\n";
+      }
+      
+      // Candidate projections
+      const candidates = report.candidateProjections as any[];
+      if (candidates && candidates.length > 0) {
+        csv += "PROJEÇÕES DE CANDIDATOS\n";
+        csv += "Ranking,Nome,Partido,Cargo,Probabilidade de Eleição,Votos Esperados,Votos Min,Votos Max,Confiança\n";
+        for (const c of candidates) {
+          csv += `${c.ranking},${c.name},${c.party},${c.position},${(c.electionProbability * 100).toFixed(1)}%,${c.projectedVotes?.expected},${c.projectedVotes?.min},${c.projectedVotes?.max},${(c.confidence * 100).toFixed(1)}%\n`;
+        }
+        csv += "\n";
+      }
+      
+      // Confidence intervals
+      const confidence = report.confidenceIntervals as any;
+      if (confidence) {
+        csv += "INTERVALOS DE CONFIANÇA\n";
+        csv += `Geral,${(confidence.overall * 100).toFixed(1)}%\n`;
+        csv += `Comparecimento,${(confidence.turnout * 100).toFixed(1)}%\n`;
+        csv += `Resultados Partidários,${(confidence.partyResults * 100).toFixed(1)}%\n`;
+        csv += `Distribuição de Cadeiras,${(confidence.seatDistribution * 100).toFixed(1)}%\n\n`;
+      }
+      
+      // Recommendations
+      const recommendations = report.recommendations as string[];
+      if (recommendations && recommendations.length > 0) {
+        csv += "RECOMENDAÇÕES\n";
+        recommendations.forEach((r, i) => {
+          csv += `${i + 1},${r}\n`;
+        });
+      }
+      
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="projecao-${report.name.replace(/\s+/g, "-")}-${report.targetYear}.csv"`);
+      res.send("\ufeff" + csv); // BOM for Excel compatibility
+    } catch (error) {
+      console.error("Failed to export projection report:", error);
+      res.status(500).json({ error: "Failed to export report" });
     }
   });
 
