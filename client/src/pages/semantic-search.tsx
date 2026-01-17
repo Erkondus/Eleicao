@@ -23,7 +23,7 @@ import {
   Database,
   Zap
 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface SemanticSearchResult {
@@ -98,6 +98,8 @@ export default function SemanticSearchPage() {
     },
     onSuccess: (data) => {
       setResult(data);
+      // Invalidate history cache to show new search
+      queryClient.invalidateQueries({ queryKey: ["/api/semantic-search/history"] });
     },
     onError: (error: any) => {
       console.error("Search error:", error);

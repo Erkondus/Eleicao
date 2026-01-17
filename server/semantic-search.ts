@@ -118,6 +118,14 @@ export async function generateAnswer(
   query: string,
   searchResults: SemanticSearchResult[]
 ): Promise<{ answer: string; citations: { id: number; snippet: string }[] }> {
+  // Handle zero results without calling OpenAI API
+  if (searchResults.length === 0) {
+    return {
+      answer: "Não foram encontrados dados relevantes para sua busca. Tente usar termos diferentes ou ajustar os filtros.",
+      citations: [],
+    };
+  }
+  
   const openai = getOpenAIClient();
   
   const contextSnippets = searchResults.map((r, i) => 
