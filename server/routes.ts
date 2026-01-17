@@ -1715,6 +1715,110 @@ Responda em JSON:
     }
   });
 
+  // Data Validation API Endpoints
+  app.get("/api/imports/tse/:id/validation", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+      
+      const { getValidationStatus } = await import("./data-validation");
+      const status = await getValidationStatus(jobId);
+      res.json(status);
+    } catch (error) {
+      console.error("Failed to fetch validation status:", error);
+      res.status(500).json({ error: "Failed to fetch validation status" });
+    }
+  });
+
+  app.post("/api/imports/tse/:id/validation/run", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+      
+      const job = await storage.getTseImportJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+      
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Can only validate completed imports" });
+      }
+      
+      const { runValidation } = await import("./data-validation");
+      const result = await runValidation(jobId);
+      
+      await logAudit(req, "create", "validation_run", String(result.runId), {
+        jobId,
+        issuesFound: result.summary.issuesFound,
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Failed to run validation:", error);
+      res.status(500).json({ error: "Failed to run validation" });
+    }
+  });
+
+  app.get("/api/validation-runs/:runId/issues", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const runId = parseInt(req.params.runId);
+      if (isNaN(runId)) {
+        return res.status(400).json({ error: "Invalid run ID" });
+      }
+      
+      const type = req.query.type as string | undefined;
+      const severity = req.query.severity as string | undefined;
+      const status = req.query.status as string | undefined;
+      
+      const issues = await storage.getValidationIssuesForRun(runId, { type, severity, status });
+      res.json(issues);
+    } catch (error) {
+      console.error("Failed to fetch validation issues:", error);
+      res.status(500).json({ error: "Failed to fetch validation issues" });
+    }
+  });
+
+  app.patch("/api/validation-issues/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const issueId = parseInt(req.params.id);
+      if (isNaN(issueId)) {
+        return res.status(400).json({ error: "Invalid issue ID" });
+      }
+      
+      const { status } = req.body;
+      if (!status || !["open", "resolved", "ignored"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status. Must be: open, resolved, or ignored" });
+      }
+      
+      const user = req.user as any;
+      const updateData: any = { status };
+      
+      if (status === "resolved" || status === "ignored") {
+        updateData.resolvedBy = user?.id;
+        updateData.resolvedAt = new Date();
+      } else {
+        updateData.resolvedBy = null;
+        updateData.resolvedAt = null;
+      }
+      
+      const updated = await storage.updateValidationIssue(issueId, updateData);
+      if (!updated) {
+        return res.status(404).json({ error: "Issue not found" });
+      }
+      
+      await logAudit(req, "update", "validation_issue", String(issueId), { status });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update validation issue:", error);
+      res.status(500).json({ error: "Failed to update validation issue" });
+    }
+  });
+
   app.post("/api/imports/tse", requireAuth, requireRole("admin"), upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {

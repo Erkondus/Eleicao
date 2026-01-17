@@ -154,14 +154,14 @@ async function checkNegativeVotes(jobId: number): Promise<ValidationIssue[]> {
   const negativeVotes = await db
     .select({
       id: tseCandidateVotes.id,
-      nomeCandidato: tseCandidateVotes.nomeCandidato,
-      quantidadeVotos: tseCandidateVotes.quantidadeVotos,
-      numeroCandidato: tseCandidateVotes.numeroCandidato,
+      nmCandidato: tseCandidateVotes.nmCandidato,
+      qtVotosNominais: tseCandidateVotes.qtVotosNominais,
+      nrCandidato: tseCandidateVotes.nrCandidato,
     })
     .from(tseCandidateVotes)
     .where(and(
       eq(tseCandidateVotes.importJobId, jobId),
-      lt(tseCandidateVotes.quantidadeVotos, 0)
+      lt(tseCandidateVotes.qtVotosNominais, 0)
     ))
     .limit(100);
 
@@ -171,9 +171,9 @@ async function checkNegativeVotes(jobId: number): Promise<ValidationIssue[]> {
       severity: "error",
       category: "data_quality",
       rowReference: `ID: ${record.id}`,
-      field: "quantidadeVotos",
-      currentValue: String(record.quantidadeVotos),
-      message: `Candidato "${record.nomeCandidato}" (${record.numeroCandidato}) possui contagem de votos negativa: ${record.quantidadeVotos}`,
+      field: "qtVotosNominais",
+      currentValue: String(record.qtVotosNominais),
+      message: `Candidato "${record.nmCandidato}" (${record.nrCandidato}) possui contagem de votos negativa: ${record.qtVotosNominais}`,
       suggestedFix: {
         action: "review",
         newValue: 0,
@@ -192,12 +192,12 @@ async function checkMissingRequiredFields(jobId: number): Promise<ValidationIssu
   const missingCandidateName = await db
     .select({
       id: tseCandidateVotes.id,
-      numeroCandidato: tseCandidateVotes.numeroCandidato,
+      nrCandidato: tseCandidateVotes.nrCandidato,
     })
     .from(tseCandidateVotes)
     .where(and(
       eq(tseCandidateVotes.importJobId, jobId),
-      sql`(${tseCandidateVotes.nomeCandidato} IS NULL OR ${tseCandidateVotes.nomeCandidato} = '')`
+      sql`(${tseCandidateVotes.nmCandidato} IS NULL OR ${tseCandidateVotes.nmCandidato} = '')`
     ))
     .limit(50);
 
@@ -207,8 +207,8 @@ async function checkMissingRequiredFields(jobId: number): Promise<ValidationIssu
       severity: "warning",
       category: "data_quality",
       rowReference: `ID: ${record.id}`,
-      field: "nomeCandidato",
-      message: `Registro com número ${record.numeroCandidato} não possui nome do candidato`,
+      field: "nmCandidato",
+      message: `Registro com número ${record.nrCandidato} não possui nome do candidato`,
       suggestedFix: {
         action: "review",
         confidence: 0.3,
@@ -220,12 +220,12 @@ async function checkMissingRequiredFields(jobId: number): Promise<ValidationIssu
   const missingParty = await db
     .select({
       id: tseCandidateVotes.id,
-      nomeCandidato: tseCandidateVotes.nomeCandidato,
+      nmCandidato: tseCandidateVotes.nmCandidato,
     })
     .from(tseCandidateVotes)
     .where(and(
       eq(tseCandidateVotes.importJobId, jobId),
-      sql`(${tseCandidateVotes.siglaPartido} IS NULL OR ${tseCandidateVotes.siglaPartido} = '')`
+      sql`(${tseCandidateVotes.sgPartido} IS NULL OR ${tseCandidateVotes.sgPartido} = '')`
     ))
     .limit(50);
 
@@ -235,8 +235,8 @@ async function checkMissingRequiredFields(jobId: number): Promise<ValidationIssu
       severity: "warning",
       category: "data_quality",
       rowReference: `ID: ${record.id}`,
-      field: "siglaPartido",
-      message: `Candidato "${record.nomeCandidato}" não possui sigla do partido`,
+      field: "sgPartido",
+      message: `Candidato "${record.nmCandidato}" não possui sigla do partido`,
       suggestedFix: {
         action: "review",
         confidence: 0.3,
@@ -253,14 +253,14 @@ async function checkDuplicateEntries(jobId: number): Promise<ValidationIssue[]> 
 
   const duplicates = await db.execute(sql`
     SELECT 
-      ${tseCandidateVotes.numeroCandidato} as numero_candidato,
-      ${tseCandidateVotes.siglaUe} as sigla_ue,
-      ${tseCandidateVotes.codigoCargo} as codigo_cargo,
+      ${tseCandidateVotes.nrCandidato} as nr_candidato,
+      ${tseCandidateVotes.sgUe} as sg_ue,
+      ${tseCandidateVotes.cdCargo} as cd_cargo,
       COUNT(*) as count,
       array_agg(${tseCandidateVotes.id}) as ids
     FROM ${tseCandidateVotes}
     WHERE ${tseCandidateVotes.importJobId} = ${jobId}
-    GROUP BY ${tseCandidateVotes.numeroCandidato}, ${tseCandidateVotes.siglaUe}, ${tseCandidateVotes.codigoCargo}
+    GROUP BY ${tseCandidateVotes.nrCandidato}, ${tseCandidateVotes.sgUe}, ${tseCandidateVotes.cdCargo}
     HAVING COUNT(*) > 1
     LIMIT 50
   `);
@@ -271,8 +271,8 @@ async function checkDuplicateEntries(jobId: number): Promise<ValidationIssue[]> 
       severity: "warning",
       category: "consistency",
       rowReference: `IDs: ${row.ids?.slice(0, 5).join(", ")}${row.ids?.length > 5 ? "..." : ""}`,
-      field: "numeroCandidato,siglaUe,codigoCargo",
-      message: `${row.count} registros duplicados para candidato ${row.numero_candidato} em ${row.sigla_ue} para cargo ${row.codigo_cargo}`,
+      field: "nrCandidato,sgUe,cdCargo",
+      message: `${row.count} registros duplicados para candidato ${row.nr_candidato} em ${row.sg_ue} para cargo ${row.cd_cargo}`,
       suggestedFix: {
         action: "review",
         confidence: 0.6,
@@ -290,15 +290,15 @@ async function checkUnrealisticVoteCounts(jobId: number): Promise<ValidationIssu
   const extremelyHighVotes = await db
     .select({
       id: tseCandidateVotes.id,
-      nomeCandidato: tseCandidateVotes.nomeCandidato,
-      quantidadeVotos: tseCandidateVotes.quantidadeVotos,
-      siglaUe: tseCandidateVotes.siglaUe,
-      descricaoCargo: tseCandidateVotes.descricaoCargo,
+      nmCandidato: tseCandidateVotes.nmCandidato,
+      qtVotosNominais: tseCandidateVotes.qtVotosNominais,
+      sgUe: tseCandidateVotes.sgUe,
+      dsCargo: tseCandidateVotes.dsCargo,
     })
     .from(tseCandidateVotes)
     .where(and(
       eq(tseCandidateVotes.importJobId, jobId),
-      gt(tseCandidateVotes.quantidadeVotos, 10000000)
+      gt(tseCandidateVotes.qtVotosNominais, 10000000)
     ))
     .limit(20);
 
@@ -308,9 +308,9 @@ async function checkUnrealisticVoteCounts(jobId: number): Promise<ValidationIssu
       severity: "warning",
       category: "statistical",
       rowReference: `ID: ${record.id}`,
-      field: "quantidadeVotos",
-      currentValue: String(record.quantidadeVotos),
-      message: `"${record.nomeCandidato}" em ${record.siglaUe} (${record.descricaoCargo}) possui ${record.quantidadeVotos?.toLocaleString()} votos - valor extremamente alto`,
+      field: "qtVotosNominais",
+      currentValue: String(record.qtVotosNominais),
+      message: `"${record.nmCandidato}" em ${record.sgUe} (${record.dsCargo}) possui ${record.qtVotosNominais?.toLocaleString()} votos - valor extremamente alto`,
       suggestedFix: {
         action: "review",
         confidence: 0.4,
@@ -328,13 +328,13 @@ async function checkInvalidCandidateNumbers(jobId: number): Promise<ValidationIs
   const invalidNumbers = await db
     .select({
       id: tseCandidateVotes.id,
-      nomeCandidato: tseCandidateVotes.nomeCandidato,
-      numeroCandidato: tseCandidateVotes.numeroCandidato,
+      nmCandidato: tseCandidateVotes.nmCandidato,
+      nrCandidato: tseCandidateVotes.nrCandidato,
     })
     .from(tseCandidateVotes)
     .where(and(
       eq(tseCandidateVotes.importJobId, jobId),
-      sql`(${tseCandidateVotes.numeroCandidato} < 10 OR ${tseCandidateVotes.numeroCandidato} > 999999)`
+      sql`(${tseCandidateVotes.nrCandidato} < 10 OR ${tseCandidateVotes.nrCandidato} > 999999)`
     ))
     .limit(50);
 
@@ -344,9 +344,9 @@ async function checkInvalidCandidateNumbers(jobId: number): Promise<ValidationIs
       severity: "warning",
       category: "format",
       rowReference: `ID: ${record.id}`,
-      field: "numeroCandidato",
-      currentValue: String(record.numeroCandidato),
-      message: `Candidato "${record.nomeCandidato}" possui número inválido: ${record.numeroCandidato}`,
+      field: "nrCandidato",
+      currentValue: String(record.nrCandidato),
+      message: `Candidato "${record.nmCandidato}" possui número inválido: ${record.nrCandidato}`,
       suggestedFix: {
         action: "review",
         confidence: 0.5,
@@ -363,13 +363,13 @@ async function checkStatisticalOutliers(jobId: number): Promise<ValidationIssue[
 
   const stats = await db.execute(sql`
     SELECT 
-      AVG(${tseCandidateVotes.quantidadeVotos})::numeric as avg_votes,
-      STDDEV(${tseCandidateVotes.quantidadeVotos})::numeric as stddev_votes,
-      ${tseCandidateVotes.codigoCargo} as codigo_cargo
+      AVG(${tseCandidateVotes.qtVotosNominais})::numeric as avg_votes,
+      STDDEV(${tseCandidateVotes.qtVotosNominais})::numeric as stddev_votes,
+      ${tseCandidateVotes.cdCargo} as cd_cargo
     FROM ${tseCandidateVotes}
     WHERE ${tseCandidateVotes.importJobId} = ${jobId}
-      AND ${tseCandidateVotes.quantidadeVotos} > 0
-    GROUP BY ${tseCandidateVotes.codigoCargo}
+      AND ${tseCandidateVotes.qtVotosNominais} > 0
+    GROUP BY ${tseCandidateVotes.cdCargo}
   `);
 
   for (const stat of stats.rows as any[]) {
@@ -381,28 +381,28 @@ async function checkStatisticalOutliers(jobId: number): Promise<ValidationIssue[
       const outliers = await db
         .select({
           id: tseCandidateVotes.id,
-          nomeCandidato: tseCandidateVotes.nomeCandidato,
-          quantidadeVotos: tseCandidateVotes.quantidadeVotos,
-          descricaoCargo: tseCandidateVotes.descricaoCargo,
+          nmCandidato: tseCandidateVotes.nmCandidato,
+          qtVotosNominais: tseCandidateVotes.qtVotosNominais,
+          dsCargo: tseCandidateVotes.dsCargo,
         })
         .from(tseCandidateVotes)
         .where(and(
           eq(tseCandidateVotes.importJobId, jobId),
-          eq(tseCandidateVotes.codigoCargo, stat.codigo_cargo),
-          gt(tseCandidateVotes.quantidadeVotos, Math.round(threshold))
+          eq(tseCandidateVotes.cdCargo, stat.cd_cargo),
+          gt(tseCandidateVotes.qtVotosNominais, Math.round(threshold))
         ))
         .limit(10);
 
       for (const outlier of outliers) {
-        const zScore = (outlier.quantidadeVotos! - avgVotes) / stddev;
+        const zScore = (outlier.qtVotosNominais! - avgVotes) / stddev;
         issues.push({
           type: "statistical_outlier",
           severity: "info",
           category: "statistical",
           rowReference: `ID: ${outlier.id}`,
-          field: "quantidadeVotos",
-          currentValue: String(outlier.quantidadeVotos),
-          message: `"${outlier.nomeCandidato}" (${outlier.descricaoCargo}) é um outlier estatístico com ${outlier.quantidadeVotos?.toLocaleString()} votos (z-score: ${zScore.toFixed(2)})`,
+          field: "qtVotosNominais",
+          currentValue: String(outlier.qtVotosNominais),
+          message: `"${outlier.nmCandidato}" (${outlier.dsCargo}) é um outlier estatístico com ${outlier.qtVotosNominais?.toLocaleString()} votos (z-score: ${zScore.toFixed(2)})`,
           suggestedFix: {
             action: "review",
             confidence: 0.3,
@@ -421,14 +421,14 @@ async function checkPartyNumberConsistency(jobId: number): Promise<ValidationIss
 
   const inconsistencies = await db.execute(sql`
     SELECT 
-      ${tseCandidateVotes.siglaPartido} as sigla,
-      array_agg(DISTINCT ${tseCandidateVotes.numeroPartido}) as numeros,
-      COUNT(DISTINCT ${tseCandidateVotes.numeroPartido}) as count_numeros
+      ${tseCandidateVotes.sgPartido} as sigla,
+      array_agg(DISTINCT ${tseCandidateVotes.nrPartido}) as numeros,
+      COUNT(DISTINCT ${tseCandidateVotes.nrPartido}) as count_numeros
     FROM ${tseCandidateVotes}
     WHERE ${tseCandidateVotes.importJobId} = ${jobId}
-      AND ${tseCandidateVotes.siglaPartido} IS NOT NULL
-    GROUP BY ${tseCandidateVotes.siglaPartido}
-    HAVING COUNT(DISTINCT ${tseCandidateVotes.numeroPartido}) > 1
+      AND ${tseCandidateVotes.sgPartido} IS NOT NULL
+    GROUP BY ${tseCandidateVotes.sgPartido}
+    HAVING COUNT(DISTINCT ${tseCandidateVotes.nrPartido}) > 1
     LIMIT 20
   `);
 
@@ -437,7 +437,7 @@ async function checkPartyNumberConsistency(jobId: number): Promise<ValidationIss
       type: "party_number_mismatch",
       severity: "warning",
       category: "consistency",
-      field: "numeroPartido,siglaPartido",
+      field: "nrPartido,sgPartido",
       currentValue: `${row.sigla}: ${row.numeros?.join(", ")}`,
       message: `Partido ${row.sigla} aparece com ${row.count_numeros} números diferentes: ${row.numeros?.join(", ")}`,
       suggestedFix: {
