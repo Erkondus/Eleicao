@@ -89,9 +89,14 @@ export async function registerRoutes(
 ): Promise<Server> {
   await (storage as any).seedDefaultAdmin?.();
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET environment variable is required in production");
+  }
+
   app.use(
     session({
-      secret: process.env.SESSION_SECRET || "simulavoto-secret-key-2024",
+      secret: sessionSecret || "dev-only-secret-do-not-use-in-production",
       resave: false,
       saveUninitialized: false,
       cookie: {

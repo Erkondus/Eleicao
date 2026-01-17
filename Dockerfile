@@ -22,9 +22,8 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/drizzle.config.ts ./
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/server ./server
+COPY --from=builder /app/node_modules ./node_modules
 COPY docker-entrypoint.sh ./
-
-RUN npm ci --only=production && npm cache clean --force
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 expressjs && \

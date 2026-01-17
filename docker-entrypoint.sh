@@ -10,6 +10,11 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
+if [ -z "$SESSION_SECRET" ]; then
+  echo "ERROR: SESSION_SECRET environment variable is not set"
+  exit 1
+fi
+
 echo "Running database migrations..."
 npm run db:push
 
