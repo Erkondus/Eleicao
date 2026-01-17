@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
+import { SQL } from "drizzle-orm";
 import {
   type User, type InsertUser, users,
   type Party, type InsertParty, parties,
@@ -14,6 +15,14 @@ import {
   type TseCandidateVote, type InsertTseCandidateVote, tseCandidateVotes,
   type TseImportError, type InsertTseImportError, tseImportErrors,
   type ScenarioCandidate, type InsertScenarioCandidate, scenarioCandidates,
+  type SavedReport, type InsertSavedReport, savedReports,
+  type AiPrediction, aiPredictions,
+  type ProjectionReportRecord, type InsertProjectionReport, projectionReports,
+  type ValidationRunRecord, type InsertValidationRun, importValidationRuns,
+  type ValidationIssueRecord, type InsertValidationIssue, importValidationIssues,
+  type ForecastRun, type InsertForecastRun, forecastRuns,
+  type ForecastResult, type InsertForecastResult, forecastResults,
+  type SwingRegion, type InsertSwingRegion, forecastSwingRegions,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -28,9 +37,11 @@ export interface IStorage {
 
   getParties(): Promise<Party[]>;
   getParty(id: number): Promise<Party | undefined>;
+  getPartyByNumber(number: number): Promise<Party | undefined>;
   createParty(party: InsertParty): Promise<Party>;
   updateParty(id: number, data: Partial<InsertParty>): Promise<Party | undefined>;
   deleteParty(id: number): Promise<boolean>;
+  syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number }>;
 
   getCandidates(): Promise<Candidate[]>;
   getCandidate(id: number): Promise<Candidate | undefined>;
@@ -74,6 +85,97 @@ export interface IStorage {
   updateScenarioCandidate(id: number, data: Partial<InsertScenarioCandidate>): Promise<ScenarioCandidate | undefined>;
   deleteScenarioCandidate(id: number): Promise<boolean>;
   addCandidateToScenario(scenarioId: number, candidateId: number, partyId: number, ballotNumber: number, nickname?: string, votes?: number): Promise<ScenarioCandidate>;
+
+  // Drill-down analytics methods
+  getCandidatesByParty(filters: {
+    year?: number;
+    uf?: string;
+    party: string;
+    position?: string;
+    limit?: number;
+  }): Promise<{
+    name: string;
+    nickname: string | null;
+    number: number | null;
+    votes: number;
+    municipality: string | null;
+    state: string | null;
+    position: string | null;
+    result: string | null;
+  }[]>;
+
+  getPartyPerformanceByState(filters: {
+    year?: number;
+    party?: string;
+    position?: string;
+  }): Promise<{
+    state: string;
+    party: string;
+    votes: number;
+    candidateCount: number;
+    percentage: number;
+  }[]>;
+
+  getVotesByPosition(filters: {
+    year?: number;
+    uf?: string;
+  }): Promise<{
+    position: string;
+    votes: number;
+    candidateCount: number;
+    partyCount: number;
+  }[]>;
+
+  // AI Prediction caching methods
+  getAiPrediction(cacheKey: string): Promise<AiPrediction | undefined>;
+  saveAiPrediction(data: { cacheKey: string; predictionType: string; prediction: unknown; expiresAt: Date }): Promise<AiPrediction>;
+  deleteExpiredAiPredictions(): Promise<number>;
+
+  // Validation methods
+  createValidationRun(data: InsertValidationRun): Promise<ValidationRunRecord>;
+  getValidationRun(id: number): Promise<ValidationRunRecord | undefined>;
+  getValidationRunByJobId(jobId: number): Promise<ValidationRunRecord | undefined>;
+  getValidationRunsForJob(jobId: number): Promise<ValidationRunRecord[]>;
+  updateValidationRun(id: number, data: Partial<InsertValidationRun>): Promise<ValidationRunRecord | undefined>;
+  
+  createValidationIssue(data: InsertValidationIssue): Promise<ValidationIssueRecord>;
+  createValidationIssues(data: InsertValidationIssue[]): Promise<ValidationIssueRecord[]>;
+  getValidationIssuesForRun(runId: number, filters?: { type?: string; severity?: string; status?: string }): Promise<ValidationIssueRecord[]>;
+  getValidationIssue(id: number): Promise<ValidationIssueRecord | undefined>;
+  updateValidationIssue(id: number, data: Partial<InsertValidationIssue>): Promise<ValidationIssueRecord | undefined>;
+  getValidationIssueCounts(runId: number): Promise<{ type: string; severity: string; count: number }[]>;
+
+  // Forecast methods
+  createForecastRun(data: InsertForecastRun): Promise<ForecastRun>;
+  getForecastRun(id: number): Promise<ForecastRun | undefined>;
+  getForecastRuns(filters?: { targetYear?: number; status?: string }): Promise<ForecastRun[]>;
+  updateForecastRun(id: number, data: Partial<InsertForecastRun>): Promise<ForecastRun | undefined>;
+  deleteForecastRun(id: number): Promise<boolean>;
+  
+  createForecastResult(data: InsertForecastResult): Promise<ForecastResult>;
+  createForecastResults(data: InsertForecastResult[]): Promise<ForecastResult[]>;
+  getForecastResults(runId: number, filters?: { resultType?: string; region?: string }): Promise<ForecastResult[]>;
+  
+  createSwingRegion(data: InsertSwingRegion): Promise<SwingRegion>;
+  createSwingRegions(data: InsertSwingRegion[]): Promise<SwingRegion[]>;
+  getSwingRegions(runId: number): Promise<SwingRegion[]>;
+  
+  // Historical data for forecasting
+  getHistoricalVotesByParty(filters: { years: number[]; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    state: string | null;
+    position: string | null;
+    totalVotes: number;
+    candidateCount: number;
+  }[]>;
+  
+  getHistoricalTrends(filters: { party?: string; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    voteShare: number;
+    seats?: number;
+  }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -122,9 +224,100 @@ export class DatabaseStorage implements IStorage {
     return party;
   }
 
+  async getPartyByNumber(number: number): Promise<Party | undefined> {
+    const [party] = await db.select().from(parties).where(eq(parties.number, number));
+    return party;
+  }
+
   async createParty(party: InsertParty): Promise<Party> {
     const [created] = await db.insert(parties).values(party).returning();
     return created;
+  }
+
+  async syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number }> {
+    const uniqueParties = await db.selectDistinct({
+      nrPartido: tseCandidateVotes.nrPartido,
+      sgPartido: tseCandidateVotes.sgPartido,
+      nmPartido: tseCandidateVotes.nmPartido,
+    })
+    .from(tseCandidateVotes)
+    .where(eq(tseCandidateVotes.importJobId, jobId));
+
+    let created = 0;
+    let existing = 0;
+
+    for (const partyData of uniqueParties) {
+      if (!partyData.nrPartido || !partyData.sgPartido) continue;
+
+      try {
+        // Use ON CONFLICT DO NOTHING to handle race conditions
+        const result = await db.insert(parties).values({
+          name: partyData.nmPartido || partyData.sgPartido,
+          abbreviation: partyData.sgPartido,
+          number: partyData.nrPartido,
+          color: this.generatePartyColor(partyData.nrPartido),
+          active: true,
+        }).onConflictDoNothing({ target: parties.number }).returning();
+
+        if (result.length > 0) {
+          created++;
+          console.log(`Created party: ${partyData.sgPartido} (${partyData.nrPartido})`);
+        } else {
+          existing++;
+        }
+      } catch (error: any) {
+        // Handle abbreviation uniqueness conflict (different party with same abbreviation)
+        if (error.code === '23505') {
+          existing++;
+        } else {
+          console.error(`Failed to create party ${partyData.sgPartido}:`, error.message);
+        }
+      }
+    }
+
+    return { created, existing };
+  }
+
+  private generatePartyColor(partyNumber: number): string {
+    const colors: { [key: number]: string } = {
+      10: "#FF0000", // PRB/Republicanos - vermelho
+      11: "#0000FF", // PP - azul
+      12: "#00AA00", // PDT - verde
+      13: "#FF0000", // PT - vermelho
+      14: "#00AA00", // PTB - verde
+      15: "#0000FF", // MDB/PMDB - azul
+      16: "#800080", // PSTU - roxo
+      17: "#FF8C00", // PSL - laranja
+      18: "#FFCC00", // REDE - amarelo
+      19: "#008000", // PODE - verde
+      20: "#00CED1", // PSC - turquesa
+      21: "#FFA500", // PCB - laranja
+      22: "#0000FF", // PL - azul
+      23: "#00FF00", // PPS/Cidadania - verde
+      25: "#008000", // DEM/União - verde
+      27: "#FF0000", // PSDC - vermelho
+      28: "#FF69B4", // PRTB - rosa
+      29: "#FFD700", // PCO - dourado
+      30: "#228B22", // NOVO - verde
+      31: "#FF4500", // PHS - laranja
+      33: "#0000CD", // PMN - azul
+      35: "#32CD32", // PMB - verde
+      36: "#800000", // PTC - marrom
+      40: "#FF6347", // PSB - vermelho
+      43: "#006400", // PV - verde escuro
+      44: "#0000FF", // UNIÃO - azul
+      45: "#0000FF", // PSDB - azul
+      50: "#FF0000", // PSOL - vermelho
+      51: "#FF4500", // PEN/Patriota - laranja
+      54: "#FF69B4", // PPL - rosa
+      55: "#FF0000", // PSD - vermelho
+      65: "#FF0000", // PC do B - vermelho
+      70: "#00BFFF", // AVANTE - azul claro
+      77: "#90EE90", // SOLIDARIEDADE - verde claro
+      80: "#4682B4", // UP - azul
+      90: "#006400", // PROS - verde
+    };
+    return colors[partyNumber] || `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
   }
 
   async updateParty(id: number, data: Partial<InsertParty>): Promise<Party | undefined> {
@@ -316,6 +509,59 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
 
+  async findExistingImport(
+    filename: string, 
+    electionYear?: number | null, 
+    uf?: string | null,
+    electionType?: string | null
+  ): Promise<{ job: TseImportJob; isInProgress: boolean } | undefined> {
+    const filenameCondition = eq(tseImportJobs.filename, filename);
+    
+    const baseConditions = [filenameCondition];
+    
+    if (electionYear) {
+      baseConditions.push(eq(tseImportJobs.electionYear, electionYear));
+    }
+    
+    if (uf) {
+      baseConditions.push(eq(tseImportJobs.uf, uf));
+    }
+
+    if (electionType) {
+      baseConditions.push(eq(tseImportJobs.electionType, electionType));
+    }
+    
+    const inProgressStatuses = ["pending", "downloading", "extracting", "running"];
+    
+    const [inProgressJob] = await db.select()
+      .from(tseImportJobs)
+      .where(and(
+        ...baseConditions,
+        sql`${tseImportJobs.status} IN ('pending', 'downloading', 'extracting', 'running')`
+      ))
+      .orderBy(desc(tseImportJobs.createdAt))
+      .limit(1);
+    
+    if (inProgressJob) {
+      return { job: inProgressJob, isInProgress: true };
+    }
+    
+    const [completedJob] = await db.select()
+      .from(tseImportJobs)
+      .where(and(
+        ...baseConditions,
+        eq(tseImportJobs.status, "completed")
+      ))
+      .orderBy(desc(tseImportJobs.completedAt))
+      .limit(1);
+    
+    if (completedJob) {
+      return { job: completedJob, isInProgress: false };
+    }
+    
+    return undefined;
+  }
+
   async createTseImportJob(job: InsertTseImportJob): Promise<TseImportJob> {
     const [created] = await db.insert(tseImportJobs).values(job).returning();
     return created;
@@ -496,6 +742,944 @@ export class DatabaseStorage implements IStorage {
       status: "active",
       votes: votes ?? 0,
     });
+  }
+
+  // Analytics methods
+  async getAnalyticsSummary(filters: { year?: number; uf?: string; electionType?: string }): Promise<{
+    totalVotes: number;
+    totalCandidates: number;
+    totalParties: number;
+    totalMunicipalities: number;
+  }> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [result] = await db
+      .select({
+        totalVotes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        totalCandidates: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+        totalParties: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})`,
+        totalMunicipalities: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.cdMunicipio})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause);
+
+    return {
+      totalVotes: Number(result?.totalVotes ?? 0),
+      totalCandidates: Number(result?.totalCandidates ?? 0),
+      totalParties: Number(result?.totalParties ?? 0),
+      totalMunicipalities: Number(result?.totalMunicipalities ?? 0),
+    };
+  }
+
+  async getVotesByParty(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+    party: string;
+    partyNumber: number | null;
+    votes: number;
+    candidateCount: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        party: tseCandidateVotes.sgPartido,
+        partyNumber: tseCandidateVotes.nrPartido,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(tseCandidateVotes.sgPartido, tseCandidateVotes.nrPartido)
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 20);
+
+    return results.map((r) => ({
+      party: r.party || "N/A",
+      partyNumber: r.partyNumber,
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+    }));
+  }
+
+  async getTopCandidates(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+    name: string;
+    nickname: string | null;
+    party: string | null;
+    number: number | null;
+    state: string | null;
+    position: string | null;
+    votes: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        name: tseCandidateVotes.nmCandidato,
+        nickname: tseCandidateVotes.nmUrnaCandidato,
+        party: tseCandidateVotes.sgPartido,
+        number: tseCandidateVotes.nrCandidato,
+        state: tseCandidateVotes.sgUf,
+        position: tseCandidateVotes.dsCargo,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(
+        tseCandidateVotes.nmCandidato,
+        tseCandidateVotes.nmUrnaCandidato,
+        tseCandidateVotes.sgPartido,
+        tseCandidateVotes.nrCandidato,
+        tseCandidateVotes.sgUf,
+        tseCandidateVotes.dsCargo
+      )
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 20);
+
+    return results.map((r) => ({
+      name: r.name || "N/A",
+      nickname: r.nickname,
+      party: r.party,
+      number: r.number,
+      state: r.state,
+      position: r.position,
+      votes: Number(r.votes),
+    }));
+  }
+
+  async getVotesByState(filters: { year?: number; electionType?: string }): Promise<{
+    state: string;
+    votes: number;
+    candidateCount: number;
+    partyCount: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        state: tseCandidateVotes.sgUf,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+        partyCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(tseCandidateVotes.sgUf)
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`);
+
+    return results.map((r) => ({
+      state: r.state || "N/A",
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+      partyCount: Number(r.partyCount),
+    }));
+  }
+
+  async getVotesByMunicipality(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+    municipality: string;
+    state: string | null;
+    votes: number;
+    candidateCount: number;
+  }[]> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const results = await db
+      .select({
+        municipality: tseCandidateVotes.nmMunicipio,
+        state: tseCandidateVotes.sgUf,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(tseCandidateVotes.nmMunicipio, tseCandidateVotes.sgUf)
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 50);
+
+    return results.map((r) => ({
+      municipality: r.municipality || "N/A",
+      state: r.state,
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+    }));
+  }
+
+  async getAvailableElectionYears(): Promise<number[]> {
+    const results = await db
+      .selectDistinct({ year: tseCandidateVotes.anoEleicao })
+      .from(tseCandidateVotes)
+      .where(sql`${tseCandidateVotes.anoEleicao} IS NOT NULL`)
+      .orderBy(sql`${tseCandidateVotes.anoEleicao} DESC`);
+
+    return results.map((r) => r.year!).filter(Boolean);
+  }
+
+  async getAvailableStates(year?: number): Promise<string[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.sgUf} IS NOT NULL`];
+    if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
+
+    const results = await db
+      .selectDistinct({ state: tseCandidateVotes.sgUf })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.sgUf);
+
+    return results.map((r) => r.state!).filter(Boolean);
+  }
+
+  async getAvailableElectionTypes(year?: number): Promise<string[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.nmTipoEleicao} IS NOT NULL`];
+    if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
+
+    const results = await db
+      .selectDistinct({ type: tseCandidateVotes.nmTipoEleicao })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.nmTipoEleicao);
+
+    return results.map((r) => r.type!).filter(Boolean);
+  }
+
+  async getAvailablePositions(filters: { year?: number; uf?: string }): Promise<string[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.dsCargo} IS NOT NULL`];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+
+    const results = await db
+      .selectDistinct({ position: tseCandidateVotes.dsCargo })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.dsCargo);
+
+    return results.map((r) => r.position!).filter(Boolean);
+  }
+
+  async getAvailableParties(filters: { year?: number; uf?: string }): Promise<{ party: string; number: number }[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.sgPartido} IS NOT NULL`];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+
+    const results = await db
+      .selectDistinct({ 
+        party: tseCandidateVotes.sgPartido,
+        number: tseCandidateVotes.nrPartido
+      })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(tseCandidateVotes.sgPartido);
+
+    return results.filter(r => r.party).map(r => ({ party: r.party!, number: r.number || 0 }));
+  }
+
+  // Drill-down analytics methods
+  async getCandidatesByParty(filters: {
+    year?: number;
+    uf?: string;
+    party: string;
+    position?: string;
+    limit?: number;
+  }): Promise<{
+    name: string;
+    nickname: string | null;
+    number: number | null;
+    votes: number;
+    municipality: string | null;
+    state: string | null;
+    position: string | null;
+    result: string | null;
+  }[]> {
+    const conditions: any[] = [eq(tseCandidateVotes.sgPartido, filters.party)];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+
+    const results = await db
+      .select({
+        name: tseCandidateVotes.nmCandidato,
+        nickname: tseCandidateVotes.nmUrnaCandidato,
+        number: tseCandidateVotes.nrCandidato,
+        votes: sql<number>`COALESCE(${tseCandidateVotes.qtVotosNominais}, 0)`,
+        municipality: tseCandidateVotes.nmMunicipio,
+        state: tseCandidateVotes.sgUf,
+        position: tseCandidateVotes.dsCargo,
+        result: tseCandidateVotes.dsSitTotTurno,
+      })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .orderBy(sql`COALESCE(${tseCandidateVotes.qtVotosNominais}, 0) DESC`)
+      .limit(filters.limit ?? 100);
+
+    return results.map(r => ({
+      name: r.name || "N/A",
+      nickname: r.nickname,
+      number: r.number,
+      votes: Number(r.votes),
+      municipality: r.municipality,
+      state: r.state,
+      position: r.position,
+      result: r.result,
+    }));
+  }
+
+  async getPartyPerformanceByState(filters: {
+    year?: number;
+    party?: string;
+    position?: string;
+  }): Promise<{
+    state: string;
+    party: string;
+    votes: number;
+    candidateCount: number;
+    percentage: number;
+  }[]> {
+    const conditions: any[] = [
+      sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
+      sql`${tseCandidateVotes.sgPartido} IS NOT NULL`,
+    ];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.party) conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+
+    const results = await db
+      .select({
+        state: tseCandidateVotes.sgUf,
+        party: tseCandidateVotes.sgPartido,
+        votes: sql<number>`SUM(COALESCE(${tseCandidateVotes.qtVotosNominais}, 0))`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+      })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .groupBy(tseCandidateVotes.sgUf, tseCandidateVotes.sgPartido)
+      .orderBy(sql`SUM(COALESCE(${tseCandidateVotes.qtVotosNominais}, 0)) DESC`);
+
+    const totalByState: Record<string, number> = {};
+    results.forEach(r => {
+      if (r.state) {
+        totalByState[r.state] = (totalByState[r.state] || 0) + Number(r.votes);
+      }
+    });
+
+    return results.filter(r => r.state && r.party).map(r => ({
+      state: r.state!,
+      party: r.party!,
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+      percentage: totalByState[r.state!] > 0 
+        ? (Number(r.votes) / totalByState[r.state!]) * 100 
+        : 0,
+    }));
+  }
+
+  async getVotesByPosition(filters: {
+    year?: number;
+    uf?: string;
+  }): Promise<{
+    position: string;
+    votes: number;
+    candidateCount: number;
+    partyCount: number;
+  }[]> {
+    const conditions: any[] = [sql`${tseCandidateVotes.dsCargo} IS NOT NULL`];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+
+    const results = await db
+      .select({
+        position: tseCandidateVotes.dsCargo,
+        votes: sql<number>`SUM(COALESCE(${tseCandidateVotes.qtVotosNominais}, 0))`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+        partyCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})`,
+      })
+      .from(tseCandidateVotes)
+      .where(and(...conditions))
+      .groupBy(tseCandidateVotes.dsCargo)
+      .orderBy(sql`SUM(COALESCE(${tseCandidateVotes.qtVotosNominais}, 0)) DESC`);
+
+    return results.filter(r => r.position).map(r => ({
+      position: r.position!,
+      votes: Number(r.votes),
+      candidateCount: Number(r.candidateCount),
+      partyCount: Number(r.partyCount),
+    }));
+  }
+
+  async getAdvancedAnalytics(filters: {
+    year?: number;
+    uf?: string;
+    electionType?: string;
+    position?: string;
+    party?: string;
+    minVotes?: number;
+    maxVotes?: number;
+    limit?: number;
+  }): Promise<{
+    candidates: {
+      name: string;
+      nickname: string | null;
+      party: string | null;
+      number: number | null;
+      state: string | null;
+      position: string | null;
+      municipality: string | null;
+      votes: number;
+    }[];
+    summary: {
+      totalVotes: number;
+      candidateCount: number;
+      avgVotes: number;
+    };
+  }> {
+    const conditions: any[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    if (filters.party) conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const candidateResults = await db
+      .select({
+        name: tseCandidateVotes.nmCandidato,
+        nickname: tseCandidateVotes.nmUrnaCandidato,
+        party: tseCandidateVotes.sgPartido,
+        number: tseCandidateVotes.nrCandidato,
+        state: tseCandidateVotes.sgUf,
+        position: tseCandidateVotes.dsCargo,
+        municipality: tseCandidateVotes.nmMunicipio,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(
+        tseCandidateVotes.nmCandidato,
+        tseCandidateVotes.nmUrnaCandidato,
+        tseCandidateVotes.sgPartido,
+        tseCandidateVotes.nrCandidato,
+        tseCandidateVotes.sgUf,
+        tseCandidateVotes.dsCargo,
+        tseCandidateVotes.nmMunicipio
+      )
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(filters.limit ?? 100);
+
+    let candidates = candidateResults.map((r) => ({
+      name: r.name || "N/A",
+      nickname: r.nickname,
+      party: r.party,
+      number: r.number,
+      state: r.state,
+      position: r.position,
+      municipality: r.municipality,
+      votes: Number(r.votes),
+    }));
+
+    if (filters.minVotes !== undefined) {
+      candidates = candidates.filter(c => c.votes >= filters.minVotes!);
+    }
+    if (filters.maxVotes !== undefined) {
+      candidates = candidates.filter(c => c.votes <= filters.maxVotes!);
+    }
+
+    const totalVotes = candidates.reduce((sum, c) => sum + c.votes, 0);
+    const candidateCount = candidates.length;
+    const avgVotes = candidateCount > 0 ? Math.round(totalVotes / candidateCount) : 0;
+
+    return {
+      candidates,
+      summary: { totalVotes, candidateCount, avgVotes },
+    };
+  }
+
+  async getComparisonData(params: {
+    years?: number[];
+    states?: string[];
+    groupBy: "party" | "state" | "position";
+  }): Promise<{
+    label: string;
+    data: { key: string; votes: number; candidateCount: number }[];
+  }[]> {
+    const results: { label: string; data: { key: string; votes: number; candidateCount: number }[] }[] = [];
+
+    if (params.years && params.years.length > 0) {
+      for (const year of params.years) {
+        let groupByField;
+        if (params.groupBy === "party") groupByField = tseCandidateVotes.sgPartido;
+        else if (params.groupBy === "state") groupByField = tseCandidateVotes.sgUf;
+        else groupByField = tseCandidateVotes.dsCargo;
+
+        const yearData = await db
+          .select({
+            key: groupByField,
+            votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+            candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+          })
+          .from(tseCandidateVotes)
+          .where(eq(tseCandidateVotes.anoEleicao, year))
+          .groupBy(groupByField)
+          .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+          .limit(10);
+
+        results.push({
+          label: String(year),
+          data: yearData.map(d => ({
+            key: d.key || "N/A",
+            votes: Number(d.votes),
+            candidateCount: Number(d.candidateCount),
+          })),
+        });
+      }
+    }
+
+    if (params.states && params.states.length > 0) {
+      for (const state of params.states) {
+        let groupByField;
+        if (params.groupBy === "party") groupByField = tseCandidateVotes.sgPartido;
+        else if (params.groupBy === "position") groupByField = tseCandidateVotes.dsCargo;
+        else groupByField = tseCandidateVotes.anoEleicao;
+
+        const stateData = await db
+          .select({
+            key: groupByField,
+            votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+            candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+          })
+          .from(tseCandidateVotes)
+          .where(eq(tseCandidateVotes.sgUf, state))
+          .groupBy(groupByField)
+          .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+          .limit(10);
+
+        results.push({
+          label: state,
+          data: stateData.map(d => ({
+            key: String(d.key) || "N/A",
+            votes: Number(d.votes),
+            candidateCount: Number(d.candidateCount),
+          })),
+        });
+      }
+    }
+
+    return results;
+  }
+
+  // Saved Reports CRUD
+  async getSavedReports(userId?: string): Promise<SavedReport[]> {
+    if (userId) {
+      return db.select().from(savedReports).where(eq(savedReports.createdBy, userId)).orderBy(sql`${savedReports.updatedAt} DESC`);
+    }
+    return db.select().from(savedReports).orderBy(sql`${savedReports.updatedAt} DESC`);
+  }
+
+  async getSavedReportById(id: number): Promise<SavedReport | undefined> {
+    const [report] = await db.select().from(savedReports).where(eq(savedReports.id, id));
+    return report;
+  }
+
+  async createSavedReport(data: InsertSavedReport): Promise<SavedReport> {
+    const [created] = await db.insert(savedReports).values(data).returning();
+    return created;
+  }
+
+  async updateSavedReport(id: number, data: Partial<InsertSavedReport>): Promise<SavedReport | undefined> {
+    const [updated] = await db
+      .update(savedReports)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(savedReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSavedReport(id: number): Promise<boolean> {
+    const result = await db.delete(savedReports).where(eq(savedReports.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // AI Prediction caching methods
+  async getAiPrediction(cacheKey: string): Promise<AiPrediction | undefined> {
+    const [prediction] = await db
+      .select()
+      .from(aiPredictions)
+      .where(eq(aiPredictions.cacheKey, cacheKey));
+    return prediction;
+  }
+
+  async saveAiPrediction(data: { cacheKey: string; predictionType: string; prediction: unknown; expiresAt: Date }): Promise<AiPrediction> {
+    // Delete existing prediction with same cache key
+    await db.delete(aiPredictions).where(eq(aiPredictions.cacheKey, data.cacheKey));
+    
+    const [created] = await db
+      .insert(aiPredictions)
+      .values({
+        cacheKey: data.cacheKey,
+        predictionType: data.predictionType,
+        prediction: data.prediction,
+        validUntil: data.expiresAt,
+      })
+      .returning();
+    return created;
+  }
+
+  async deleteExpiredAiPredictions(): Promise<number> {
+    const result = await db
+      .delete(aiPredictions)
+      .where(sql`${aiPredictions.validUntil} < NOW()`);
+    return result.rowCount ?? 0;
+  }
+
+  // Projection Reports CRUD
+  async getProjectionReports(filters?: { status?: string; targetYear?: number; scope?: string }): Promise<ProjectionReportRecord[]> {
+    let query = db.select().from(projectionReports);
+    
+    const conditions: SQL[] = [];
+    if (filters?.status) {
+      conditions.push(eq(projectionReports.status, filters.status));
+    }
+    if (filters?.targetYear) {
+      conditions.push(eq(projectionReports.targetYear, filters.targetYear));
+    }
+    if (filters?.scope) {
+      conditions.push(eq(projectionReports.scope, filters.scope));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return query.orderBy(desc(projectionReports.createdAt));
+  }
+
+  async getProjectionReportById(id: number): Promise<ProjectionReportRecord | undefined> {
+    const [report] = await db
+      .select()
+      .from(projectionReports)
+      .where(eq(projectionReports.id, id));
+    return report;
+  }
+
+  async createProjectionReport(data: InsertProjectionReport): Promise<ProjectionReportRecord> {
+    const [report] = await db
+      .insert(projectionReports)
+      .values(data)
+      .returning();
+    return report;
+  }
+
+  async updateProjectionReport(id: number, data: Partial<InsertProjectionReport>): Promise<ProjectionReportRecord | undefined> {
+    const [updated] = await db
+      .update(projectionReports)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(projectionReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectionReport(id: number): Promise<boolean> {
+    const result = await db
+      .delete(projectionReports)
+      .where(eq(projectionReports.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Validation Run methods
+  async createValidationRun(data: InsertValidationRun): Promise<ValidationRunRecord> {
+    const [run] = await db.insert(importValidationRuns).values(data).returning();
+    return run;
+  }
+
+  async getValidationRun(id: number): Promise<ValidationRunRecord | undefined> {
+    const [run] = await db
+      .select()
+      .from(importValidationRuns)
+      .where(eq(importValidationRuns.id, id));
+    return run;
+  }
+
+  async getValidationRunByJobId(jobId: number): Promise<ValidationRunRecord | undefined> {
+    const [run] = await db
+      .select()
+      .from(importValidationRuns)
+      .where(eq(importValidationRuns.jobId, jobId))
+      .orderBy(desc(importValidationRuns.createdAt))
+      .limit(1);
+    return run;
+  }
+
+  async getValidationRunsForJob(jobId: number): Promise<ValidationRunRecord[]> {
+    return db
+      .select()
+      .from(importValidationRuns)
+      .where(eq(importValidationRuns.jobId, jobId))
+      .orderBy(desc(importValidationRuns.createdAt));
+  }
+
+  async updateValidationRun(id: number, data: Partial<InsertValidationRun>): Promise<ValidationRunRecord | undefined> {
+    const [updated] = await db
+      .update(importValidationRuns)
+      .set(data)
+      .where(eq(importValidationRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Validation Issue methods
+  async createValidationIssue(data: InsertValidationIssue): Promise<ValidationIssueRecord> {
+    const [issue] = await db.insert(importValidationIssues).values(data).returning();
+    return issue;
+  }
+
+  async createValidationIssues(data: InsertValidationIssue[]): Promise<ValidationIssueRecord[]> {
+    if (data.length === 0) return [];
+    return db.insert(importValidationIssues).values(data).returning();
+  }
+
+  async getValidationIssuesForRun(
+    runId: number, 
+    filters?: { type?: string; severity?: string; status?: string }
+  ): Promise<ValidationIssueRecord[]> {
+    const conditions: SQL[] = [eq(importValidationIssues.runId, runId)];
+    
+    if (filters?.type) {
+      conditions.push(eq(importValidationIssues.type, filters.type));
+    }
+    if (filters?.severity) {
+      conditions.push(eq(importValidationIssues.severity, filters.severity));
+    }
+    if (filters?.status) {
+      conditions.push(eq(importValidationIssues.status, filters.status));
+    }
+    
+    return db
+      .select()
+      .from(importValidationIssues)
+      .where(and(...conditions))
+      .orderBy(desc(importValidationIssues.createdAt));
+  }
+
+  async getValidationIssue(id: number): Promise<ValidationIssueRecord | undefined> {
+    const [issue] = await db
+      .select()
+      .from(importValidationIssues)
+      .where(eq(importValidationIssues.id, id));
+    return issue;
+  }
+
+  async updateValidationIssue(id: number, data: Partial<InsertValidationIssue>): Promise<ValidationIssueRecord | undefined> {
+    const [updated] = await db
+      .update(importValidationIssues)
+      .set(data)
+      .where(eq(importValidationIssues.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getValidationIssueCounts(runId: number): Promise<{ type: string; severity: string; count: number }[]> {
+    const result = await db
+      .select({
+        type: importValidationIssues.type,
+        severity: importValidationIssues.severity,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(importValidationIssues)
+      .where(eq(importValidationIssues.runId, runId))
+      .groupBy(importValidationIssues.type, importValidationIssues.severity);
+    return result;
+  }
+
+  // Forecast methods
+  async createForecastRun(data: InsertForecastRun): Promise<ForecastRun> {
+    const [run] = await db.insert(forecastRuns).values(data).returning();
+    return run;
+  }
+
+  async getForecastRun(id: number): Promise<ForecastRun | undefined> {
+    const [run] = await db.select().from(forecastRuns).where(eq(forecastRuns.id, id));
+    return run;
+  }
+
+  async getForecastRuns(filters?: { targetYear?: number; status?: string }): Promise<ForecastRun[]> {
+    const conditions: SQL[] = [];
+    
+    if (filters?.targetYear) {
+      conditions.push(eq(forecastRuns.targetYear, filters.targetYear));
+    }
+    if (filters?.status) {
+      conditions.push(eq(forecastRuns.status, filters.status));
+    }
+    
+    const query = conditions.length > 0
+      ? db.select().from(forecastRuns).where(and(...conditions))
+      : db.select().from(forecastRuns);
+    
+    return query.orderBy(desc(forecastRuns.createdAt));
+  }
+
+  async updateForecastRun(id: number, data: Partial<InsertForecastRun>): Promise<ForecastRun | undefined> {
+    const [updated] = await db
+      .update(forecastRuns)
+      .set(data)
+      .where(eq(forecastRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteForecastRun(id: number): Promise<boolean> {
+    const result = await db.delete(forecastRuns).where(eq(forecastRuns.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async createForecastResult(data: InsertForecastResult): Promise<ForecastResult> {
+    const [result] = await db.insert(forecastResults).values(data).returning();
+    return result;
+  }
+
+  async createForecastResults(data: InsertForecastResult[]): Promise<ForecastResult[]> {
+    if (data.length === 0) return [];
+    return db.insert(forecastResults).values(data).returning();
+  }
+
+  async getForecastResults(runId: number, filters?: { resultType?: string; region?: string }): Promise<ForecastResult[]> {
+    const conditions: SQL[] = [eq(forecastResults.runId, runId)];
+    
+    if (filters?.resultType) {
+      conditions.push(eq(forecastResults.resultType, filters.resultType));
+    }
+    if (filters?.region) {
+      conditions.push(eq(forecastResults.region, filters.region));
+    }
+    
+    return db
+      .select()
+      .from(forecastResults)
+      .where(and(...conditions))
+      .orderBy(desc(forecastResults.predictedVoteShare));
+  }
+
+  async createSwingRegion(data: InsertSwingRegion): Promise<SwingRegion> {
+    const [region] = await db.insert(forecastSwingRegions).values(data).returning();
+    return region;
+  }
+
+  async createSwingRegions(data: InsertSwingRegion[]): Promise<SwingRegion[]> {
+    if (data.length === 0) return [];
+    return db.insert(forecastSwingRegions).values(data).returning();
+  }
+
+  async getSwingRegions(runId: number): Promise<SwingRegion[]> {
+    return db
+      .select()
+      .from(forecastSwingRegions)
+      .where(eq(forecastSwingRegions.runId, runId))
+      .orderBy(desc(forecastSwingRegions.volatilityScore));
+  }
+
+  async getHistoricalVotesByParty(filters: { years: number[]; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    state: string | null;
+    position: string | null;
+    totalVotes: number;
+    candidateCount: number;
+  }[]> {
+    const conditions: SQL[] = [];
+    
+    if (filters.years.length > 0) {
+      conditions.push(sql`${tseCandidateVotes.anoEleicao} = ANY(${filters.years})`);
+    }
+    if (filters.position) {
+      conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    }
+    if (filters.state) {
+      conditions.push(eq(tseCandidateVotes.sgUf, filters.state));
+    }
+    
+    const result = await db
+      .select({
+        year: tseCandidateVotes.anoEleicao,
+        party: tseCandidateVotes.sgPartido,
+        state: tseCandidateVotes.sgUf,
+        position: tseCandidateVotes.dsCargo,
+        totalVotes: sql<number>`SUM(${tseCandidateVotes.qtVotosNominais})::int`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.nrCandidato})::int`,
+      })
+      .from(tseCandidateVotes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(
+        tseCandidateVotes.anoEleicao, 
+        tseCandidateVotes.sgPartido, 
+        tseCandidateVotes.sgUf, 
+        tseCandidateVotes.dsCargo
+      )
+      .orderBy(tseCandidateVotes.anoEleicao, desc(sql`SUM(${tseCandidateVotes.qtVotosNominais})`));
+    
+    return result.map(r => ({
+      year: r.year || 0,
+      party: r.party || "",
+      state: r.state,
+      position: r.position,
+      totalVotes: r.totalVotes,
+      candidateCount: r.candidateCount,
+    }));
+  }
+
+  async getHistoricalTrends(filters: { party?: string; position?: string; state?: string }): Promise<{
+    year: number;
+    party: string;
+    voteShare: number;
+    seats?: number;
+  }[]> {
+    const conditions: SQL[] = [];
+    
+    if (filters.party) {
+      conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
+    }
+    if (filters.position) {
+      conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    }
+    if (filters.state) {
+      conditions.push(eq(tseCandidateVotes.sgUf, filters.state));
+    }
+    
+    const voteTotals = await db
+      .select({
+        year: tseCandidateVotes.anoEleicao,
+        party: tseCandidateVotes.sgPartido,
+        votes: sql<number>`SUM(${tseCandidateVotes.qtVotosNominais})::int`,
+        totalVotesInYear: sql<number>`SUM(SUM(${tseCandidateVotes.qtVotosNominais})) OVER (PARTITION BY ${tseCandidateVotes.anoEleicao})::int`,
+      })
+      .from(tseCandidateVotes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(tseCandidateVotes.anoEleicao, tseCandidateVotes.sgPartido)
+      .orderBy(tseCandidateVotes.anoEleicao);
+    
+    return voteTotals.map(r => ({
+      year: r.year || 0,
+      party: r.party || "",
+      voteShare: r.totalVotesInYear > 0 ? (r.votes / r.totalVotesInYear) * 100 : 0,
+    }));
   }
 }
 

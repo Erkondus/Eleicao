@@ -4,6 +4,59 @@
 SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
 
 ## Mudanças Recentes
+- **2026-01-17**: **Previsões Eleitorais** - Sistema de modelagem preditiva para eleições futuras
+- **2026-01-17**: Simulações Monte Carlo com 10.000 iterações para intervalos de confiança robustos
+- **2026-01-17**: Análise de tendências históricas por partido com detecção de crescimento/queda
+- **2026-01-17**: Identificação de regiões voláteis (swing regions) onde pequenas mudanças alteram resultados
+- **2026-01-17**: Tabelas forecast_runs, forecast_results, forecast_swing_regions para armazenar previsões
+- **2026-01-17**: API endpoints para criar, listar, visualizar e excluir previsões
+- **2026-01-17**: Interface frontend com criação de previsões, visualização de resultados e gráficos de incerteza
+- **2026-01-17**: Geração de narrativas com IA para explicar cenários competitivos e riscos
+- **2026-01-17**: **Validação de Dados com IA** - Sistema completo de validação de dados importados do TSE
+- **2026-01-17**: Validação com 7 verificações determinísticas (votos negativos, campos vazios, duplicatas, votos irreais, números de candidato inválidos, outliers estatísticos, inconsistência de números de partido)
+- **2026-01-17**: Análise com IA usando GPT-4o para score de qualidade (0-100), recomendações e avaliação de riscos
+- **2026-01-17**: Tabelas import_validation_runs e import_validation_issues para armazenar resultados
+- **2026-01-17**: Interface de validação integrada à página de importação TSE com botões Validar/Ver
+- **2026-01-17**: Dialog de validação com score de qualidade, descobertas, riscos e lista de problemas
+- **2026-01-17**: Fluxo de status de issues: open → resolved/ignored com rastreamento de responsável
+- **2026-01-17**: **Relatórios de Projeção** - Sistema completo de relatórios preditivos com margens de erro e intervalos de confiança
+- **2026-01-17**: Projeções de comparecimento eleitoral com fatores de influência e base histórica
+- **2026-01-17**: Projeções por partido com estimativa de votos e cadeiras (min/esperado/max)
+- **2026-01-17**: Projeções de candidatos com probabilidade de eleição e ranking
+- **2026-01-17**: Análise de cenários com probabilidades e resultados esperados
+- **2026-01-17**: Avaliação de riscos com categorias, probabilidades e mitigações
+- **2026-01-17**: Exportação de relatórios em CSV com dados completos
+- **2026-01-17**: Página AI Insights com análises preditivas avançadas (comparecimento, candidatos, partidos)
+- **2026-01-17**: Previsão de comparecimento eleitoral baseada em padrões históricos
+- **2026-01-17**: Probabilidade de sucesso de candidatos com fatores de influência
+- **2026-01-17**: Previsão de desempenho partidário com análise de tendências
+- **2026-01-17**: Insights estratégicos com descobertas, riscos e recomendações
+- **2026-01-17**: Análise de sentimento (extensível para notícias e mídias sociais)
+- **2026-01-17**: Cache de previsões de IA para otimização de custos
+- **2026-01-17**: Painel interativo com drill-down por região, partido e cargo
+- **2026-01-17**: Busca Semântica com pgvector para consultas em linguagem natural sobre dados eleitorais
+- **2026-01-17**: Embeddings automáticos gerados após importação TSE via OpenAI text-embedding-3-small
+- **2026-01-17**: Interface de busca semântica com filtros, exemplos de perguntas, histórico e citações
+- **2026-01-17**: Dashboard Eleitoral com mapa do Brasil interativo, métricas consolidadas e status de importações
+- **2026-01-17**: Sincronização automática de partidos durante importação TSE (cria partidos que não existem)
+- **2026-01-16**: Progresso detalhado de importação (download %, tempo decorrido, linhas processadas)
+- **2026-01-16**: Indicador global de importações ativas na sidebar
+- **2026-01-16**: Atualização de progresso em tempo real durante download e processamento
+- **2026-01-16**: Priorização de arquivos _BRASIL.csv em ZIPs com múltiplos CSVs
+- **2026-01-16**: Filtro de cargo na importação (Deputado, Senador, Vereador, etc.)
+- **2026-01-16**: Prevenção de importação duplicada com feedback detalhado ao usuário
+- **2026-01-15**: Filtros avançados: cargo, partido específico, faixa de votos (min/max)
+- **2026-01-15**: Sistema de relatórios salvos para acesso rápido
+- **2026-01-15**: Modo de comparação entre eleições/estados com visualizações
+- **2026-01-15**: Tooltips interativos detalhados nos gráficos
+- **2026-01-15**: Assistente de IA para perguntas em linguagem natural sobre dados eleitorais
+- **2026-01-15**: Análise de tendências históricas com previsões de IA
+- **2026-01-15**: Detecção de anomalias estatísticas nos dados de votação
+- **2026-01-15**: Seção de Análise de Dados com relatórios personalizados e visualizações
+- **2026-01-15**: Filtros por ano, estado e tipo de eleição para análises
+- **2026-01-15**: Gráficos (barras, pizza, área) para distribuição de votos
+- **2026-01-15**: Exportação de relatórios em CSV e PDF
+- **2026-01-15**: Importação via URL direta do TSE (cdn.tse.jus.br)
 - **2026-01-14**: Sistema de importação de dados CSV do TSE (até 5GB) com streaming e progresso
 - **2026-01-14**: Tabelas para armazenar todos os 50 campos do layout de candidatos do TSE
 - **2026-01-14**: Suporte a Federações (2022+) e Coligações (pré-2022) - afetam distribuição de vagas
@@ -22,6 +75,7 @@ SimulaVoto é um sistema web completo para simular resultados eleitorais proporc
 - **Banco de Dados**: PostgreSQL com Drizzle ORM
 - **Autenticação**: passport-local + express-session
 - **IA**: OpenAI GPT-4o via Replit AI Integrations
+- **Busca Semântica**: pgvector + OpenAI text-embedding-3-small (1536 dims)
 
 ### Estrutura de Diretórios
 ```
@@ -64,6 +118,29 @@ SimulaVoto é um sistema web completo para simular resultados eleitorais proporc
 - `POST /api/predictions` - Previsões com IA (admin/analyst)
 - `GET /api/audit` - Logs de auditoria (admin)
 - `GET /api/stats` - Estatísticas do dashboard
+- `GET /api/analytics/summary` - Resumo analítico (votos, candidatos, partidos, municípios)
+- `GET /api/analytics/votes-by-party` - Votos agregados por partido
+- `GET /api/analytics/top-candidates` - Candidatos mais votados
+- `GET /api/analytics/votes-by-state` - Votos por estado
+- `GET /api/analytics/votes-by-municipality` - Votos por município
+- `GET /api/analytics/election-years` - Anos eleitorais disponíveis
+- `GET /api/analytics/states` - Estados disponíveis
+- `GET /api/analytics/election-types` - Tipos de eleição disponíveis
+- `GET /api/analytics/positions` - Cargos disponíveis
+- `GET /api/analytics/parties-list` - Lista de partidos disponíveis
+- `GET /api/analytics/advanced` - Análise avançada com múltiplos filtros
+- `POST /api/analytics/compare` - Comparação entre anos/estados
+- `GET /api/analytics/export/csv` - Exportação de relatórios em CSV
+- `GET/POST/PUT/DELETE /api/reports` - CRUD de relatórios salvos
+- `POST /api/ai/assistant` - Assistente IA para perguntas sobre dados
+- `POST /api/ai/predict-historical` - Previsões baseadas em histórico
+- `POST /api/ai/anomalies` - Detecção de anomalias estatísticas
+- `POST /api/ai/turnout` - Previsão de comparecimento eleitoral
+- `POST /api/ai/candidate-success` - Probabilidade de sucesso de candidatos
+- `POST /api/ai/party-performance` - Previsão de desempenho partidário
+- `POST /api/ai/electoral-insights` - Insights estratégicos eleitorais
+- `POST /api/ai/sentiment` - Análise de sentimento de notícias/posts
+- `POST /api/imports/tse/url` - Importação via URL do TSE
 
 ### Sistema Eleitoral Brasileiro
 O sistema implementa o cálculo proporcional brasileiro:

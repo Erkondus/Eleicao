@@ -5,12 +5,23 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
 import multer from "multer";
-import { createReadStream } from "fs";
+import { createReadStream, createWriteStream } from "fs";
+import { unlink, mkdir } from "fs/promises";
 import { parse } from "csv-parse";
 import iconv from "iconv-lite";
+import unzipper from "unzipper";
+import { pipeline } from "stream/promises";
+import path from "path";
+import { z } from "zod";
 import { storage } from "./storage";
 import type { User, InsertTseCandidateVote } from "@shared/schema";
 import OpenAI from "openai";
+import { 
+  processSemanticSearch, 
+  generateEmbeddingsForImportJob, 
+  getEmbeddingStats, 
+  getRecentQueries 
+} from "./semantic-search";
 
 const upload = multer({ 
   dest: "/tmp/uploads/",
@@ -78,9 +89,14 @@ export async function registerRoutes(
 ): Promise<Server> {
   await (storage as any).seedDefaultAdmin?.();
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET environment variable is required in production");
+  }
+
   app.use(
     session({
-      secret: process.env.SESSION_SECRET || "simulavoto-secret-key-2024",
+      secret: sessionSecret || "dev-only-secret-do-not-use-in-production",
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -125,6 +141,29 @@ export async function registerRoutes(
       done(null, user || undefined);
     } catch (error) {
       done(error);
+    }
+  });
+
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const stats = await storage.getStats();
+      res.json({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        version: "1.0.0",
+        database: "connected",
+        stats: {
+          users: stats.totalUsers,
+          parties: stats.totalParties,
+        }
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        database: "disconnected",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
@@ -946,6 +985,734 @@ Responda em JSON com a seguinte estrutura:
     }
   });
 
+  // AI Assistant for natural language queries about electoral data
+  app.post("/api/ai/assistant", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { question, filters } = req.body;
+      
+      if (!question || typeof question !== "string" || question.length < 5) {
+        return res.status(400).json({ error: "Please provide a valid question (at least 5 characters)" });
+      }
+
+      if (question.length > 500) {
+        return res.status(400).json({ error: "Question is too long (max 500 characters)" });
+      }
+
+      // Fetch data based on filters to provide context to the AI
+      const summary = await storage.getAnalyticsSummary(filters || {});
+      const votesByParty = await storage.getVotesByParty({ ...(filters || {}), limit: 15 });
+      const topCandidates = await storage.getTopCandidates({ ...(filters || {}), limit: 10 });
+      const votesByState = await storage.getVotesByState(filters || {});
+
+      const dataContext = `
+DADOS ELEITORAIS DISPONÍVEIS:
+
+Resumo:
+- Total de Votos: ${summary.totalVotes.toLocaleString("pt-BR")}
+- Candidatos: ${summary.totalCandidates.toLocaleString("pt-BR")}
+- Partidos: ${summary.totalParties}
+- Municípios: ${summary.totalMunicipalities.toLocaleString("pt-BR")}
+
+Votos por Partido (Top 15):
+${votesByParty.map((p, i) => `${i + 1}. ${p.party} (${p.partyNumber}): ${p.votes.toLocaleString("pt-BR")} votos, ${p.candidateCount} candidatos`).join("\n")}
+
+Candidatos Mais Votados (Top 10):
+${topCandidates.map((c, i) => `${i + 1}. ${c.nickname || c.name} (${c.party}) - ${c.state}: ${c.votes.toLocaleString("pt-BR")} votos`).join("\n")}
+
+Votos por Estado:
+${votesByState.map((s) => `- ${s.state}: ${s.votes.toLocaleString("pt-BR")} votos, ${s.candidateCount} candidatos, ${s.partyCount} partidos`).join("\n")}
+
+Filtros Aplicados: ${JSON.stringify(filters || { info: "Todos os dados" })}
+`;
+
+      const openai = new OpenAI();
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um assistente especializado em análise de dados eleitorais brasileiros do TSE.
+Responda perguntas sobre os dados eleitorais usando APENAS as informações fornecidas abaixo.
+Seja preciso, cite números específicos quando disponíveis, e responda em português.
+Se não houver dados suficientes para responder, informe isso educadamente.
+Não invente dados que não estejam no contexto fornecido.`
+          },
+          {
+            role: "user",
+            content: `${dataContext}\n\nPERGUNTA DO USUÁRIO: ${question}`
+          }
+        ],
+        max_tokens: 1000,
+      });
+
+      const answer = completion.choices[0]?.message?.content;
+      if (!answer) {
+        throw new Error("No response from AI");
+      }
+
+      await logAudit(req, "ai_query", "assistant", undefined, { question, filters });
+
+      res.json({
+        question,
+        answer,
+        filters,
+        dataContext: {
+          totalVotes: summary.totalVotes,
+          totalParties: summary.totalParties,
+          totalCandidates: summary.totalCandidates,
+        },
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("AI Assistant error:", error);
+      res.status(500).json({ error: "Failed to process question" });
+    }
+  });
+
+  // AI Historical Prediction based on trends
+  app.post("/api/ai/predict-historical", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { filters, targetYear } = req.body;
+
+      // Get historical data
+      const availableYears = await storage.getAvailableElectionYears();
+      if (availableYears.length < 1) {
+        return res.status(400).json({ error: "Insufficient historical data for predictions" });
+      }
+
+      const historicalData: any[] = [];
+      for (const year of availableYears.slice(0, 4)) {
+        const data = await storage.getVotesByParty({ 
+          year, 
+          uf: filters?.uf, 
+          electionType: filters?.electionType,
+          limit: 20 
+        });
+        historicalData.push({ year, parties: data });
+      }
+
+      const openai = new OpenAI();
+      const prompt = `Você é um analista político especializado em tendências eleitorais brasileiras.
+Analise os dados históricos de votação abaixo e forneça previsões para futuras eleições.
+
+DADOS HISTÓRICOS:
+${historicalData.map((h) => `
+Ano ${h.year}:
+${h.parties.map((p: any) => `- ${p.party}: ${p.votes.toLocaleString("pt-BR")} votos (${p.candidateCount} candidatos)`).join("\n")}`).join("\n")}
+
+Anos Disponíveis: ${availableYears.join(", ")}
+Filtros: ${JSON.stringify(filters || {})}
+
+Responda em JSON com a estrutura:
+{
+  "analysis": "Análise detalhada das tendências observadas (2-3 parágrafos)",
+  "trends": [
+    {
+      "party": "sigla",
+      "trend": "crescimento" | "declínio" | "estável",
+      "changePercent": número,
+      "observation": "breve observação"
+    }
+  ],
+  "predictions": [
+    {
+      "party": "sigla",
+      "expectedPerformance": "forte" | "moderado" | "fraco",
+      "confidence": número_0_a_1,
+      "reasoning": "justificativa"
+    }
+  ],
+  "insights": ["insight 1", "insight 2", "insight 3"]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No response from AI");
+      }
+
+      const prediction = JSON.parse(content);
+      prediction.historicalYears = availableYears;
+      prediction.filters = filters;
+      prediction.generatedAt = new Date().toISOString();
+
+      await logAudit(req, "ai_prediction", "historical", undefined, { filters, years: availableYears });
+
+      res.json(prediction);
+    } catch (error: any) {
+      console.error("AI Historical Prediction error:", error);
+      res.status(500).json({ error: "Failed to generate historical prediction" });
+    }
+  });
+
+  // AI Anomaly Detection in voting data
+  app.post("/api/ai/anomalies", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { filters } = req.body;
+
+      // Get data for anomaly analysis
+      const votesByParty = await storage.getVotesByParty({ ...(filters || {}), limit: 30 });
+      const topCandidates = await storage.getTopCandidates({ ...(filters || {}), limit: 50 });
+      const votesByMunicipality = await storage.getVotesByMunicipality({ ...(filters || {}), limit: 100 });
+      const summary = await storage.getAnalyticsSummary(filters || {});
+
+      // Calculate basic statistics for anomaly detection
+      const partyVotes = votesByParty.map((p) => p.votes);
+      const avgVotes = partyVotes.length > 0 ? partyVotes.reduce((a, b) => a + b, 0) / partyVotes.length : 0;
+      const stdDev = partyVotes.length > 0 
+        ? Math.sqrt(partyVotes.map((v) => Math.pow(v - avgVotes, 2)).reduce((a, b) => a + b, 0) / partyVotes.length)
+        : 0;
+
+      const municipalityVotes = votesByMunicipality.map((m) => m.votes);
+      const avgMuniVotes = municipalityVotes.length > 0 ? municipalityVotes.reduce((a, b) => a + b, 0) / municipalityVotes.length : 0;
+      const muniStdDev = municipalityVotes.length > 0
+        ? Math.sqrt(municipalityVotes.map((v) => Math.pow(v - avgMuniVotes, 2)).reduce((a, b) => a + b, 0) / municipalityVotes.length)
+        : 0;
+
+      // Statistical flags
+      const statisticalFlags = {
+        partyOutliers: votesByParty.filter((p) => Math.abs(p.votes - avgVotes) > 2 * stdDev).map((p) => ({
+          party: p.party,
+          votes: p.votes,
+          zScore: stdDev > 0 ? (p.votes - avgVotes) / stdDev : 0,
+        })),
+        municipalityOutliers: votesByMunicipality.filter((m) => Math.abs(m.votes - avgMuniVotes) > 2.5 * muniStdDev).slice(0, 10).map((m) => ({
+          municipality: m.municipality,
+          state: m.state,
+          votes: m.votes,
+          zScore: muniStdDev > 0 ? (m.votes - avgMuniVotes) / muniStdDev : 0,
+        })),
+        candidateConcentration: topCandidates.slice(0, 5).map((c) => ({
+          candidate: c.nickname || c.name,
+          party: c.party,
+          votes: c.votes,
+          percentOfTotal: summary.totalVotes > 0 ? ((c.votes / summary.totalVotes) * 100).toFixed(2) : 0,
+        })),
+      };
+
+      const openai = new OpenAI();
+      const prompt = `Você é um especialista em detecção de anomalias em dados eleitorais brasileiros.
+Analise os dados estatísticos abaixo e identifique possíveis anomalias, padrões incomuns ou pontos que merecem investigação.
+NÃO afirme que há fraude - apenas aponte padrões estatisticamente incomuns que podem merecer verificação.
+
+DADOS ESTATÍSTICOS:
+Total de Votos: ${summary.totalVotes.toLocaleString("pt-BR")}
+Média de votos por partido: ${avgVotes.toLocaleString("pt-BR")}
+Desvio padrão (partidos): ${stdDev.toLocaleString("pt-BR")}
+
+Partidos com votação fora do padrão (>2 desvios):
+${JSON.stringify(statisticalFlags.partyOutliers, null, 2)}
+
+Municípios com votação atípica (>2.5 desvios):
+${JSON.stringify(statisticalFlags.municipalityOutliers, null, 2)}
+
+Concentração de votos (top 5 candidatos):
+${JSON.stringify(statisticalFlags.candidateConcentration, null, 2)}
+
+Responda em JSON:
+{
+  "overallRisk": "baixo" | "médio" | "alto",
+  "summary": "Resumo da análise em 1-2 parágrafos",
+  "anomalies": [
+    {
+      "type": "partido" | "município" | "candidato" | "distribuição",
+      "severity": "baixa" | "média" | "alta",
+      "description": "descrição da anomalia",
+      "recommendation": "recomendação de verificação"
+    }
+  ],
+  "observations": ["observação 1", "observação 2"]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No response from AI");
+      }
+
+      const analysis = JSON.parse(content);
+      analysis.statistics = {
+        avgVotesPerParty: avgVotes,
+        stdDevParty: stdDev,
+        avgVotesPerMunicipality: avgMuniVotes,
+        stdDevMunicipality: muniStdDev,
+      };
+      analysis.rawFlags = statisticalFlags;
+      analysis.filters = filters;
+      analysis.generatedAt = new Date().toISOString();
+
+      await logAudit(req, "ai_anomaly", "detection", undefined, { filters, riskLevel: analysis.overallRisk });
+
+      res.json(analysis);
+    } catch (error: any) {
+      console.error("AI Anomaly Detection error:", error);
+      res.status(500).json({ error: "Failed to detect anomalies" });
+    }
+  });
+
+  // AI Voter Turnout Prediction
+  app.post("/api/ai/turnout", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional(),
+        targetYear: z.number().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { predictVoterTurnout } = await import("./ai-insights");
+      const { year, uf, electionType, targetYear } = parsed.data;
+      
+      const cacheKey = `turnout_${year || 'all'}_${uf || 'all'}_${electionType || 'all'}_${targetYear || 'next'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const prediction = await predictVoterTurnout({ year, uf, electionType, targetYear });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'turnout',
+        prediction,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "turnout", undefined, { year, uf, electionType, targetYear });
+      
+      res.json(prediction);
+    } catch (error: any) {
+      console.error("AI Turnout Prediction error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate turnout prediction" });
+    }
+  });
+
+  // AI Candidate Success Probability
+  app.post("/api/ai/candidate-success", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        candidateNumber: z.number().optional(),
+        candidateName: z.string().optional(),
+        party: z.string().optional(),
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { candidateNumber, candidateName, party, year, uf, electionType } = parsed.data;
+      
+      const cacheKey = `candidate_${candidateNumber || 'all'}_${party || 'all'}_${year || 'all'}_${uf || 'all'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const { predictCandidateSuccess } = await import("./ai-insights");
+      const predictions = await predictCandidateSuccess({ 
+        candidateNumber, 
+        candidateName, 
+        party, 
+        year, 
+        uf, 
+        electionType 
+      });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'candidate_success',
+        prediction: predictions,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "candidate_success", undefined, { party, year, uf });
+      
+      res.json(predictions);
+    } catch (error: any) {
+      console.error("AI Candidate Success error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate candidate success predictions" });
+    }
+  });
+
+  // AI Party Performance Prediction
+  app.post("/api/ai/party-performance", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        party: z.string().optional(),
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional(),
+        targetYear: z.number().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { party, year, uf, electionType, targetYear } = parsed.data;
+      
+      const cacheKey = `party_${party || 'all'}_${year || 'all'}_${uf || 'all'}_${targetYear || 'next'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const { predictPartyPerformance } = await import("./ai-insights");
+      const predictions = await predictPartyPerformance({ party, year, uf, electionType, targetYear });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'party_performance',
+        prediction: predictions,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "party_performance", undefined, { party, year, uf });
+      
+      res.json(predictions);
+    } catch (error: any) {
+      console.error("AI Party Performance error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate party performance predictions" });
+    }
+  });
+
+  // AI Electoral Insights (comprehensive analysis)
+  app.post("/api/ai/electoral-insights", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional(),
+        party: z.string().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { year, uf, electionType, party } = parsed.data;
+      
+      const cacheKey = `insights_${year || 'all'}_${uf || 'all'}_${electionType || 'all'}_${party || 'all'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const { generateElectoralInsights } = await import("./ai-insights");
+      const insights = await generateElectoralInsights({ year, uf, electionType, party });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'electoral_insights',
+        prediction: insights,
+        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "electoral_insights", undefined, { year, uf, electionType });
+      
+      res.json(insights);
+    } catch (error: any) {
+      console.error("AI Electoral Insights error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate electoral insights" });
+    }
+  });
+
+  // AI Sentiment Analysis
+  app.post("/api/ai/sentiment", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        newsArticles: z.array(z.object({
+          title: z.string(),
+          content: z.string(),
+          source: z.string().optional(),
+          publishedAt: z.string().optional()
+        })).optional(),
+        socialPosts: z.array(z.object({
+          content: z.string(),
+          platform: z.string().optional(),
+          author: z.string().optional(),
+          postedAt: z.string().optional()
+        })).optional(),
+        party: z.string().optional(),
+        dateRange: z.object({
+          start: z.string(),
+          end: z.string()
+        }).optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { newsArticles, socialPosts, party, dateRange } = parsed.data;
+      
+      const { analyzeElectoralSentiment } = await import("./ai-insights");
+      const analysis = await analyzeElectoralSentiment({ newsArticles, socialPosts, party, dateRange });
+      
+      await logAudit(req, "ai_prediction", "sentiment", undefined, { party, articlesCount: newsArticles?.length || 0 });
+      
+      res.json(analysis);
+    } catch (error: any) {
+      console.error("AI Sentiment Analysis error:", error);
+      res.status(500).json({ error: error.message || "Failed to analyze sentiment" });
+    }
+  });
+
+  // Projection Reports API - Query params validation schema
+  const projectionReportQuerySchema = z.object({
+    status: z.enum(["draft", "published", "archived"]).optional(),
+    scope: z.enum(["national", "state"]).optional(),
+    targetYear: z.string().optional().transform((val) => val ? parseInt(val) : undefined).pipe(
+      z.number().int().min(2000).max(2100).optional()
+    )
+  });
+
+  app.get("/api/projection-reports", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const validationResult = projectionReportQuerySchema.safeParse(req.query);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid query parameters", 
+          details: validationResult.error.issues 
+        });
+      }
+      
+      const { status, targetYear, scope } = validationResult.data;
+      
+      const reports = await storage.getProjectionReports({ status, targetYear, scope });
+      res.json(reports);
+    } catch (error) {
+      console.error("Failed to fetch projection reports:", error);
+      res.status(500).json({ error: "Failed to fetch projection reports" });
+    }
+  });
+
+  app.get("/api/projection-reports/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const report = await storage.getProjectionReportById(parseInt(req.params.id));
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error("Failed to fetch projection report:", error);
+      res.status(500).json({ error: "Failed to fetch projection report" });
+    }
+  });
+
+  // Zod schema for projection report creation
+  const createProjectionReportSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    targetYear: z.number().int().min(2000).max(2100),
+    electionType: z.string().min(1, "Election type is required"),
+    scope: z.enum(["national", "state"]),
+    state: z.string().optional(),
+    position: z.string().optional()
+  });
+
+  app.post("/api/projection-reports", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const validationResult = createProjectionReportSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: validationResult.error.issues 
+        });
+      }
+      
+      const { name, targetYear, electionType, scope, state, position } = validationResult.data;
+      
+      if (scope === "state" && !state) {
+        return res.status(400).json({ error: "State is required when scope is 'state'" });
+      }
+      
+      // Generate the projection report using AI
+      const { generateProjectionReport } = await import("./ai-insights");
+      const aiReport = await generateProjectionReport({
+        name,
+        targetYear,
+        electionType,
+        scope,
+        state: scope === "state" ? state : undefined,
+        position
+      });
+      
+      // Save to database
+      const savedReport = await storage.createProjectionReport({
+        name,
+        targetYear,
+        electionType,
+        scope,
+        state: scope === "state" ? state : null,
+        executiveSummary: aiReport.executiveSummary,
+        methodology: aiReport.methodology,
+        dataQuality: aiReport.dataQuality,
+        turnoutProjection: aiReport.turnoutProjection,
+        partyProjections: aiReport.partyProjections,
+        candidateProjections: aiReport.candidateProjections,
+        scenarios: aiReport.scenarios,
+        riskAssessment: aiReport.riskAssessment,
+        confidenceIntervals: aiReport.confidenceIntervals,
+        recommendations: aiReport.recommendations,
+        validUntil: new Date(aiReport.validUntil),
+        status: "draft",
+        createdBy: req.user?.id,
+      });
+      
+      await logAudit(req, "create", "projection_report", String(savedReport.id), { name, targetYear, scope });
+      
+      res.json(savedReport);
+    } catch (error: any) {
+      console.error("Failed to create projection report:", error);
+      res.status(500).json({ error: error.message || "Failed to create projection report" });
+    }
+  });
+
+  const updateProjectionReportSchema = z.object({
+    name: z.string().min(1).optional(),
+    status: z.enum(["draft", "published", "archived"]).optional()
+  });
+
+  app.put("/api/projection-reports/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      
+      const validationResult = updateProjectionReportSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: validationResult.error.issues 
+        });
+      }
+      
+      const { status, name } = validationResult.data;
+      
+      const updated = await storage.updateProjectionReport(id, { status, name });
+      if (!updated) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      await logAudit(req, "update", "projection_report", String(id), { status, name });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update projection report:", error);
+      res.status(500).json({ error: "Failed to update projection report" });
+    }
+  });
+
+  app.delete("/api/projection-reports/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteProjectionReport(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      await logAudit(req, "delete", "projection_report", String(id));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete projection report:", error);
+      res.status(500).json({ error: "Failed to delete projection report" });
+    }
+  });
+
+  // Export projection report as CSV
+  app.get("/api/projection-reports/:id/export/csv", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const report = await storage.getProjectionReportById(parseInt(req.params.id));
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      // Generate CSV content
+      let csv = "Relatório de Projeção Eleitoral\n";
+      csv += `Nome,${report.name}\n`;
+      csv += `Ano Alvo,${report.targetYear}\n`;
+      csv += `Tipo,${report.electionType}\n`;
+      csv += `Escopo,${report.scope === "national" ? "Nacional" : report.state}\n`;
+      csv += `Gerado em,${report.createdAt}\n\n`;
+      
+      // Turnout projection
+      const turnout = report.turnoutProjection as any;
+      if (turnout) {
+        csv += "PROJEÇÃO DE COMPARECIMENTO\n";
+        csv += `Esperado,${turnout.expected}%\n`;
+        csv += `Confiança,${(turnout.confidence * 100).toFixed(1)}%\n`;
+        csv += `Margem de Erro,${turnout.marginOfError?.lower}% - ${turnout.marginOfError?.upper}%\n\n`;
+      }
+      
+      // Party projections
+      const parties = report.partyProjections as any[];
+      if (parties && parties.length > 0) {
+        csv += "PROJEÇÕES POR PARTIDO\n";
+        csv += "Partido,Sigla,Votos Esperados (%),Votos Min (%),Votos Max (%),Cadeiras Esperadas,Cadeiras Min,Cadeiras Max,Tendência,Confiança,Margem de Erro\n";
+        for (const p of parties) {
+          csv += `${p.party},${p.abbreviation},${p.voteShare?.expected},${p.voteShare?.min},${p.voteShare?.max},${p.seats?.expected},${p.seats?.min},${p.seats?.max},${p.trend},${(p.confidence * 100).toFixed(1)}%,${p.marginOfError}%\n`;
+        }
+        csv += "\n";
+      }
+      
+      // Candidate projections
+      const candidates = report.candidateProjections as any[];
+      if (candidates && candidates.length > 0) {
+        csv += "PROJEÇÕES DE CANDIDATOS\n";
+        csv += "Ranking,Nome,Partido,Cargo,Probabilidade de Eleição,Votos Esperados,Votos Min,Votos Max,Confiança\n";
+        for (const c of candidates) {
+          csv += `${c.ranking},${c.name},${c.party},${c.position},${(c.electionProbability * 100).toFixed(1)}%,${c.projectedVotes?.expected},${c.projectedVotes?.min},${c.projectedVotes?.max},${(c.confidence * 100).toFixed(1)}%\n`;
+        }
+        csv += "\n";
+      }
+      
+      // Confidence intervals
+      const confidence = report.confidenceIntervals as any;
+      if (confidence) {
+        csv += "INTERVALOS DE CONFIANÇA\n";
+        csv += `Geral,${(confidence.overall * 100).toFixed(1)}%\n`;
+        csv += `Comparecimento,${(confidence.turnout * 100).toFixed(1)}%\n`;
+        csv += `Resultados Partidários,${(confidence.partyResults * 100).toFixed(1)}%\n`;
+        csv += `Distribuição de Cadeiras,${(confidence.seatDistribution * 100).toFixed(1)}%\n\n`;
+      }
+      
+      // Recommendations
+      const recommendations = report.recommendations as string[];
+      if (recommendations && recommendations.length > 0) {
+        csv += "RECOMENDAÇÕES\n";
+        recommendations.forEach((r, i) => {
+          csv += `${i + 1},${r}\n`;
+        });
+      }
+      
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="projecao-${report.name.replace(/\s+/g, "-")}-${report.targetYear}.csv"`);
+      res.send("\ufeff" + csv); // BOM for Excel compatibility
+    } catch (error) {
+      console.error("Failed to export projection report:", error);
+      res.status(500).json({ error: "Failed to export report" });
+    }
+  });
+
   app.get("/api/imports/tse", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const jobs = await storage.getTseImportJobs();
@@ -976,19 +1743,294 @@ Responda em JSON com a seguinte estrutura:
     }
   });
 
+  // Data Validation API Endpoints
+  app.get("/api/imports/tse/:id/validation", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+      
+      const { getValidationStatus } = await import("./data-validation");
+      const status = await getValidationStatus(jobId);
+      res.json(status);
+    } catch (error) {
+      console.error("Failed to fetch validation status:", error);
+      res.status(500).json({ error: "Failed to fetch validation status" });
+    }
+  });
+
+  app.post("/api/imports/tse/:id/validation/run", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+      
+      const job = await storage.getTseImportJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+      
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Can only validate completed imports" });
+      }
+      
+      const { runValidation } = await import("./data-validation");
+      const result = await runValidation(jobId);
+      
+      await logAudit(req, "create", "validation_run", String(result.runId), {
+        jobId,
+        issuesFound: result.summary.issuesFound,
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Failed to run validation:", error);
+      res.status(500).json({ error: "Failed to run validation" });
+    }
+  });
+
+  app.get("/api/validation-runs/:runId/issues", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const runId = parseInt(req.params.runId);
+      if (isNaN(runId)) {
+        return res.status(400).json({ error: "Invalid run ID" });
+      }
+      
+      const type = req.query.type as string | undefined;
+      const severity = req.query.severity as string | undefined;
+      const status = req.query.status as string | undefined;
+      
+      const issues = await storage.getValidationIssuesForRun(runId, { type, severity, status });
+      res.json(issues);
+    } catch (error) {
+      console.error("Failed to fetch validation issues:", error);
+      res.status(500).json({ error: "Failed to fetch validation issues" });
+    }
+  });
+
+  app.patch("/api/validation-issues/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const issueId = parseInt(req.params.id);
+      if (isNaN(issueId)) {
+        return res.status(400).json({ error: "Invalid issue ID" });
+      }
+      
+      const { status } = req.body;
+      if (!status || !["open", "resolved", "ignored"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status. Must be: open, resolved, or ignored" });
+      }
+      
+      const user = req.user as any;
+      const updateData: any = { status };
+      
+      if (status === "resolved" || status === "ignored") {
+        updateData.resolvedBy = user?.id;
+        updateData.resolvedAt = new Date();
+      } else {
+        updateData.resolvedBy = null;
+        updateData.resolvedAt = null;
+      }
+      
+      const updated = await storage.updateValidationIssue(issueId, updateData);
+      if (!updated) {
+        return res.status(404).json({ error: "Issue not found" });
+      }
+      
+      await logAudit(req, "update", "validation_issue", String(issueId), { status });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update validation issue:", error);
+      res.status(500).json({ error: "Failed to update validation issue" });
+    }
+  });
+
+  // Forecasting endpoints
+  const { createAndRunForecast, getForecastSummary, runForecast } = await import("./forecasting");
+
+  app.get("/api/forecasts", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const targetYear = req.query.targetYear ? parseInt(req.query.targetYear as string) : undefined;
+      const status = req.query.status as string | undefined;
+      const forecasts = await storage.getForecastRuns({ targetYear, status });
+      res.json(forecasts);
+    } catch (error) {
+      console.error("Failed to fetch forecasts:", error);
+      res.status(500).json({ error: "Failed to fetch forecasts" });
+    }
+  });
+
+  app.get("/api/forecasts/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const summary = await getForecastSummary(id);
+      if (!summary) {
+        return res.status(404).json({ error: "Forecast not found" });
+      }
+      
+      res.json(summary);
+    } catch (error) {
+      console.error("Failed to fetch forecast:", error);
+      res.status(500).json({ error: "Failed to fetch forecast" });
+    }
+  });
+
+  app.get("/api/forecasts/:id/results", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const resultType = req.query.resultType as string | undefined;
+      const region = req.query.region as string | undefined;
+      
+      const results = await storage.getForecastResults(id, { resultType, region });
+      res.json(results);
+    } catch (error) {
+      console.error("Failed to fetch forecast results:", error);
+      res.status(500).json({ error: "Failed to fetch forecast results" });
+    }
+  });
+
+  app.get("/api/forecasts/:id/swing-regions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const swingRegions = await storage.getSwingRegions(id);
+      res.json(swingRegions);
+    } catch (error) {
+      console.error("Failed to fetch swing regions:", error);
+      res.status(500).json({ error: "Failed to fetch swing regions" });
+    }
+  });
+
+  app.post("/api/forecasts", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { name, description, targetYear, targetPosition, targetState, targetElectionType, historicalYears, modelParameters } = req.body;
+      
+      if (!name || !targetYear) {
+        return res.status(400).json({ error: "Name and target year are required" });
+      }
+      
+      const forecastRun = await createAndRunForecast(user.id, {
+        name,
+        description,
+        targetYear,
+        targetPosition,
+        targetState,
+        targetElectionType,
+        historicalYears,
+        modelParameters,
+      });
+      
+      await logAudit(req, "create", "forecast", String(forecastRun.id), { name, targetYear });
+      
+      res.status(201).json(forecastRun);
+    } catch (error) {
+      console.error("Failed to create forecast:", error);
+      res.status(500).json({ error: "Failed to create forecast" });
+    }
+  });
+
+  app.delete("/api/forecasts/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const deleted = await storage.deleteForecastRun(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Forecast not found" });
+      }
+      
+      await logAudit(req, "delete", "forecast", String(id));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete forecast:", error);
+      res.status(500).json({ error: "Failed to delete forecast" });
+    }
+  });
+
+  app.get("/api/analytics/historical-years", requireAuth, async (req, res) => {
+    try {
+      const position = req.query.position as string | undefined;
+      const state = req.query.state as string | undefined;
+      
+      const years = await storage.getHistoricalVotesByParty({
+        years: [2002, 2006, 2010, 2014, 2018, 2022],
+        position,
+        state,
+      });
+      
+      const uniqueYears = [...new Set(years.map(y => y.year))].sort((a, b) => b - a);
+      res.json(uniqueYears);
+    } catch (error) {
+      console.error("Failed to fetch historical years:", error);
+      res.status(500).json({ error: "Failed to fetch historical years" });
+    }
+  });
+
   app.post("/api/imports/tse", requireAuth, requireRole("admin"), upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
+      const electionYear = req.body.electionYear ? parseInt(req.body.electionYear) : null;
+      const uf = req.body.uf || null;
+      const electionType = req.body.electionType || null;
+      const parsedCargo = req.body.cargoFilter ? parseInt(req.body.cargoFilter) : NaN;
+      const cargoFilter = !isNaN(parsedCargo) ? parsedCargo : null;
+      
+      const existingImport = await storage.findExistingImport(
+        req.file.originalname,
+        electionYear,
+        uf,
+        electionType
+      );
+
+      if (existingImport) {
+        if (existingImport.isInProgress) {
+          return res.status(409).json({ 
+            error: "Importação em andamento",
+            message: `Este arquivo já está sendo processado. Aguarde a conclusão da importação atual.`,
+            existingJob: existingImport.job,
+            isInProgress: true
+          });
+        } else {
+          const importDate = existingImport.job.completedAt 
+            ? new Date(existingImport.job.completedAt).toLocaleDateString("pt-BR") 
+            : "data desconhecida";
+          return res.status(409).json({ 
+            error: "Dados já importados",
+            message: `Este arquivo já foi importado com sucesso em ${importDate}. Foram processados ${existingImport.job.processedRows?.toLocaleString("pt-BR") || 0} registros.`,
+            existingJob: existingImport.job,
+            isInProgress: false
+          });
+        }
+      }
+
       const job = await storage.createTseImportJob({
         filename: req.file.originalname,
         fileSize: req.file.size,
         status: "pending",
-        electionYear: req.body.electionYear ? parseInt(req.body.electionYear) : null,
-        electionType: req.body.electionType || null,
-        uf: req.body.uf || null,
+        electionYear,
+        electionType,
+        uf,
+        cargoFilter,
         createdBy: req.user?.id || null,
       });
 
@@ -1002,6 +2044,343 @@ Responda em JSON com a seguinte estrutura:
       res.status(500).json({ error: "Failed to start import" });
     }
   });
+
+  app.post("/api/imports/tse/url", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { url, electionYear, electionType, uf, cargoFilter } = req.body;
+      
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      if (!url.startsWith("https://cdn.tse.jus.br/") && !url.startsWith("https://dadosabertos.tse.jus.br/")) {
+        return res.status(400).json({ error: "URL must be from TSE domain (cdn.tse.jus.br or dadosabertos.tse.jus.br)" });
+      }
+
+      if (!url.toLowerCase().endsWith(".zip")) {
+        return res.status(400).json({ error: "URL must point to a .zip file" });
+      }
+
+      const filename = path.basename(url);
+      const fullFilename = `[URL] ${filename}`;
+      const parsedYear = electionYear ? parseInt(electionYear) : null;
+
+      const existingImport = await storage.findExistingImport(
+        fullFilename,
+        parsedYear,
+        uf || null,
+        electionType || null
+      );
+
+      if (existingImport) {
+        if (existingImport.isInProgress) {
+          return res.status(409).json({ 
+            error: "Importação em andamento",
+            message: `Esta URL já está sendo processada. Aguarde a conclusão da importação atual.`,
+            existingJob: existingImport.job,
+            isInProgress: true
+          });
+        } else {
+          const importDate = existingImport.job.completedAt 
+            ? new Date(existingImport.job.completedAt).toLocaleDateString("pt-BR") 
+            : "data desconhecida";
+          return res.status(409).json({ 
+            error: "Dados já importados",
+            message: `Estes dados do TSE já foram importados com sucesso em ${importDate}. Foram processados ${existingImport.job.processedRows?.toLocaleString("pt-BR") || 0} registros.`,
+            existingJob: existingImport.job,
+            isInProgress: false
+          });
+        }
+      }
+
+      const job = await storage.createTseImportJob({
+        filename: fullFilename,
+        fileSize: 0,
+        status: "pending",
+        electionYear: parsedYear,
+        electionType: electionType || null,
+        uf: uf || null,
+        cargoFilter: cargoFilter && !isNaN(parseInt(cargoFilter)) ? parseInt(cargoFilter) : null,
+        createdBy: req.user?.id || null,
+      });
+
+      await logAudit(req, "create", "tse_import_url", String(job.id), { url, filename });
+
+      processURLImport(job.id, url);
+
+      res.json({ jobId: job.id, message: "URL import started" });
+    } catch (error) {
+      console.error("TSE URL import error:", error);
+      res.status(500).json({ error: "Failed to start URL import" });
+    }
+  });
+
+  const processURLImport = async (jobId: number, url: string) => {
+    const tmpDir = `/tmp/tse-import-${jobId}`;
+    let csvPath: string | null = null;
+
+    try {
+      await storage.updateTseImportJob(jobId, { 
+        status: "downloading", 
+        stage: "downloading",
+        startedAt: new Date(),
+        updatedAt: new Date()
+      });
+      await mkdir(tmpDir, { recursive: true });
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+      }
+
+      const contentLength = response.headers.get("content-length");
+      const totalBytes = contentLength ? parseInt(contentLength) : 0;
+      if (totalBytes > 0) {
+        await storage.updateTseImportJob(jobId, { fileSize: totalBytes });
+      }
+
+      const zipPath = path.join(tmpDir, "data.zip");
+      const fileStream = createWriteStream(zipPath);
+      
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      const reader = response.body.getReader();
+      let downloadedBytes = 0;
+      let lastProgressUpdate = Date.now();
+      const PROGRESS_UPDATE_INTERVAL = 2000;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fileStream.write(value);
+        downloadedBytes += value.length;
+        
+        const now = Date.now();
+        if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
+          await storage.updateTseImportJob(jobId, { 
+            downloadedBytes,
+            updatedAt: new Date()
+          });
+          lastProgressUpdate = now;
+        }
+      }
+      
+      await storage.updateTseImportJob(jobId, { 
+        downloadedBytes,
+        updatedAt: new Date()
+      });
+      
+      fileStream.end();
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on("finish", resolve);
+        fileStream.on("error", reject);
+      });
+
+      await storage.updateTseImportJob(jobId, { 
+        status: "extracting",
+        stage: "extracting",
+        updatedAt: new Date()
+      });
+
+      const directory = await unzipper.Open.file(zipPath);
+      
+      const csvFiles = directory.files.filter(f => 
+        (f.path.endsWith(".csv") || f.path.endsWith(".txt")) && !f.path.startsWith("__MACOSX")
+      );
+      
+      if (csvFiles.length === 0) {
+        throw new Error("No CSV/TXT file found in ZIP");
+      }
+      
+      const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
+      const csvFile = brasilFile || csvFiles[0];
+      
+      console.log(`Found ${csvFiles.length} CSV files, using: ${csvFile.path}${brasilFile ? " (prioritized _BRASIL file)" : ""}`);
+      
+      if (!csvFile) {
+        throw new Error("No CSV/TXT file found in ZIP");
+      }
+
+      csvPath = path.join(tmpDir, "data.csv");
+      await pipeline(csvFile.stream(), createWriteStream(csvPath));
+
+      await storage.updateTseImportJob(jobId, { 
+        status: "processing",
+        stage: "processing",
+        updatedAt: new Date()
+      });
+      await processCSVImportInternal(jobId, csvPath);
+
+      await unlink(zipPath).catch(() => {});
+      await unlink(csvPath).catch(() => {});
+    } catch (error: any) {
+      console.error("URL import error:", error);
+      await storage.updateTseImportJob(jobId, {
+        status: "failed",
+        stage: "failed",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+        errorMessage: error.message || "Unknown error",
+      });
+    }
+  };
+
+  const processCSVImportInternal = async (jobId: number, filePath: string) => {
+    const job = await storage.getTseImportJob(jobId);
+    const cargoFilter = job?.cargoFilter;
+    
+    const records: InsertTseCandidateVote[] = [];
+    let rowCount = 0;
+    let filteredCount = 0;
+    let errorCount = 0;
+    const BATCH_SIZE = 1000;
+
+    const fieldMap: { [key: number]: keyof InsertTseCandidateVote } = {
+      0: "dtGeracao",
+      1: "hhGeracao",
+      2: "anoEleicao",
+      3: "cdTipoEleicao",
+      4: "nmTipoEleicao",
+      5: "nrTurno",
+      6: "cdEleicao",
+      7: "dsEleicao",
+      8: "dtEleicao",
+      9: "tpAbrangencia",
+      10: "sgUf",
+      11: "sgUe",
+      12: "nmUe",
+      13: "cdMunicipio",
+      14: "nmMunicipio",
+      15: "nrZona",
+      16: "cdCargo",
+      17: "dsCargo",
+      18: "sqCandidato",
+      19: "nrCandidato",
+      20: "nmCandidato",
+      21: "nmUrnaCandidato",
+      22: "nmSocialCandidato",
+      23: "cdSituacaoCandidatura",
+      24: "dsSituacaoCandidatura",
+      25: "cdDetalheSituacaoCand",
+      26: "dsDetalheSituacaoCand",
+      27: "cdSituacaoJulgamento",
+      28: "dsSituacaoJulgamento",
+      29: "cdSituacaoCassacao",
+      30: "dsSituacaoCassacao",
+      31: "cdSituacaoDconstDiploma",
+      32: "dsSituacaoDconstDiploma",
+      33: "tpAgremiacao",
+      34: "nrPartido",
+      35: "sgPartido",
+      36: "nmPartido",
+      37: "nrFederacao",
+      38: "nmFederacao",
+      39: "sgFederacao",
+      40: "dsComposicaoFederacao",
+      41: "sqColigacao",
+      42: "nmColigacao",
+      43: "dsComposicaoColigacao",
+      44: "stVotoEmTransito",
+      45: "qtVotosNominais",
+      46: "nmTipoDestinacaoVotos",
+      47: "qtVotosNominaisValidos",
+      48: "cdSitTotTurno",
+      49: "dsSitTotTurno",
+    };
+
+    const parseValue = (value: string, field: string): any => {
+      if (value === "#NULO" || value === "#NE" || value === "") {
+        return null;
+      }
+      if (field.startsWith("qt") || field.startsWith("nr") || field.startsWith("cd") || field.startsWith("sq")) {
+        const num = parseInt(value, 10);
+        return isNaN(num) ? null : num;
+      }
+      return value;
+    };
+
+    const parser = createReadStream(filePath)
+      .pipe(iconv.decodeStream("latin1"))
+      .pipe(parse({
+        delimiter: ";",
+        quote: '"',
+        relax_quotes: true,
+        relax_column_count: true,
+        skip_empty_lines: true,
+        from_line: 2,
+      }));
+
+    for await (const row of parser) {
+      try {
+        rowCount++;
+        const record: Partial<InsertTseCandidateVote> = {};
+
+        for (const [index, field] of Object.entries(fieldMap)) {
+          const value = row[parseInt(index)];
+          if (value !== undefined) {
+            (record as any)[field] = parseValue(value, field);
+          }
+        }
+
+        if (record.anoEleicao && record.nrCandidato) {
+          if (cargoFilter && record.cdCargo !== cargoFilter) {
+            filteredCount++;
+          } else {
+            records.push(record as InsertTseCandidateVote);
+          }
+        }
+
+        if (records.length >= BATCH_SIZE) {
+          await storage.bulkInsertTseCandidateVotes(records);
+          await storage.updateTseImportJob(jobId, { 
+            processedRows: rowCount,
+            updatedAt: new Date()
+          });
+          records.length = 0;
+        }
+      } catch (err: any) {
+        errorCount++;
+        await storage.createTseImportError({
+          importJobId: jobId,
+          errorType: "parse_error",
+          rowNumber: rowCount,
+          errorMessage: err.message || "Parse error",
+          rawData: JSON.stringify(row).substring(0, 1000),
+        });
+      }
+    }
+
+    if (records.length > 0) {
+      await storage.bulkInsertTseCandidateVotes(records);
+    }
+
+    // Sync parties from imported data before marking as complete
+    const partiesResult = await storage.syncPartiesFromTseImport(jobId);
+    console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.existing} existing`);
+
+    await storage.updateTseImportJob(jobId, {
+      status: "completed",
+      stage: "completed",
+      completedAt: new Date(),
+      updatedAt: new Date(),
+      processedRows: rowCount,
+      errorCount: errorCount,
+    });
+
+    // Trigger embedding generation for semantic search (if API key configured)
+    if (process.env.OPENAI_API_KEY) {
+      console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
+      generateEmbeddingsForImportJob(jobId)
+        .then(result => {
+          console.log(`TSE Import ${jobId}: Embeddings generated - ${result.processed} processed, ${result.skipped} skipped, ${result.errors} errors`);
+        })
+        .catch(error => {
+          console.error(`TSE Import ${jobId}: Embedding generation failed:`, error);
+        });
+    }
+  };
 
   app.get("/api/tse/candidates", requireAuth, async (req, res) => {
     try {
@@ -1048,10 +2427,19 @@ Responda em JSON com a seguinte estrutura:
 
   const processCSVImport = async (jobId: number, filePath: string) => {
     try {
-      await storage.updateTseImportJob(jobId, { status: "running", startedAt: new Date() });
+      await storage.updateTseImportJob(jobId, { 
+        status: "processing", 
+        stage: "processing",
+        startedAt: new Date(),
+        updatedAt: new Date()
+      });
+      
+      const job = await storage.getTseImportJob(jobId);
+      const cargoFilter = job?.cargoFilter;
 
       const records: InsertTseCandidateVote[] = [];
       let rowCount = 0;
+      let filteredCount = 0;
       let errorCount = 0;
       const BATCH_SIZE = 1000;
 
@@ -1150,11 +2538,18 @@ Responda em JSON com a seguinte estrutura:
             }
           }
 
-          records.push(record);
+          if (cargoFilter && record.cdCargo !== cargoFilter) {
+            filteredCount++;
+          } else {
+            records.push(record);
+          }
 
           if (records.length >= BATCH_SIZE) {
             await storage.bulkInsertTseCandidateVotes(records);
-            await storage.updateTseImportJob(jobId, { processedRows: rowCount });
+            await storage.updateTseImportJob(jobId, { 
+              processedRows: rowCount,
+              updatedAt: new Date()
+            });
             records.length = 0;
           }
         } catch (err: any) {
@@ -1173,21 +2568,41 @@ Responda em JSON com a seguinte estrutura:
         await storage.bulkInsertTseCandidateVotes(records);
       }
 
+      // Sync parties from imported data before marking as complete
+      const partiesResult = await storage.syncPartiesFromTseImport(jobId);
+      console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.existing} existing`);
+
       await storage.updateTseImportJob(jobId, {
         status: "completed",
+        stage: "completed",
         totalRows: rowCount,
         processedRows: rowCount,
         errorCount,
         completedAt: new Date(),
+        updatedAt: new Date(),
       });
 
       console.log(`TSE Import ${jobId} completed: ${rowCount} rows, ${errorCount} errors`);
+
+      // Trigger embedding generation for semantic search (if API key configured)
+      if (process.env.OPENAI_API_KEY) {
+        console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
+        generateEmbeddingsForImportJob(jobId)
+          .then(result => {
+            console.log(`TSE Import ${jobId}: Embeddings generated - ${result.processed} processed, ${result.skipped} skipped, ${result.errors} errors`);
+          })
+          .catch(error => {
+            console.error(`TSE Import ${jobId}: Embedding generation failed:`, error);
+          });
+      }
     } catch (error: any) {
       console.error(`TSE Import ${jobId} failed:`, error);
       await storage.updateTseImportJob(jobId, {
         status: "failed",
+        stage: "failed",
         errorCount: 1,
         completedAt: new Date(),
+        updatedAt: new Date(),
       });
       await storage.createTseImportError({
         importJobId: jobId,
@@ -1198,6 +2613,484 @@ Responda em JSON com a seguinte estrutura:
       });
     }
   }
+
+  // Data Analysis endpoints
+  app.get("/api/analytics/summary", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType } = req.query;
+      const summary = await storage.getAnalyticsSummary({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+      });
+      res.json(summary);
+    } catch (error) {
+      console.error("Analytics summary error:", error);
+      res.status(500).json({ error: "Failed to fetch analytics summary" });
+    }
+  });
+
+  app.get("/api/analytics/votes-by-party", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, limit } = req.query;
+      const data = await storage.getVotesByParty({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        limit: limit ? parseInt(limit as string) : 20,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by party error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by party" });
+    }
+  });
+
+  app.get("/api/analytics/top-candidates", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, limit } = req.query;
+      const data = await storage.getTopCandidates({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        limit: limit ? parseInt(limit as string) : 20,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Top candidates error:", error);
+      res.status(500).json({ error: "Failed to fetch top candidates" });
+    }
+  });
+
+  app.get("/api/analytics/votes-by-state", requireAuth, async (req, res) => {
+    try {
+      const { year, electionType } = req.query;
+      const data = await storage.getVotesByState({
+        year: year ? parseInt(year as string) : undefined,
+        electionType: electionType as string | undefined,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by state error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by state" });
+    }
+  });
+
+  app.get("/api/analytics/votes-by-municipality", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, limit } = req.query;
+      const data = await storage.getVotesByMunicipality({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        limit: limit ? parseInt(limit as string) : 50,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by municipality error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by municipality" });
+    }
+  });
+
+  app.get("/api/analytics/election-years", requireAuth, async (req, res) => {
+    try {
+      const years = await storage.getAvailableElectionYears();
+      res.json(years);
+    } catch (error) {
+      console.error("Election years error:", error);
+      res.status(500).json({ error: "Failed to fetch election years" });
+    }
+  });
+
+  app.get("/api/analytics/states", requireAuth, async (req, res) => {
+    try {
+      const { year } = req.query;
+      const states = await storage.getAvailableStates(year ? parseInt(year as string) : undefined);
+      res.json(states);
+    } catch (error) {
+      console.error("States error:", error);
+      res.status(500).json({ error: "Failed to fetch states" });
+    }
+  });
+
+  app.get("/api/analytics/election-types", requireAuth, async (req, res) => {
+    try {
+      const { year } = req.query;
+      const types = await storage.getAvailableElectionTypes(year ? parseInt(year as string) : undefined);
+      res.json(types);
+    } catch (error) {
+      console.error("Election types error:", error);
+      res.status(500).json({ error: "Failed to fetch election types" });
+    }
+  });
+
+  app.get("/api/analytics/export/csv", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, reportType } = req.query;
+      const filters = {
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+      };
+
+      let data: any[];
+      let filename: string;
+
+      switch (reportType) {
+        case "parties":
+          data = await storage.getVotesByParty({ ...filters, limit: 10000 });
+          filename = "votos_por_partido.csv";
+          break;
+        case "candidates":
+          data = await storage.getTopCandidates({ ...filters, limit: 10000 });
+          filename = "candidatos_mais_votados.csv";
+          break;
+        case "states":
+          data = await storage.getVotesByState(filters);
+          filename = "votos_por_estado.csv";
+          break;
+        case "municipalities":
+          data = await storage.getVotesByMunicipality({ ...filters, limit: 10000 });
+          filename = "votos_por_municipio.csv";
+          break;
+        default:
+          return res.status(400).json({ error: "Invalid report type" });
+      }
+
+      if (data.length === 0) {
+        return res.status(404).json({ error: "No data found for the specified filters" });
+      }
+
+      const headers = Object.keys(data[0]);
+      const csvRows = [headers.join(",")];
+      for (const row of data) {
+        const values = headers.map((h) => {
+          const val = row[h];
+          if (val === null || val === undefined) return "";
+          const str = String(val);
+          return str.includes(",") || str.includes('"') || str.includes("\n")
+            ? `"${str.replace(/"/g, '""')}"`
+            : str;
+        });
+        csvRows.push(values.join(","));
+      }
+
+      await logAudit(req, "export", "analytics_csv", reportType as string, { filters, rowCount: data.length });
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send("\uFEFF" + csvRows.join("\n"));
+    } catch (error) {
+      console.error("Analytics CSV export error:", error);
+      res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
+  // Advanced filter endpoints
+  app.get("/api/analytics/positions", requireAuth, async (req, res) => {
+    try {
+      const { year, uf } = req.query;
+      const positions = await storage.getAvailablePositions({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+      });
+      res.json(positions);
+    } catch (error) {
+      console.error("Positions error:", error);
+      res.status(500).json({ error: "Failed to fetch positions" });
+    }
+  });
+
+  app.get("/api/analytics/parties-list", requireAuth, async (req, res) => {
+    try {
+      const { year, uf } = req.query;
+      const parties = await storage.getAvailableParties({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+      });
+      res.json(parties);
+    } catch (error) {
+      console.error("Parties list error:", error);
+      res.status(500).json({ error: "Failed to fetch parties" });
+    }
+  });
+
+  app.get("/api/analytics/advanced", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, electionType, position, party, minVotes, maxVotes, limit } = req.query;
+      const result = await storage.getAdvancedAnalytics({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        electionType: electionType as string | undefined,
+        position: position as string | undefined,
+        party: party as string | undefined,
+        minVotes: minVotes ? parseInt(minVotes as string) : undefined,
+        maxVotes: maxVotes ? parseInt(maxVotes as string) : undefined,
+        limit: limit ? parseInt(limit as string) : 100,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Advanced analytics error:", error);
+      res.status(500).json({ error: "Failed to fetch advanced analytics" });
+    }
+  });
+
+  app.post("/api/analytics/compare", requireAuth, async (req, res) => {
+    try {
+      const { years, states, groupBy } = req.body;
+      if (!groupBy || !["party", "state", "position"].includes(groupBy)) {
+        return res.status(400).json({ error: "Invalid groupBy parameter" });
+      }
+      const result = await storage.getComparisonData({
+        years: years?.map((y: string | number) => typeof y === "string" ? parseInt(y) : y),
+        states,
+        groupBy,
+      });
+      await logAudit(req, "compare", "analytics", undefined, { years, states, groupBy });
+      res.json(result);
+    } catch (error) {
+      console.error("Comparison error:", error);
+      res.status(500).json({ error: "Failed to get comparison data" });
+    }
+  });
+
+  // ==================== DRILL-DOWN ANALYTICS ROUTES ====================
+
+  app.get("/api/analytics/drill-down/candidates-by-party", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, party, position, limit } = req.query;
+      if (!party) {
+        return res.status(400).json({ error: "Party parameter is required" });
+      }
+      const candidates = await storage.getCandidatesByParty({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        party: party as string,
+        position: position as string | undefined,
+        limit: limit ? parseInt(limit as string) : 100,
+      });
+      res.json(candidates);
+    } catch (error) {
+      console.error("Candidates by party error:", error);
+      res.status(500).json({ error: "Failed to fetch candidates by party" });
+    }
+  });
+
+  app.get("/api/analytics/drill-down/party-by-state", requireAuth, async (req, res) => {
+    try {
+      const { year, party, position } = req.query;
+      const data = await storage.getPartyPerformanceByState({
+        year: year ? parseInt(year as string) : undefined,
+        party: party as string | undefined,
+        position: position as string | undefined,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Party by state error:", error);
+      res.status(500).json({ error: "Failed to fetch party performance by state" });
+    }
+  });
+
+  app.get("/api/analytics/drill-down/votes-by-position", requireAuth, async (req, res) => {
+    try {
+      const { year, uf } = req.query;
+      const data = await storage.getVotesByPosition({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+      });
+      res.json(data);
+    } catch (error) {
+      console.error("Votes by position error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by position" });
+    }
+  });
+
+  // Saved Reports CRUD
+  app.get("/api/reports", requireAuth, async (req, res) => {
+    try {
+      const reports = await storage.getSavedReports(req.user?.id);
+      res.json(reports);
+    } catch (error) {
+      console.error("Get reports error:", error);
+      res.status(500).json({ error: "Failed to fetch reports" });
+    }
+  });
+
+  app.get("/api/reports/:id", requireAuth, async (req, res) => {
+    try {
+      const report = await storage.getSavedReportById(parseInt(req.params.id));
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error("Get report error:", error);
+      res.status(500).json({ error: "Failed to fetch report" });
+    }
+  });
+
+  app.post("/api/reports", requireAuth, async (req, res) => {
+    try {
+      const { name, description, filters, columns, chartType, sortBy, sortOrder } = req.body;
+      if (!name || !filters || !columns) {
+        return res.status(400).json({ error: "Name, filters and columns are required" });
+      }
+      const report = await storage.createSavedReport({
+        name,
+        description,
+        filters,
+        columns,
+        chartType: chartType || "bar",
+        sortBy,
+        sortOrder: sortOrder || "desc",
+        createdBy: req.user?.id,
+      });
+      await logAudit(req, "create", "saved_report", String(report.id), { name });
+      res.status(201).json(report);
+    } catch (error) {
+      console.error("Create report error:", error);
+      res.status(500).json({ error: "Failed to create report" });
+    }
+  });
+
+  app.put("/api/reports/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getSavedReportById(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      const { name, description, filters, columns, chartType, sortBy, sortOrder } = req.body;
+      const report = await storage.updateSavedReport(id, {
+        name,
+        description,
+        filters,
+        columns,
+        chartType,
+        sortBy,
+        sortOrder,
+      });
+      await logAudit(req, "update", "saved_report", String(id), { name });
+      res.json(report);
+    } catch (error) {
+      console.error("Update report error:", error);
+      res.status(500).json({ error: "Failed to update report" });
+    }
+  });
+
+  app.delete("/api/reports/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getSavedReportById(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      await storage.deleteSavedReport(id);
+      await logAudit(req, "delete", "saved_report", String(id), { name: existing.name });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete report error:", error);
+      res.status(500).json({ error: "Failed to delete report" });
+    }
+  });
+
+  // ==================== SEMANTIC SEARCH ROUTES ====================
+
+  app.post("/api/semantic-search", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { query, filters = {}, topK = 10 } = req.body;
+      
+      if (!query || typeof query !== "string" || query.trim().length < 3) {
+        return res.status(400).json({ error: "Query must be at least 3 characters" });
+      }
+      
+      const result = await processSemanticSearch(
+        query.trim(),
+        {
+          year: filters.year ? parseInt(filters.year) : undefined,
+          state: filters.state || undefined,
+          party: filters.party || undefined,
+          position: filters.position || undefined,
+        },
+        req.user?.id
+      );
+      
+      await logAudit(req, "semantic_search", "semantic_search", undefined, {
+        query: query.slice(0, 100),
+        filters,
+        resultCount: result.totalResults,
+      });
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Semantic search error:", error);
+      if (error.message?.includes("OPENAI_API_KEY")) {
+        return res.status(503).json({ 
+          error: "Semantic search requires an OpenAI API key. Please configure OPENAI_API_KEY in secrets." 
+        });
+      }
+      res.status(500).json({ error: "Failed to perform semantic search" });
+    }
+  });
+
+  app.get("/api/semantic-search/stats", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const stats = await getEmbeddingStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Get embedding stats error:", error);
+      res.status(500).json({ error: "Failed to get embedding stats" });
+    }
+  });
+
+  app.get("/api/semantic-search/history", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const queries = await getRecentQueries(limit);
+      res.json(queries);
+    } catch (error) {
+      console.error("Get search history error:", error);
+      res.status(500).json({ error: "Failed to get search history" });
+    }
+  });
+
+  app.post("/api/semantic-search/generate-embeddings/:importJobId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const importJobId = parseInt(req.params.importJobId);
+      const job = await storage.getTseImportJob(importJobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+      
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Can only generate embeddings for completed import jobs" });
+      }
+      
+      res.json({ message: "Embedding generation started", jobId: importJobId });
+      
+      generateEmbeddingsForImportJob(importJobId)
+        .then(result => {
+          console.log(`Embeddings generated for job ${importJobId}:`, result);
+        })
+        .catch(error => {
+          console.error(`Error generating embeddings for job ${importJobId}:`, error);
+        });
+      
+    } catch (error) {
+      console.error("Generate embeddings error:", error);
+      res.status(500).json({ error: "Failed to start embedding generation" });
+    }
+  });
+
+  app.get("/api/semantic-search/check-api-key", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const hasKey = !!process.env.OPENAI_API_KEY;
+      res.json({ configured: hasKey });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check API key" });
+    }
+  });
 
   return httpServer;
 }

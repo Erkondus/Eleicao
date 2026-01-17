@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb, bigint, index, vector } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -248,16 +248,21 @@ export type AIPrediction = {
 export const tseImportJobs = pgTable("tse_import_jobs", {
   id: serial("id").primaryKey(),
   filename: text("filename").notNull(),
-  fileSize: integer("file_size").notNull(),
+  fileSize: bigint("file_size", { mode: "number" }).notNull(),
   status: text("status").notNull().default("pending"),
+  stage: text("stage").default("pending"),
+  downloadedBytes: bigint("downloaded_bytes", { mode: "number" }).default(0),
   totalRows: integer("total_rows").default(0),
   processedRows: integer("processed_rows").default(0),
   errorCount: integer("error_count").default(0),
+  errorMessage: text("error_message"),
   electionYear: integer("election_year"),
   electionType: text("election_type"),
   uf: text("uf"),
+  cargoFilter: integer("cargo_filter"),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   createdBy: varchar("created_by").references(() => users.id),
 });
@@ -351,3 +356,352 @@ export type InsertTseCandidateVote = z.infer<typeof insertTseCandidateVoteSchema
 export type TseCandidateVote = typeof tseCandidateVotes.$inferSelect;
 export type InsertTseImportError = z.infer<typeof insertTseImportErrorSchema>;
 export type TseImportError = typeof tseImportErrors.$inferSelect;
+
+// Saved Reports
+export const savedReports = pgTable("saved_reports", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  filters: jsonb("filters").notNull(),
+  columns: jsonb("columns").notNull(),
+  chartType: text("chart_type").default("bar"),
+  sortBy: text("sort_by"),
+  sortOrder: text("sort_order").default("desc"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const savedReportsRelations = relations(savedReports, ({ one }) => ({
+  createdByUser: one(users, { fields: [savedReports.createdBy], references: [users.id] }),
+}));
+
+export const insertSavedReportSchema = createInsertSchema(savedReports).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSavedReport = z.infer<typeof insertSavedReportSchema>;
+export type SavedReport = typeof savedReports.$inferSelect;
+
+// Semantic Documents for Vector Search
+export const semanticDocuments = pgTable("semantic_documents", {
+  id: serial("id").primaryKey(),
+  sourceType: text("source_type").notNull(), // 'tse_candidate', 'party', 'election_summary'
+  sourceId: integer("source_id"), // FK to source table
+  year: integer("year"),
+  state: text("state"),
+  electionType: text("election_type"),
+  position: text("position"),
+  partyAbbreviation: text("party_abbreviation"),
+  content: text("content").notNull(), // Full text content for search
+  contentHash: text("content_hash"), // To detect stale embeddings
+  metadata: jsonb("metadata"), // Additional context
+  embedding: vector("embedding", { dimensions: 1536 }), // text-embedding-3-small
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("semantic_documents_year_idx").on(table.year),
+  index("semantic_documents_state_idx").on(table.state),
+  index("semantic_documents_party_idx").on(table.partyAbbreviation),
+  index("semantic_documents_source_idx").on(table.sourceType, table.sourceId),
+]);
+
+export const insertSemanticDocumentSchema = createInsertSchema(semanticDocuments).omit({ id: true, createdAt: true });
+export type InsertSemanticDocument = z.infer<typeof insertSemanticDocumentSchema>;
+export type SemanticDocument = typeof semanticDocuments.$inferSelect;
+
+// Semantic Search Queries (for analytics/history)
+export const semanticSearchQueries = pgTable("semantic_search_queries", {
+  id: serial("id").primaryKey(),
+  query: text("query").notNull(),
+  filters: jsonb("filters"),
+  resultCount: integer("result_count").default(0),
+  responseTime: integer("response_time"), // ms
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const semanticSearchQueriesRelations = relations(semanticSearchQueries, ({ one }) => ({
+  createdByUser: one(users, { fields: [semanticSearchQueries.createdBy], references: [users.id] }),
+}));
+
+export const insertSemanticSearchQuerySchema = createInsertSchema(semanticSearchQueries).omit({ id: true, createdAt: true });
+export type InsertSemanticSearchQuery = z.infer<typeof insertSemanticSearchQuerySchema>;
+export type SemanticSearchQuery = typeof semanticSearchQueries.$inferSelect;
+
+// AI Predictions Cache
+export const aiPredictions = pgTable("ai_predictions", {
+  id: serial("id").primaryKey(),
+  predictionType: text("prediction_type").notNull(), // 'turnout', 'candidate_success', 'party_performance', 'sentiment', 'insights'
+  cacheKey: text("cache_key").notNull().unique(), // hash of filters for deduplication
+  filters: jsonb("filters"), // The filters used to generate the prediction
+  prediction: jsonb("prediction").notNull(), // The actual prediction result
+  confidence: decimal("confidence", { precision: 5, scale: 4 }), // Overall confidence score
+  validUntil: timestamp("valid_until"), // When the cache expires
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("ai_predictions_type_idx").on(table.predictionType),
+  index("ai_predictions_cache_key_idx").on(table.cacheKey),
+  index("ai_predictions_valid_until_idx").on(table.validUntil),
+]);
+
+export const aiPredictionsRelations = relations(aiPredictions, ({ one }) => ({
+  createdByUser: one(users, { fields: [aiPredictions.createdBy], references: [users.id] }),
+}));
+
+export const insertAiPredictionSchema = createInsertSchema(aiPredictions).omit({ id: true, createdAt: true });
+export type InsertAiPrediction = z.infer<typeof insertAiPredictionSchema>;
+export type AiPrediction = typeof aiPredictions.$inferSelect;
+
+// AI Sentiment Data (for news and social media)
+export const aiSentimentData = pgTable("ai_sentiment_data", {
+  id: serial("id").primaryKey(),
+  sourceType: text("source_type").notNull(), // 'news', 'social', 'official'
+  sourceUrl: text("source_url"),
+  title: text("title"),
+  content: text("content").notNull(),
+  author: text("author"),
+  publishedAt: timestamp("published_at"),
+  party: text("party"), // Related party if any
+  state: text("state"), // Related state if any
+  sentiment: text("sentiment"), // 'positive', 'negative', 'neutral'
+  sentimentScore: decimal("sentiment_score", { precision: 5, scale: 4 }), // -1 to 1
+  topics: jsonb("topics"), // Extracted topics
+  analyzed: boolean("analyzed").default(false),
+  analyzedAt: timestamp("analyzed_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("ai_sentiment_source_type_idx").on(table.sourceType),
+  index("ai_sentiment_party_idx").on(table.party),
+  index("ai_sentiment_published_at_idx").on(table.publishedAt),
+]);
+
+export const insertAiSentimentDataSchema = createInsertSchema(aiSentimentData).omit({ id: true, createdAt: true });
+export type InsertAiSentimentData = z.infer<typeof insertAiSentimentDataSchema>;
+export type AiSentimentData = typeof aiSentimentData.$inferSelect;
+
+// Projection Reports - Comprehensive Electoral Predictions
+export const projectionReports = pgTable("projection_reports", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  targetYear: integer("target_year").notNull(),
+  electionType: text("election_type").notNull(),
+  scope: text("scope").notNull(), // 'national' or 'state'
+  state: text("state"), // State code if scope is 'state'
+  
+  // Report data stored as JSON for flexibility
+  executiveSummary: text("executive_summary"),
+  methodology: text("methodology"),
+  dataQuality: jsonb("data_quality"),
+  turnoutProjection: jsonb("turnout_projection"),
+  partyProjections: jsonb("party_projections"),
+  candidateProjections: jsonb("candidate_projections"),
+  scenarios: jsonb("scenarios"),
+  riskAssessment: jsonb("risk_assessment"),
+  confidenceIntervals: jsonb("confidence_intervals"),
+  recommendations: jsonb("recommendations"),
+  
+  // Metadata
+  version: text("version").default("1.0"),
+  validUntil: timestamp("valid_until"),
+  status: text("status").notNull().default("draft"), // draft, published, archived
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("projection_reports_target_year_idx").on(table.targetYear),
+  index("projection_reports_scope_idx").on(table.scope),
+  index("projection_reports_status_idx").on(table.status),
+]);
+
+export const projectionReportsRelations = relations(projectionReports, ({ one }) => ({
+  createdByUser: one(users, { fields: [projectionReports.createdBy], references: [users.id] }),
+}));
+
+export const insertProjectionReportSchema = createInsertSchema(projectionReports).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertProjectionReport = z.infer<typeof insertProjectionReportSchema>;
+export type ProjectionReportRecord = typeof projectionReports.$inferSelect;
+
+// Import Validation Runs - tracks validation analysis per import job
+export const importValidationRuns = pgTable("import_validation_runs", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").references(() => tseImportJobs.id).notNull(),
+  status: text("status").notNull().default("pending"), // pending, running, completed, failed
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  totalRecordsChecked: integer("total_records_checked").default(0),
+  issuesFound: integer("issues_found").default(0),
+  summary: jsonb("summary"), // Statistical summary: counts by type, severity distribution
+  aiAnalysis: jsonb("ai_analysis"), // AI-generated insights and recommendations
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("validation_runs_job_idx").on(table.jobId),
+  index("validation_runs_status_idx").on(table.status),
+]);
+
+export const validationRunsRelations = relations(importValidationRuns, ({ one, many }) => ({
+  job: one(tseImportJobs, { fields: [importValidationRuns.jobId], references: [tseImportJobs.id] }),
+  issues: many(importValidationIssues),
+}));
+
+// Import Validation Issues - individual issues found during validation
+export const importValidationIssues = pgTable("import_validation_issues", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").references(() => importValidationRuns.id).notNull(),
+  type: text("type").notNull(), // vote_count, candidate_id, abstention_rate, duplicate, missing_field, statistical_outlier
+  severity: text("severity").notNull().default("warning"), // error, warning, info
+  category: text("category").notNull().default("data_quality"), // data_quality, consistency, statistical, format
+  rowReference: text("row_reference"), // Line number or record identifier
+  field: text("field"), // Which field has the issue
+  currentValue: text("current_value"), // The problematic value
+  message: text("message").notNull(), // Human-readable description
+  suggestedFix: jsonb("suggested_fix"), // AI or rule-based suggestion: { action, newValue, confidence, reasoning }
+  status: text("status").notNull().default("open"), // open, resolved, ignored
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("validation_issues_run_idx").on(table.runId),
+  index("validation_issues_type_idx").on(table.type),
+  index("validation_issues_severity_idx").on(table.severity),
+  index("validation_issues_status_idx").on(table.status),
+]);
+
+export const validationIssuesRelations = relations(importValidationIssues, ({ one }) => ({
+  run: one(importValidationRuns, { fields: [importValidationIssues.runId], references: [importValidationRuns.id] }),
+  resolver: one(users, { fields: [importValidationIssues.resolvedBy], references: [users.id] }),
+}));
+
+export const insertValidationRunSchema = createInsertSchema(importValidationRuns).omit({ id: true, createdAt: true });
+export type InsertValidationRun = z.infer<typeof insertValidationRunSchema>;
+export type ValidationRunRecord = typeof importValidationRuns.$inferSelect;
+
+export const insertValidationIssueSchema = createInsertSchema(importValidationIssues).omit({ id: true, createdAt: true });
+export type InsertValidationIssue = z.infer<typeof insertValidationIssueSchema>;
+export type ValidationIssueRecord = typeof importValidationIssues.$inferSelect;
+
+// Election Forecast Runs - stores forecast model runs and metadata
+export const forecastRuns = pgTable("forecast_runs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  targetYear: integer("target_year").notNull(), // Year being predicted
+  targetElectionType: text("target_election_type"), // e.g., 'Eleições Gerais', 'Eleições Municipais'
+  targetPosition: text("target_position"), // e.g., 'Deputado Federal', 'Senador'
+  targetState: text("target_state"), // Optional: specific state or 'BR' for national
+  historicalYearsUsed: jsonb("historical_years_used").$type<number[]>().default([]), // Which election years were analyzed
+  modelParameters: jsonb("model_parameters"), // Monte Carlo iterations, confidence thresholds, etc.
+  sentimentData: jsonb("sentiment_data"), // Snapshot of sentiment analysis inputs
+  status: text("status").notNull().default("pending"), // pending, running, completed, failed
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  totalSimulations: integer("total_simulations").default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("forecast_runs_target_year_idx").on(table.targetYear),
+  index("forecast_runs_status_idx").on(table.status),
+  index("forecast_runs_created_at_idx").on(table.createdAt),
+]);
+
+export const forecastRunsRelations = relations(forecastRuns, ({ one, many }) => ({
+  createdByUser: one(users, { fields: [forecastRuns.createdBy], references: [users.id] }),
+  results: many(forecastResults),
+  swingRegions: many(forecastSwingRegions),
+}));
+
+// Forecast Results - predictions by party/candidate with confidence intervals
+export const forecastResults = pgTable("forecast_results", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").references(() => forecastRuns.id, { onDelete: "cascade" }).notNull(),
+  resultType: text("result_type").notNull(), // 'party', 'candidate', 'coalition'
+  entityId: integer("entity_id"), // FK to parties or candidates table
+  entityName: text("entity_name").notNull(), // Party abbreviation or candidate name
+  region: text("region"), // State or region code
+  position: text("position"), // Cargo being contested
+  
+  // Vote predictions with confidence intervals
+  predictedVoteShare: decimal("predicted_vote_share", { precision: 7, scale: 4 }), // Percentage (e.g., 15.2345)
+  voteShareLower: decimal("vote_share_lower", { precision: 7, scale: 4 }), // 95% CI lower bound
+  voteShareUpper: decimal("vote_share_upper", { precision: 7, scale: 4 }), // 95% CI upper bound
+  predictedVotes: integer("predicted_votes"), // Absolute vote count
+  votesLower: integer("votes_lower"),
+  votesUpper: integer("votes_upper"),
+  
+  // Seat predictions (for proportional elections)
+  predictedSeats: integer("predicted_seats"),
+  seatsLower: integer("seats_lower"),
+  seatsUpper: integer("seats_upper"),
+  
+  // Win probability (for majoritarian elections or candidate success)
+  winProbability: decimal("win_probability", { precision: 5, scale: 4 }),
+  electedProbability: decimal("elected_probability", { precision: 5, scale: 4 }), // Probability of being elected
+  
+  // Historical trend data
+  historicalTrend: jsonb("historical_trend"), // { years: [2018, 2020, 2022], voteShares: [10.5, 12.3, 14.1] }
+  trendDirection: text("trend_direction"), // 'rising', 'falling', 'stable'
+  trendStrength: decimal("trend_strength", { precision: 5, scale: 4 }), // Coefficient
+  
+  // Factors influencing prediction
+  influenceFactors: jsonb("influence_factors"), // [{ factor: 'sentiment', weight: 0.15, impact: 'positive' }]
+  
+  confidence: decimal("confidence", { precision: 5, scale: 4 }), // Overall confidence in prediction
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("forecast_results_run_idx").on(table.runId),
+  index("forecast_results_type_idx").on(table.resultType),
+  index("forecast_results_entity_idx").on(table.entityName),
+  index("forecast_results_region_idx").on(table.region),
+]);
+
+export const forecastResultsRelations = relations(forecastResults, ({ one }) => ({
+  run: one(forecastRuns, { fields: [forecastResults.runId], references: [forecastRuns.id] }),
+}));
+
+// Forecast Swing Regions - volatile regions that could determine outcomes
+export const forecastSwingRegions = pgTable("forecast_swing_regions", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").references(() => forecastRuns.id, { onDelete: "cascade" }).notNull(),
+  region: text("region").notNull(), // State code
+  regionName: text("region_name").notNull(), // Full state name
+  position: text("position"), // Which position makes this a swing region
+  
+  // Margin between leading candidates/parties
+  marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }), // How close the race is
+  marginVotes: integer("margin_votes"),
+  
+  // Volatility metrics
+  volatilityScore: decimal("volatility_score", { precision: 5, scale: 4 }), // Historical volatility
+  swingMagnitude: decimal("swing_magnitude", { precision: 5, scale: 2 }), // Expected swing size
+  
+  // Key competing entities
+  leadingEntity: text("leading_entity"), // Currently leading party/candidate
+  challengingEntity: text("challenging_entity"), // Closest challenger
+  
+  // Sentiment and trend factors
+  sentimentBalance: decimal("sentiment_balance", { precision: 5, scale: 4 }), // -1 to 1, positive favors incumbent
+  recentTrendShift: decimal("recent_trend_shift", { precision: 5, scale: 4 }), // Recent momentum change
+  
+  // Risk assessment
+  outcomeUncertainty: decimal("outcome_uncertainty", { precision: 5, scale: 4 }), // How uncertain the outcome is
+  keyFactors: jsonb("key_factors"), // Factors making this region volatile
+  
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("swing_regions_run_idx").on(table.runId),
+  index("swing_regions_region_idx").on(table.region),
+  index("swing_regions_volatility_idx").on(table.volatilityScore),
+]);
+
+export const swingRegionsRelations = relations(forecastSwingRegions, ({ one }) => ({
+  run: one(forecastRuns, { fields: [forecastSwingRegions.runId], references: [forecastRuns.id] }),
+}));
+
+export const insertForecastRunSchema = createInsertSchema(forecastRuns).omit({ id: true, createdAt: true });
+export type InsertForecastRun = z.infer<typeof insertForecastRunSchema>;
+export type ForecastRun = typeof forecastRuns.$inferSelect;
+
+export const insertForecastResultSchema = createInsertSchema(forecastResults).omit({ id: true, createdAt: true });
+export type InsertForecastResult = z.infer<typeof insertForecastResultSchema>;
+export type ForecastResult = typeof forecastResults.$inferSelect;
+
+export const insertSwingRegionSchema = createInsertSchema(forecastSwingRegions).omit({ id: true, createdAt: true });
+export type InsertSwingRegion = z.infer<typeof insertSwingRegionSchema>;
+export type SwingRegion = typeof forecastSwingRegions.$inferSelect;

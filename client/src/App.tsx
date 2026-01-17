@@ -22,6 +22,13 @@ import Settings from "@/pages/settings";
 import Alliances from "@/pages/alliances";
 import TseImport from "@/pages/tse-import";
 import ScenarioCandidates from "@/pages/scenario-candidates";
+import DataAnalysis from "@/pages/data-analysis";
+import ElectoralDashboard from "@/pages/electoral-dashboard";
+import SemanticSearch from "@/pages/semantic-search";
+import InteractiveDashboard from "@/pages/interactive-dashboard";
+import AIInsights from "@/pages/ai-insights";
+import ProjectionReports from "@/pages/projection-reports";
+import Forecasts from "@/pages/forecasts";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -39,6 +46,13 @@ function Router() {
       <Route path="/users" component={Users} />
       <Route path="/settings" component={Settings} />
       <Route path="/tse-import" component={TseImport} />
+      <Route path="/data-analysis" component={DataAnalysis} />
+      <Route path="/electoral-dashboard" component={ElectoralDashboard} />
+      <Route path="/semantic-search" component={SemanticSearch} />
+      <Route path="/interactive-dashboard" component={InteractiveDashboard} />
+      <Route path="/ai-insights" component={AIInsights} />
+      <Route path="/projection-reports" component={ProjectionReports} />
+      <Route path="/forecasts" component={Forecasts} />
       <Route component={NotFound} />
     </Switch>
   );
