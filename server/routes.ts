@@ -1819,6 +1819,142 @@ Responda em JSON:
     }
   });
 
+  // Forecasting endpoints
+  const { createAndRunForecast, getForecastSummary, runForecast } = await import("./forecasting");
+
+  app.get("/api/forecasts", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const targetYear = req.query.targetYear ? parseInt(req.query.targetYear as string) : undefined;
+      const status = req.query.status as string | undefined;
+      const forecasts = await storage.getForecastRuns({ targetYear, status });
+      res.json(forecasts);
+    } catch (error) {
+      console.error("Failed to fetch forecasts:", error);
+      res.status(500).json({ error: "Failed to fetch forecasts" });
+    }
+  });
+
+  app.get("/api/forecasts/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const summary = await getForecastSummary(id);
+      if (!summary) {
+        return res.status(404).json({ error: "Forecast not found" });
+      }
+      
+      res.json(summary);
+    } catch (error) {
+      console.error("Failed to fetch forecast:", error);
+      res.status(500).json({ error: "Failed to fetch forecast" });
+    }
+  });
+
+  app.get("/api/forecasts/:id/results", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const resultType = req.query.resultType as string | undefined;
+      const region = req.query.region as string | undefined;
+      
+      const results = await storage.getForecastResults(id, { resultType, region });
+      res.json(results);
+    } catch (error) {
+      console.error("Failed to fetch forecast results:", error);
+      res.status(500).json({ error: "Failed to fetch forecast results" });
+    }
+  });
+
+  app.get("/api/forecasts/:id/swing-regions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const swingRegions = await storage.getSwingRegions(id);
+      res.json(swingRegions);
+    } catch (error) {
+      console.error("Failed to fetch swing regions:", error);
+      res.status(500).json({ error: "Failed to fetch swing regions" });
+    }
+  });
+
+  app.post("/api/forecasts", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { name, description, targetYear, targetPosition, targetState, targetElectionType, historicalYears, modelParameters } = req.body;
+      
+      if (!name || !targetYear) {
+        return res.status(400).json({ error: "Name and target year are required" });
+      }
+      
+      const forecastRun = await createAndRunForecast(user.id, {
+        name,
+        description,
+        targetYear,
+        targetPosition,
+        targetState,
+        targetElectionType,
+        historicalYears,
+        modelParameters,
+      });
+      
+      await logAudit(req, "create", "forecast", String(forecastRun.id), { name, targetYear });
+      
+      res.status(201).json(forecastRun);
+    } catch (error) {
+      console.error("Failed to create forecast:", error);
+      res.status(500).json({ error: "Failed to create forecast" });
+    }
+  });
+
+  app.delete("/api/forecasts/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid forecast ID" });
+      }
+      
+      const deleted = await storage.deleteForecastRun(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Forecast not found" });
+      }
+      
+      await logAudit(req, "delete", "forecast", String(id));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete forecast:", error);
+      res.status(500).json({ error: "Failed to delete forecast" });
+    }
+  });
+
+  app.get("/api/analytics/historical-years", requireAuth, async (req, res) => {
+    try {
+      const position = req.query.position as string | undefined;
+      const state = req.query.state as string | undefined;
+      
+      const years = await storage.getHistoricalVotesByParty({
+        years: [2002, 2006, 2010, 2014, 2018, 2022],
+        position,
+        state,
+      });
+      
+      const uniqueYears = [...new Set(years.map(y => y.year))].sort((a, b) => b - a);
+      res.json(uniqueYears);
+    } catch (error) {
+      console.error("Failed to fetch historical years:", error);
+      res.status(500).json({ error: "Failed to fetch historical years" });
+    }
+  });
+
   app.post("/api/imports/tse", requireAuth, requireRole("admin"), upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
