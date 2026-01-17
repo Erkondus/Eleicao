@@ -29,9 +29,11 @@ export interface IStorage {
 
   getParties(): Promise<Party[]>;
   getParty(id: number): Promise<Party | undefined>;
+  getPartyByNumber(number: number): Promise<Party | undefined>;
   createParty(party: InsertParty): Promise<Party>;
   updateParty(id: number, data: Partial<InsertParty>): Promise<Party | undefined>;
   deleteParty(id: number): Promise<boolean>;
+  syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number }>;
 
   getCandidates(): Promise<Candidate[]>;
   getCandidate(id: number): Promise<Candidate | undefined>;
@@ -123,9 +125,99 @@ export class DatabaseStorage implements IStorage {
     return party;
   }
 
+  async getPartyByNumber(number: number): Promise<Party | undefined> {
+    const [party] = await db.select().from(parties).where(eq(parties.number, number));
+    return party;
+  }
+
   async createParty(party: InsertParty): Promise<Party> {
     const [created] = await db.insert(parties).values(party).returning();
     return created;
+  }
+
+  async syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number }> {
+    const uniqueParties = await db.selectDistinct({
+      nrPartido: tseCandidateVotes.nrPartido,
+      sgPartido: tseCandidateVotes.sgPartido,
+      nmPartido: tseCandidateVotes.nmPartido,
+    })
+    .from(tseCandidateVotes)
+    .where(eq(tseCandidateVotes.importJobId, jobId));
+
+    let created = 0;
+    let existing = 0;
+
+    for (const partyData of uniqueParties) {
+      if (!partyData.nrPartido || !partyData.sgPartido) continue;
+
+      const existingParty = await this.getPartyByNumber(partyData.nrPartido);
+      
+      if (existingParty) {
+        existing++;
+      } else {
+        try {
+          await this.createParty({
+            name: partyData.nmPartido || partyData.sgPartido,
+            abbreviation: partyData.sgPartido,
+            number: partyData.nrPartido,
+            color: this.generatePartyColor(partyData.nrPartido),
+            active: true,
+          });
+          created++;
+          console.log(`Created party: ${partyData.sgPartido} (${partyData.nrPartido})`);
+        } catch (error: any) {
+          if (error.code === '23505') {
+            existing++;
+          } else {
+            console.error(`Failed to create party ${partyData.sgPartido}:`, error.message);
+          }
+        }
+      }
+    }
+
+    return { created, existing };
+  }
+
+  private generatePartyColor(partyNumber: number): string {
+    const colors: { [key: number]: string } = {
+      10: "#FF0000", // PRB/Republicanos - vermelho
+      11: "#0000FF", // PP - azul
+      12: "#00AA00", // PDT - verde
+      13: "#FF0000", // PT - vermelho
+      14: "#00AA00", // PTB - verde
+      15: "#0000FF", // MDB/PMDB - azul
+      16: "#800080", // PSTU - roxo
+      17: "#FF8C00", // PSL - laranja
+      18: "#FFCC00", // REDE - amarelo
+      19: "#008000", // PODE - verde
+      20: "#00CED1", // PSC - turquesa
+      21: "#FFA500", // PCB - laranja
+      22: "#0000FF", // PL - azul
+      23: "#00FF00", // PPS/Cidadania - verde
+      25: "#008000", // DEM/União - verde
+      27: "#FF0000", // PSDC - vermelho
+      28: "#FF69B4", // PRTB - rosa
+      29: "#FFD700", // PCO - dourado
+      30: "#228B22", // NOVO - verde
+      31: "#FF4500", // PHS - laranja
+      33: "#0000CD", // PMN - azul
+      35: "#32CD32", // PMB - verde
+      36: "#800000", // PTC - marrom
+      40: "#FF6347", // PSB - vermelho
+      43: "#006400", // PV - verde escuro
+      44: "#0000FF", // UNIÃO - azul
+      45: "#0000FF", // PSDB - azul
+      50: "#FF0000", // PSOL - vermelho
+      51: "#FF4500", // PEN/Patriota - laranja
+      54: "#FF69B4", // PPL - rosa
+      55: "#FF0000", // PSD - vermelho
+      65: "#FF0000", // PC do B - vermelho
+      70: "#00BFFF", // AVANTE - azul claro
+      77: "#90EE90", // SOLIDARIEDADE - verde claro
+      80: "#4682B4", // UP - azul
+      90: "#006400", // PROS - verde
+    };
+    return colors[partyNumber] || `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
   }
 
   async updateParty(id: number, data: Partial<InsertParty>): Promise<Party | undefined> {
