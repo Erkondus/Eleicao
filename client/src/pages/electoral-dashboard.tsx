@@ -406,7 +406,7 @@ export default function ElectoralDashboard() {
                       variant="ghost" 
                       size="sm" 
                       onClick={() => setSelectedState(null)}
-                      data-testid="button-clear-selection"
+                      data-testid="button-clear-state-selection"
                     >
                       Limpar seleção
                     </Button>
