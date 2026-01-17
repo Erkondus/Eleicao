@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb, bigint, index, vector } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -379,3 +379,48 @@ export const savedReportsRelations = relations(savedReports, ({ one }) => ({
 export const insertSavedReportSchema = createInsertSchema(savedReports).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertSavedReport = z.infer<typeof insertSavedReportSchema>;
 export type SavedReport = typeof savedReports.$inferSelect;
+
+// Semantic Documents for Vector Search
+export const semanticDocuments = pgTable("semantic_documents", {
+  id: serial("id").primaryKey(),
+  sourceType: text("source_type").notNull(), // 'tse_candidate', 'party', 'election_summary'
+  sourceId: integer("source_id"), // FK to source table
+  year: integer("year"),
+  state: text("state"),
+  electionType: text("election_type"),
+  position: text("position"),
+  partyAbbreviation: text("party_abbreviation"),
+  content: text("content").notNull(), // Full text content for search
+  contentHash: text("content_hash"), // To detect stale embeddings
+  metadata: jsonb("metadata"), // Additional context
+  embedding: vector("embedding", { dimensions: 1536 }), // text-embedding-3-small
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("semantic_documents_year_idx").on(table.year),
+  index("semantic_documents_state_idx").on(table.state),
+  index("semantic_documents_party_idx").on(table.partyAbbreviation),
+  index("semantic_documents_source_idx").on(table.sourceType, table.sourceId),
+]);
+
+export const insertSemanticDocumentSchema = createInsertSchema(semanticDocuments).omit({ id: true, createdAt: true });
+export type InsertSemanticDocument = z.infer<typeof insertSemanticDocumentSchema>;
+export type SemanticDocument = typeof semanticDocuments.$inferSelect;
+
+// Semantic Search Queries (for analytics/history)
+export const semanticSearchQueries = pgTable("semantic_search_queries", {
+  id: serial("id").primaryKey(),
+  query: text("query").notNull(),
+  filters: jsonb("filters"),
+  resultCount: integer("result_count").default(0),
+  responseTime: integer("response_time"), // ms
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const semanticSearchQueriesRelations = relations(semanticSearchQueries, ({ one }) => ({
+  createdByUser: one(users, { fields: [semanticSearchQueries.createdBy], references: [users.id] }),
+}));
+
+export const insertSemanticSearchQuerySchema = createInsertSchema(semanticSearchQueries).omit({ id: true, createdAt: true });
+export type InsertSemanticSearchQuery = z.infer<typeof insertSemanticSearchQuerySchema>;
+export type SemanticSearchQuery = typeof semanticSearchQueries.$inferSelect;

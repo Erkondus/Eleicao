@@ -15,6 +15,12 @@ import path from "path";
 import { storage } from "./storage";
 import type { User, InsertTseCandidateVote } from "@shared/schema";
 import OpenAI from "openai";
+import { 
+  processSemanticSearch, 
+  generateEmbeddingsForImportJob, 
+  getEmbeddingStats, 
+  getRecentQueries 
+} from "./semantic-search";
 
 const upload = multer({ 
   dest: "/tmp/uploads/",
@@ -2188,6 +2194,104 @@ Responda em JSON:
     } catch (error) {
       console.error("Delete report error:", error);
       res.status(500).json({ error: "Failed to delete report" });
+    }
+  });
+
+  // ==================== SEMANTIC SEARCH ROUTES ====================
+
+  app.post("/api/semantic-search", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { query, filters = {}, topK = 10 } = req.body;
+      
+      if (!query || typeof query !== "string" || query.trim().length < 3) {
+        return res.status(400).json({ error: "Query must be at least 3 characters" });
+      }
+      
+      const result = await processSemanticSearch(
+        query.trim(),
+        {
+          year: filters.year ? parseInt(filters.year) : undefined,
+          state: filters.state || undefined,
+          party: filters.party || undefined,
+          position: filters.position || undefined,
+        },
+        req.user?.id
+      );
+      
+      await logAudit(req, "semantic_search", "semantic_search", undefined, {
+        query: query.slice(0, 100),
+        filters,
+        resultCount: result.totalResults,
+      });
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Semantic search error:", error);
+      if (error.message?.includes("OPENAI_API_KEY")) {
+        return res.status(503).json({ 
+          error: "Semantic search requires an OpenAI API key. Please configure OPENAI_API_KEY in secrets." 
+        });
+      }
+      res.status(500).json({ error: "Failed to perform semantic search" });
+    }
+  });
+
+  app.get("/api/semantic-search/stats", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const stats = await getEmbeddingStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Get embedding stats error:", error);
+      res.status(500).json({ error: "Failed to get embedding stats" });
+    }
+  });
+
+  app.get("/api/semantic-search/history", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const queries = await getRecentQueries(limit);
+      res.json(queries);
+    } catch (error) {
+      console.error("Get search history error:", error);
+      res.status(500).json({ error: "Failed to get search history" });
+    }
+  });
+
+  app.post("/api/semantic-search/generate-embeddings/:importJobId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const importJobId = parseInt(req.params.importJobId);
+      const job = await storage.getTseImportJobById(importJobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+      
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Can only generate embeddings for completed import jobs" });
+      }
+      
+      res.json({ message: "Embedding generation started", jobId: importJobId });
+      
+      generateEmbeddingsForImportJob(importJobId)
+        .then(result => {
+          console.log(`Embeddings generated for job ${importJobId}:`, result);
+        })
+        .catch(error => {
+          console.error(`Error generating embeddings for job ${importJobId}:`, error);
+        });
+      
+    } catch (error) {
+      console.error("Generate embeddings error:", error);
+      res.status(500).json({ error: "Failed to start embedding generation" });
+    }
+  });
+
+  app.get("/api/semantic-search/check-api-key", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const hasKey = !!process.env.OPENAI_API_KEY;
+      res.json({ configured: hasKey });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check API key" });
     }
   });
 
