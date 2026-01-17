@@ -15,6 +15,7 @@ import {
   type TseImportError, type InsertTseImportError, tseImportErrors,
   type ScenarioCandidate, type InsertScenarioCandidate, scenarioCandidates,
   type SavedReport, type InsertSavedReport, savedReports,
+  type AiPrediction, aiPredictions,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -117,6 +118,11 @@ export interface IStorage {
     candidateCount: number;
     partyCount: number;
   }[]>;
+
+  // AI Prediction caching methods
+  getAiPrediction(cacheKey: string): Promise<AiPrediction | undefined>;
+  saveAiPrediction(data: { cacheKey: string; predictionType: string; prediction: unknown; expiresAt: Date }): Promise<AiPrediction>;
+  deleteExpiredAiPredictions(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1257,6 +1263,38 @@ export class DatabaseStorage implements IStorage {
   async deleteSavedReport(id: number): Promise<boolean> {
     const result = await db.delete(savedReports).where(eq(savedReports.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // AI Prediction caching methods
+  async getAiPrediction(cacheKey: string): Promise<AiPrediction | undefined> {
+    const [prediction] = await db
+      .select()
+      .from(aiPredictions)
+      .where(eq(aiPredictions.cacheKey, cacheKey));
+    return prediction;
+  }
+
+  async saveAiPrediction(data: { cacheKey: string; predictionType: string; prediction: unknown; expiresAt: Date }): Promise<AiPrediction> {
+    // Delete existing prediction with same cache key
+    await db.delete(aiPredictions).where(eq(aiPredictions.cacheKey, data.cacheKey));
+    
+    const [created] = await db
+      .insert(aiPredictions)
+      .values({
+        cacheKey: data.cacheKey,
+        predictionType: data.predictionType,
+        prediction: data.prediction,
+        validUntil: data.expiresAt,
+      })
+      .returning();
+    return created;
+  }
+
+  async deleteExpiredAiPredictions(): Promise<number> {
+    const result = await db
+      .delete(aiPredictions)
+      .where(sql`${aiPredictions.validUntil} < NOW()`);
+    return result.rowCount ?? 0;
   }
 }
 

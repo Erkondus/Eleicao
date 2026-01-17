@@ -424,3 +424,55 @@ export const semanticSearchQueriesRelations = relations(semanticSearchQueries, (
 export const insertSemanticSearchQuerySchema = createInsertSchema(semanticSearchQueries).omit({ id: true, createdAt: true });
 export type InsertSemanticSearchQuery = z.infer<typeof insertSemanticSearchQuerySchema>;
 export type SemanticSearchQuery = typeof semanticSearchQueries.$inferSelect;
+
+// AI Predictions Cache
+export const aiPredictions = pgTable("ai_predictions", {
+  id: serial("id").primaryKey(),
+  predictionType: text("prediction_type").notNull(), // 'turnout', 'candidate_success', 'party_performance', 'sentiment', 'insights'
+  cacheKey: text("cache_key").notNull().unique(), // hash of filters for deduplication
+  filters: jsonb("filters"), // The filters used to generate the prediction
+  prediction: jsonb("prediction").notNull(), // The actual prediction result
+  confidence: decimal("confidence", { precision: 5, scale: 4 }), // Overall confidence score
+  validUntil: timestamp("valid_until"), // When the cache expires
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("ai_predictions_type_idx").on(table.predictionType),
+  index("ai_predictions_cache_key_idx").on(table.cacheKey),
+  index("ai_predictions_valid_until_idx").on(table.validUntil),
+]);
+
+export const aiPredictionsRelations = relations(aiPredictions, ({ one }) => ({
+  createdByUser: one(users, { fields: [aiPredictions.createdBy], references: [users.id] }),
+}));
+
+export const insertAiPredictionSchema = createInsertSchema(aiPredictions).omit({ id: true, createdAt: true });
+export type InsertAiPrediction = z.infer<typeof insertAiPredictionSchema>;
+export type AiPrediction = typeof aiPredictions.$inferSelect;
+
+// AI Sentiment Data (for news and social media)
+export const aiSentimentData = pgTable("ai_sentiment_data", {
+  id: serial("id").primaryKey(),
+  sourceType: text("source_type").notNull(), // 'news', 'social', 'official'
+  sourceUrl: text("source_url"),
+  title: text("title"),
+  content: text("content").notNull(),
+  author: text("author"),
+  publishedAt: timestamp("published_at"),
+  party: text("party"), // Related party if any
+  state: text("state"), // Related state if any
+  sentiment: text("sentiment"), // 'positive', 'negative', 'neutral'
+  sentimentScore: decimal("sentiment_score", { precision: 5, scale: 4 }), // -1 to 1
+  topics: jsonb("topics"), // Extracted topics
+  analyzed: boolean("analyzed").default(false),
+  analyzedAt: timestamp("analyzed_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("ai_sentiment_source_type_idx").on(table.sourceType),
+  index("ai_sentiment_party_idx").on(table.party),
+  index("ai_sentiment_published_at_idx").on(table.publishedAt),
+]);
+
+export const insertAiSentimentDataSchema = createInsertSchema(aiSentimentData).omit({ id: true, createdAt: true });
+export type InsertAiSentimentData = z.infer<typeof insertAiSentimentDataSchema>;
+export type AiSentimentData = typeof aiSentimentData.$inferSelect;

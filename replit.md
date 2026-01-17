@@ -4,6 +4,14 @@
 SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
 
 ## Mudanças Recentes
+- **2026-01-17**: Página AI Insights com análises preditivas avançadas (comparecimento, candidatos, partidos)
+- **2026-01-17**: Previsão de comparecimento eleitoral baseada em padrões históricos
+- **2026-01-17**: Probabilidade de sucesso de candidatos com fatores de influência
+- **2026-01-17**: Previsão de desempenho partidário com análise de tendências
+- **2026-01-17**: Insights estratégicos com descobertas, riscos e recomendações
+- **2026-01-17**: Análise de sentimento (extensível para notícias e mídias sociais)
+- **2026-01-17**: Cache de previsões de IA para otimização de custos
+- **2026-01-17**: Painel interativo com drill-down por região, partido e cargo
 - **2026-01-17**: Busca Semântica com pgvector para consultas em linguagem natural sobre dados eleitorais
 - **2026-01-17**: Embeddings automáticos gerados após importação TSE via OpenAI text-embedding-3-small
 - **2026-01-17**: Interface de busca semântica com filtros, exemplos de perguntas, histórico e citações
@@ -105,6 +113,11 @@ SimulaVoto é um sistema web completo para simular resultados eleitorais proporc
 - `POST /api/ai/assistant` - Assistente IA para perguntas sobre dados
 - `POST /api/ai/predict-historical` - Previsões baseadas em histórico
 - `POST /api/ai/anomalies` - Detecção de anomalias estatísticas
+- `POST /api/ai/turnout` - Previsão de comparecimento eleitoral
+- `POST /api/ai/candidate-success` - Probabilidade de sucesso de candidatos
+- `POST /api/ai/party-performance` - Previsão de desempenho partidário
+- `POST /api/ai/electoral-insights` - Insights estratégicos eleitorais
+- `POST /api/ai/sentiment` - Análise de sentimento de notícias/posts
 - `POST /api/imports/tse/url` - Importação via URL do TSE
 
 ### Sistema Eleitoral Brasileiro

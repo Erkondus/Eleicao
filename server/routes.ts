@@ -1231,6 +1231,221 @@ Responda em JSON:
     }
   });
 
+  // AI Voter Turnout Prediction
+  app.post("/api/ai/turnout", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional(),
+        targetYear: z.number().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { predictVoterTurnout } = await import("./ai-insights");
+      const { year, uf, electionType, targetYear } = parsed.data;
+      
+      const cacheKey = `turnout_${year || 'all'}_${uf || 'all'}_${electionType || 'all'}_${targetYear || 'next'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const prediction = await predictVoterTurnout({ year, uf, electionType, targetYear });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'turnout',
+        prediction,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "turnout", undefined, { year, uf, electionType, targetYear });
+      
+      res.json(prediction);
+    } catch (error: any) {
+      console.error("AI Turnout Prediction error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate turnout prediction" });
+    }
+  });
+
+  // AI Candidate Success Probability
+  app.post("/api/ai/candidate-success", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        candidateNumber: z.number().optional(),
+        candidateName: z.string().optional(),
+        party: z.string().optional(),
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { candidateNumber, candidateName, party, year, uf, electionType } = parsed.data;
+      
+      const cacheKey = `candidate_${candidateNumber || 'all'}_${party || 'all'}_${year || 'all'}_${uf || 'all'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const { predictCandidateSuccess } = await import("./ai-insights");
+      const predictions = await predictCandidateSuccess({ 
+        candidateNumber, 
+        candidateName, 
+        party, 
+        year, 
+        uf, 
+        electionType 
+      });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'candidate_success',
+        prediction: predictions,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "candidate_success", undefined, { party, year, uf });
+      
+      res.json(predictions);
+    } catch (error: any) {
+      console.error("AI Candidate Success error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate candidate success predictions" });
+    }
+  });
+
+  // AI Party Performance Prediction
+  app.post("/api/ai/party-performance", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        party: z.string().optional(),
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional(),
+        targetYear: z.number().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { party, year, uf, electionType, targetYear } = parsed.data;
+      
+      const cacheKey = `party_${party || 'all'}_${year || 'all'}_${uf || 'all'}_${targetYear || 'next'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const { predictPartyPerformance } = await import("./ai-insights");
+      const predictions = await predictPartyPerformance({ party, year, uf, electionType, targetYear });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'party_performance',
+        prediction: predictions,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "party_performance", undefined, { party, year, uf });
+      
+      res.json(predictions);
+    } catch (error: any) {
+      console.error("AI Party Performance error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate party performance predictions" });
+    }
+  });
+
+  // AI Electoral Insights (comprehensive analysis)
+  app.post("/api/ai/electoral-insights", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        year: z.number().optional(),
+        uf: z.string().optional(),
+        electionType: z.string().optional(),
+        party: z.string().optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { year, uf, electionType, party } = parsed.data;
+      
+      const cacheKey = `insights_${year || 'all'}_${uf || 'all'}_${electionType || 'all'}_${party || 'all'}`;
+      const cached = await storage.getAiPrediction(cacheKey);
+      if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
+        return res.json(cached.prediction);
+      }
+      
+      const { generateElectoralInsights } = await import("./ai-insights");
+      const insights = await generateElectoralInsights({ year, uf, electionType, party });
+      
+      await storage.saveAiPrediction({
+        cacheKey,
+        predictionType: 'electoral_insights',
+        prediction: insights,
+        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000)
+      });
+      
+      await logAudit(req, "ai_prediction", "electoral_insights", undefined, { year, uf, electionType });
+      
+      res.json(insights);
+    } catch (error: any) {
+      console.error("AI Electoral Insights error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate electoral insights" });
+    }
+  });
+
+  // AI Sentiment Analysis
+  app.post("/api/ai/sentiment", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        newsArticles: z.array(z.object({
+          title: z.string(),
+          content: z.string(),
+          source: z.string().optional(),
+          publishedAt: z.string().optional()
+        })).optional(),
+        socialPosts: z.array(z.object({
+          content: z.string(),
+          platform: z.string().optional(),
+          author: z.string().optional(),
+          postedAt: z.string().optional()
+        })).optional(),
+        party: z.string().optional(),
+        dateRange: z.object({
+          start: z.string(),
+          end: z.string()
+        }).optional()
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request parameters", details: parsed.error.errors });
+      }
+      
+      const { newsArticles, socialPosts, party, dateRange } = parsed.data;
+      
+      const { analyzeElectoralSentiment } = await import("./ai-insights");
+      const analysis = await analyzeElectoralSentiment({ newsArticles, socialPosts, party, dateRange });
+      
+      await logAudit(req, "ai_prediction", "sentiment", undefined, { party, articlesCount: newsArticles?.length || 0 });
+      
+      res.json(analysis);
+    } catch (error: any) {
+      console.error("AI Sentiment Analysis error:", error);
+      res.status(500).json({ error: error.message || "Failed to analyze sentiment" });
+    }
+  });
+
   app.get("/api/imports/tse", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const jobs = await storage.getTseImportJobs();
