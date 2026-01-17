@@ -518,3 +518,61 @@ export const projectionReportsRelations = relations(projectionReports, ({ one })
 export const insertProjectionReportSchema = createInsertSchema(projectionReports).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertProjectionReport = z.infer<typeof insertProjectionReportSchema>;
 export type ProjectionReportRecord = typeof projectionReports.$inferSelect;
+
+// Import Validation Runs - tracks validation analysis per import job
+export const importValidationRuns = pgTable("import_validation_runs", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").references(() => tseImportJobs.id).notNull(),
+  status: text("status").notNull().default("pending"), // pending, running, completed, failed
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  totalRecordsChecked: integer("total_records_checked").default(0),
+  issuesFound: integer("issues_found").default(0),
+  summary: jsonb("summary"), // Statistical summary: counts by type, severity distribution
+  aiAnalysis: jsonb("ai_analysis"), // AI-generated insights and recommendations
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("validation_runs_job_idx").on(table.jobId),
+  index("validation_runs_status_idx").on(table.status),
+]);
+
+export const validationRunsRelations = relations(importValidationRuns, ({ one, many }) => ({
+  job: one(tseImportJobs, { fields: [importValidationRuns.jobId], references: [tseImportJobs.id] }),
+  issues: many(importValidationIssues),
+}));
+
+// Import Validation Issues - individual issues found during validation
+export const importValidationIssues = pgTable("import_validation_issues", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").references(() => importValidationRuns.id).notNull(),
+  type: text("type").notNull(), // vote_count, candidate_id, abstention_rate, duplicate, missing_field, statistical_outlier
+  severity: text("severity").notNull().default("warning"), // error, warning, info
+  category: text("category").notNull().default("data_quality"), // data_quality, consistency, statistical, format
+  rowReference: text("row_reference"), // Line number or record identifier
+  field: text("field"), // Which field has the issue
+  currentValue: text("current_value"), // The problematic value
+  message: text("message").notNull(), // Human-readable description
+  suggestedFix: jsonb("suggested_fix"), // AI or rule-based suggestion: { action, newValue, confidence, reasoning }
+  status: text("status").notNull().default("open"), // open, resolved, ignored
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("validation_issues_run_idx").on(table.runId),
+  index("validation_issues_type_idx").on(table.type),
+  index("validation_issues_severity_idx").on(table.severity),
+  index("validation_issues_status_idx").on(table.status),
+]);
+
+export const validationIssuesRelations = relations(importValidationIssues, ({ one }) => ({
+  run: one(importValidationRuns, { fields: [importValidationIssues.runId], references: [importValidationRuns.id] }),
+  resolver: one(users, { fields: [importValidationIssues.resolvedBy], references: [users.id] }),
+}));
+
+export const insertValidationRunSchema = createInsertSchema(importValidationRuns).omit({ id: true, createdAt: true });
+export type InsertValidationRun = z.infer<typeof insertValidationRunSchema>;
+export type ValidationRunRecord = typeof importValidationRuns.$inferSelect;
+
+export const insertValidationIssueSchema = createInsertSchema(importValidationIssues).omit({ id: true, createdAt: true });
+export type InsertValidationIssue = z.infer<typeof insertValidationIssueSchema>;
+export type ValidationIssueRecord = typeof importValidationIssues.$inferSelect;
