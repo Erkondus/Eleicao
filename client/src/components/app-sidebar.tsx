@@ -19,6 +19,7 @@ import {
   Search,
   Layers,
   Sparkles,
+  Target,
 } from "lucide-react";
 import type { TseImportJob } from "@shared/schema";
 import {
@@ -48,6 +49,7 @@ const simulationNavItems = [
   { title: "Simulações", url: "/simulations", icon: PlayCircle, permission: "run_simulations" },
   { title: "Previsões IA", url: "/predictions", icon: Brain, permission: "ai_predictions" },
   { title: "Insights IA", url: "/ai-insights", icon: Sparkles, permission: "ai_predictions" },
+  { title: "Previsões Eleitorais", url: "/forecasts", icon: Target, permission: "ai_predictions" },
   { title: "Relatórios de Projeção", url: "/projection-reports", icon: FileText, permission: "ai_predictions" },
   { title: "Dashboard Eleitoral", url: "/electoral-dashboard", icon: PieChart, permission: null },
   { title: "Painel Interativo", url: "/interactive-dashboard", icon: Layers, permission: null },

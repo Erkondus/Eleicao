@@ -2,7 +2,14 @@ import { storage } from "./storage";
 import OpenAI from "openai";
 import type { ForecastRun, ForecastResult, SwingRegion, InsertForecastResult, InsertSwingRegion } from "@shared/schema";
 
-const openai = new OpenAI();
+let _openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI();
+  }
+  return _openai;
+}
 
 interface ModelParameters {
   monteCarloIterations: number;
@@ -91,13 +98,14 @@ function runMonteCarloSimulation(
   volatility: number,
   trendAdjustment: number,
   iterations: number,
-  confidenceLevel: number
+  confidenceLevel: number,
+  maxVoteShare: number = 100
 ): MonteCarloResult {
   const samples: number[] = [];
   
   for (let i = 0; i < iterations; i++) {
     const noise = generateNormalRandom(0, volatility);
-    const sample = Math.max(0, baseValue + trendAdjustment + noise);
+    const sample = Math.min(maxVoteShare, Math.max(0, baseValue + trendAdjustment + noise));
     samples.push(sample);
   }
   
@@ -336,7 +344,7 @@ Forneça insights sobre:
 `;
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,

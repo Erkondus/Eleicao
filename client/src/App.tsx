@@ -28,6 +28,7 @@ import SemanticSearch from "@/pages/semantic-search";
 import InteractiveDashboard from "@/pages/interactive-dashboard";
 import AIInsights from "@/pages/ai-insights";
 import ProjectionReports from "@/pages/projection-reports";
+import Forecasts from "@/pages/forecasts";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -51,6 +52,7 @@ function Router() {
       <Route path="/interactive-dashboard" component={InteractiveDashboard} />
       <Route path="/ai-insights" component={AIInsights} />
       <Route path="/projection-reports" component={ProjectionReports} />
+      <Route path="/forecasts" component={Forecasts} />
       <Route component={NotFound} />
     </Switch>
   );
