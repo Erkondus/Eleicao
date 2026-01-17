@@ -4,6 +4,13 @@
 SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
 
 ## Mudanças Recentes
+- **2026-01-17**: **Validação de Dados com IA** - Sistema completo de validação de dados importados do TSE
+- **2026-01-17**: Validação com 7 verificações determinísticas (votos negativos, campos vazios, duplicatas, votos irreais, números de candidato inválidos, outliers estatísticos, inconsistência de números de partido)
+- **2026-01-17**: Análise com IA usando GPT-4o para score de qualidade (0-100), recomendações e avaliação de riscos
+- **2026-01-17**: Tabelas import_validation_runs e import_validation_issues para armazenar resultados
+- **2026-01-17**: Interface de validação integrada à página de importação TSE com botões Validar/Ver
+- **2026-01-17**: Dialog de validação com score de qualidade, descobertas, riscos e lista de problemas
+- **2026-01-17**: Fluxo de status de issues: open → resolved/ignored com rastreamento de responsável
 - **2026-01-17**: **Relatórios de Projeção** - Sistema completo de relatórios preditivos com margens de erro e intervalos de confiança
 - **2026-01-17**: Projeções de comparecimento eleitoral com fatores de influência e base histórica
 - **2026-01-17**: Projeções por partido com estimativa de votos e cadeiras (min/esperado/max)

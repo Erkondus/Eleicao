@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database, Link, Download } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database, Link, Download, ShieldCheck, AlertTriangle, Info } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,11 +30,74 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { queryClient } from "@/lib/queryClient";
 import type { TseImportJob, TseImportError } from "@shared/schema";
+
+interface ValidationStatus {
+  hasValidation: boolean;
+  runId?: number;
+  status?: string;
+  totalRecordsChecked?: number;
+  issuesFound?: number;
+  summary?: {
+    byType: Record<string, number>;
+    bySeverity: Record<string, number>;
+    sampleIssues: Array<{
+      type: string;
+      severity: string;
+      message: string;
+      suggestedFix?: {
+        action: string;
+        newValue?: string | number;
+        confidence: number;
+        reasoning: string;
+      };
+    }>;
+  };
+  aiAnalysis?: {
+    analysis?: string;
+    recommendations?: Array<{
+      issue: string;
+      severity: string;
+      suggestedAction: string;
+      confidence: number;
+    }>;
+    overallDataQuality?: {
+      score: number;
+      assessment: string;
+      keyFindings: string[];
+      risksIdentified: string[];
+    };
+  };
+  completedAt?: string;
+}
+
+interface ValidationIssue {
+  id: number;
+  type: string;
+  severity: string;
+  category: string;
+  rowReference?: string;
+  field?: string;
+  currentValue?: string;
+  message: string;
+  suggestedFix?: {
+    action: string;
+    newValue?: string | number;
+    confidence: number;
+    reasoning: string;
+  };
+  status: string;
+}
 
 const UFS = [
   "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
@@ -65,6 +128,8 @@ export default function TseImport() {
   const [urlInput, setUrlInput] = useState<string>("");
   const [urlYear, setUrlYear] = useState<string>("");
   const [urlCargo, setUrlCargo] = useState<string>("");
+  const [validationDialogJob, setValidationDialogJob] = useState<TseImportJob | null>(null);
+  const [validatingJobId, setValidatingJobId] = useState<number | null>(null);
 
   const { data: jobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery<TseImportJob[]>({
     queryKey: ["/api/imports/tse"],
@@ -89,6 +154,43 @@ export default function TseImport() {
   const { data: jobErrors } = useQuery<TseImportError[]>({
     queryKey: ["/api/imports/tse", errorsDialogJob?.id, "errors"],
     enabled: !!errorsDialogJob,
+  });
+
+  const { data: validationStatus, refetch: refetchValidation, isLoading: validationLoading } = useQuery<ValidationStatus>({
+    queryKey: ["/api/imports/tse", validationDialogJob?.id, "validation"],
+    enabled: !!validationDialogJob,
+  });
+
+  const { data: validationIssues, isLoading: issuesLoading } = useQuery<ValidationIssue[]>({
+    queryKey: ["/api/validation-runs", validationStatus?.runId, "issues"],
+    enabled: !!validationStatus?.runId,
+  });
+
+  const runValidationMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      setValidatingJobId(jobId);
+      const response = await apiRequest("POST", `/api/imports/tse/${jobId}/validation/run`);
+      return response.json();
+    },
+    onSuccess: async (_, jobId) => {
+      toast({ 
+        title: "Validação concluída", 
+        description: "A análise dos dados foi realizada com sucesso." 
+      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/imports/tse", jobId, "validation"] });
+      if (validationDialogJob?.id === jobId) {
+        await refetchValidation();
+      }
+      setValidatingJobId(null);
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro na validação", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+      setValidatingJobId(null);
+    },
   });
 
   const uploadMutation = useMutation({
@@ -611,6 +713,7 @@ export default function TseImport() {
                   <TableHead>Status</TableHead>
                   <TableHead>Progresso</TableHead>
                   <TableHead>Erros</TableHead>
+                  <TableHead>Validação</TableHead>
                   <TableHead>Criado em</TableHead>
                 </TableRow>
               </TableHeader>
@@ -640,6 +743,36 @@ export default function TseImport() {
                         </Button>
                       ) : (
                         <span className="text-sm text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {job.status === "completed" ? (
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setValidationDialogJob(job)}
+                            data-testid={`button-view-validation-${job.id}`}
+                          >
+                            <ShieldCheck className="h-4 w-4 mr-1" />
+                            Ver
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => runValidationMutation.mutate(job.id)}
+                            disabled={validatingJobId === job.id}
+                            data-testid={`button-run-validation-${job.id}`}
+                          >
+                            {validatingJobId === job.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Validar"
+                            )}
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -696,6 +829,250 @@ export default function TseImport() {
             <p className="text-sm text-muted-foreground">
               Mostrando os primeiros 100 erros de {jobErrors.length} total.
             </p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!validationDialogJob} onOpenChange={(open) => !open && setValidationDialogJob(null)}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" />
+              Validação de Dados
+            </DialogTitle>
+            <DialogDescription>
+              Arquivo: {validationDialogJob?.filename} | Ano: {validationDialogJob?.electionYear || "-"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {validationLoading || validatingJobId === validationDialogJob?.id ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-12 w-12 animate-spin text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">
+                {validatingJobId === validationDialogJob?.id ? "Executando validação com IA..." : "Carregando resultados..."}
+              </p>
+            </div>
+          ) : validationStatus?.hasValidation ? (
+            <div className="space-y-6">
+              {validationStatus.aiAnalysis?.overallDataQuality && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center justify-between">
+                      <span>Qualidade dos Dados</span>
+                      <Badge 
+                        variant={
+                          validationStatus.aiAnalysis.overallDataQuality.score >= 80 ? "default" :
+                          validationStatus.aiAnalysis.overallDataQuality.score >= 60 ? "secondary" :
+                          "destructive"
+                        }
+                        className="text-lg px-3"
+                      >
+                        {validationStatus.aiAnalysis.overallDataQuality.score}/100
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm">{validationStatus.aiAnalysis.overallDataQuality.assessment}</p>
+                    
+                    {validationStatus.aiAnalysis.overallDataQuality.keyFindings.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2 flex items-center gap-1">
+                          <Info className="h-4 w-4" />
+                          Principais Descobertas
+                        </h4>
+                        <ul className="list-disc list-inside text-sm space-y-1">
+                          {validationStatus.aiAnalysis.overallDataQuality.keyFindings.map((finding, i) => (
+                            <li key={i}>{finding}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {validationStatus.aiAnalysis.overallDataQuality.risksIdentified.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2 flex items-center gap-1 text-destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          Riscos Identificados
+                        </h4>
+                        <ul className="list-disc list-inside text-sm space-y-1">
+                          {validationStatus.aiAnalysis.overallDataQuality.risksIdentified.map((risk, i) => (
+                            <li key={i}>{risk}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid gap-4 grid-cols-3">
+                <Card>
+                  <CardContent className="pt-4 text-center">
+                    <p className="text-3xl font-bold">{validationStatus.totalRecordsChecked?.toLocaleString("pt-BR")}</p>
+                    <p className="text-sm text-muted-foreground">Registros Verificados</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 text-center">
+                    <p className="text-3xl font-bold">{validationStatus.issuesFound || 0}</p>
+                    <p className="text-sm text-muted-foreground">Problemas Encontrados</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 text-center">
+                    <p className="text-3xl font-bold">
+                      {validationStatus.summary?.bySeverity?.["error"] || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground text-destructive">Erros Críticos</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {validationStatus.summary && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Por Severidade</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(validationStatus.summary.bySeverity).map(([sev, count]) => (
+                          <Badge 
+                            key={sev} 
+                            variant={sev === "error" ? "destructive" : sev === "warning" ? "secondary" : "outline"}
+                          >
+                            {sev}: {count}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Por Tipo</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(validationStatus.summary.byType).slice(0, 6).map(([type, count]) => (
+                          <Badge key={type} variant="outline">
+                            {type.replace(/_/g, " ")}: {count}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {validationStatus.aiAnalysis?.analysis && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Análise com IA</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm whitespace-pre-wrap">{validationStatus.aiAnalysis.analysis}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {validationIssues && validationIssues.length > 0 && (
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="issues">
+                    <AccordionTrigger>
+                      Ver Todos os Problemas ({validationIssues.length})
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Severidade</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Mensagem</TableHead>
+                            <TableHead>Sugestão</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {validationIssues.slice(0, 50).map((issue) => (
+                            <TableRow key={issue.id}>
+                              <TableCell>
+                                <Badge variant={
+                                  issue.severity === "error" ? "destructive" : 
+                                  issue.severity === "warning" ? "secondary" : "outline"
+                                }>
+                                  {issue.severity}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {issue.type.replace(/_/g, " ")}
+                              </TableCell>
+                              <TableCell className="text-sm max-w-xs truncate" title={issue.message}>
+                                {issue.message}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={issue.suggestedFix?.reasoning}>
+                                {issue.suggestedFix?.reasoning || "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      {validationIssues.length > 50 && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Mostrando os primeiros 50 de {validationIssues.length} problemas.
+                        </p>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+
+              {validationStatus.aiAnalysis?.recommendations && validationStatus.aiAnalysis.recommendations.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Recomendações</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {validationStatus.aiAnalysis.recommendations.map((rec, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <Badge variant={
+                            rec.severity === "error" ? "destructive" : 
+                            rec.severity === "warning" ? "secondary" : "outline"
+                          } className="mt-0.5 shrink-0">
+                            {rec.severity}
+                          </Badge>
+                          <div>
+                            <p className="font-medium">{rec.issue}</p>
+                            <p className="text-muted-foreground">{rec.suggestedAction}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <ShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground mb-4">
+                Nenhuma validação foi executada para esta importação.
+              </p>
+              <Button
+                onClick={() => {
+                  if (validationDialogJob) {
+                    runValidationMutation.mutate(validationDialogJob.id);
+                  }
+                }}
+                disabled={runValidationMutation.isPending}
+                data-testid="button-run-validation-dialog"
+              >
+                {runValidationMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Validando...</>
+                ) : (
+                  <><ShieldCheck className="h-4 w-4 mr-2" />Executar Validação com IA</>
+                )}
+              </Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>
