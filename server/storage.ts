@@ -18,6 +18,8 @@ import {
   type SavedReport, type InsertSavedReport, savedReports,
   type AiPrediction, aiPredictions,
   type ProjectionReportRecord, type InsertProjectionReport, projectionReports,
+  type ValidationRunRecord, type InsertValidationRun, importValidationRuns,
+  type ValidationIssueRecord, type InsertValidationIssue, importValidationIssues,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -125,6 +127,20 @@ export interface IStorage {
   getAiPrediction(cacheKey: string): Promise<AiPrediction | undefined>;
   saveAiPrediction(data: { cacheKey: string; predictionType: string; prediction: unknown; expiresAt: Date }): Promise<AiPrediction>;
   deleteExpiredAiPredictions(): Promise<number>;
+
+  // Validation methods
+  createValidationRun(data: InsertValidationRun): Promise<ValidationRunRecord>;
+  getValidationRun(id: number): Promise<ValidationRunRecord | undefined>;
+  getValidationRunByJobId(jobId: number): Promise<ValidationRunRecord | undefined>;
+  getValidationRunsForJob(jobId: number): Promise<ValidationRunRecord[]>;
+  updateValidationRun(id: number, data: Partial<InsertValidationRun>): Promise<ValidationRunRecord | undefined>;
+  
+  createValidationIssue(data: InsertValidationIssue): Promise<ValidationIssueRecord>;
+  createValidationIssues(data: InsertValidationIssue[]): Promise<ValidationIssueRecord[]>;
+  getValidationIssuesForRun(runId: number, filters?: { type?: string; severity?: string; status?: string }): Promise<ValidationIssueRecord[]>;
+  getValidationIssue(id: number): Promise<ValidationIssueRecord | undefined>;
+  updateValidationIssue(id: number, data: Partial<InsertValidationIssue>): Promise<ValidationIssueRecord | undefined>;
+  getValidationIssueCounts(runId: number): Promise<{ type: string; severity: string; count: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1351,6 +1367,111 @@ export class DatabaseStorage implements IStorage {
       .delete(projectionReports)
       .where(eq(projectionReports.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // Validation Run methods
+  async createValidationRun(data: InsertValidationRun): Promise<ValidationRunRecord> {
+    const [run] = await db.insert(importValidationRuns).values(data).returning();
+    return run;
+  }
+
+  async getValidationRun(id: number): Promise<ValidationRunRecord | undefined> {
+    const [run] = await db
+      .select()
+      .from(importValidationRuns)
+      .where(eq(importValidationRuns.id, id));
+    return run;
+  }
+
+  async getValidationRunByJobId(jobId: number): Promise<ValidationRunRecord | undefined> {
+    const [run] = await db
+      .select()
+      .from(importValidationRuns)
+      .where(eq(importValidationRuns.jobId, jobId))
+      .orderBy(desc(importValidationRuns.createdAt))
+      .limit(1);
+    return run;
+  }
+
+  async getValidationRunsForJob(jobId: number): Promise<ValidationRunRecord[]> {
+    return db
+      .select()
+      .from(importValidationRuns)
+      .where(eq(importValidationRuns.jobId, jobId))
+      .orderBy(desc(importValidationRuns.createdAt));
+  }
+
+  async updateValidationRun(id: number, data: Partial<InsertValidationRun>): Promise<ValidationRunRecord | undefined> {
+    const [updated] = await db
+      .update(importValidationRuns)
+      .set(data)
+      .where(eq(importValidationRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Validation Issue methods
+  async createValidationIssue(data: InsertValidationIssue): Promise<ValidationIssueRecord> {
+    const [issue] = await db.insert(importValidationIssues).values(data).returning();
+    return issue;
+  }
+
+  async createValidationIssues(data: InsertValidationIssue[]): Promise<ValidationIssueRecord[]> {
+    if (data.length === 0) return [];
+    return db.insert(importValidationIssues).values(data).returning();
+  }
+
+  async getValidationIssuesForRun(
+    runId: number, 
+    filters?: { type?: string; severity?: string; status?: string }
+  ): Promise<ValidationIssueRecord[]> {
+    const conditions: SQL[] = [eq(importValidationIssues.runId, runId)];
+    
+    if (filters?.type) {
+      conditions.push(eq(importValidationIssues.type, filters.type));
+    }
+    if (filters?.severity) {
+      conditions.push(eq(importValidationIssues.severity, filters.severity));
+    }
+    if (filters?.status) {
+      conditions.push(eq(importValidationIssues.status, filters.status));
+    }
+    
+    return db
+      .select()
+      .from(importValidationIssues)
+      .where(and(...conditions))
+      .orderBy(desc(importValidationIssues.createdAt));
+  }
+
+  async getValidationIssue(id: number): Promise<ValidationIssueRecord | undefined> {
+    const [issue] = await db
+      .select()
+      .from(importValidationIssues)
+      .where(eq(importValidationIssues.id, id));
+    return issue;
+  }
+
+  async updateValidationIssue(id: number, data: Partial<InsertValidationIssue>): Promise<ValidationIssueRecord | undefined> {
+    const [updated] = await db
+      .update(importValidationIssues)
+      .set(data)
+      .where(eq(importValidationIssues.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getValidationIssueCounts(runId: number): Promise<{ type: string; severity: string; count: number }[]> {
+    const result = await db
+      .select({
+        type: importValidationIssues.type,
+        severity: importValidationIssues.severity,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(importValidationIssues)
+      .where(eq(importValidationIssues.runId, runId))
+      .groupBy(importValidationIssues.type, importValidationIssues.severity);
+    return result;
   }
 }
 
