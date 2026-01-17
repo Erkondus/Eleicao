@@ -693,14 +693,14 @@ export default function ForecastsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="targetPosition">Cargo (opcional)</Label>
                   <Select
-                    value={newForecast.targetPosition}
-                    onValueChange={(value) => setNewForecast({ ...newForecast, targetPosition: value })}
+                    value={newForecast.targetPosition || "_all"}
+                    onValueChange={(value) => setNewForecast({ ...newForecast, targetPosition: value === "_all" ? "" : value })}
                   >
                     <SelectTrigger data-testid="select-forecast-position">
                       <SelectValue placeholder="Todos os cargos" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos os cargos</SelectItem>
+                      <SelectItem value="_all">Todos os cargos</SelectItem>
                       {POSITIONS.map((pos) => (
                         <SelectItem key={pos.value} value={pos.value}>{pos.label}</SelectItem>
                       ))}
@@ -710,14 +710,14 @@ export default function ForecastsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="targetState">Estado (opcional)</Label>
                   <Select
-                    value={newForecast.targetState}
-                    onValueChange={(value) => setNewForecast({ ...newForecast, targetState: value })}
+                    value={newForecast.targetState || "_all"}
+                    onValueChange={(value) => setNewForecast({ ...newForecast, targetState: value === "_all" ? "" : value })}
                   >
                     <SelectTrigger data-testid="select-forecast-state">
                       <SelectValue placeholder="Nacional (todos os estados)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nacional</SelectItem>
+                      <SelectItem value="_all">Nacional</SelectItem>
                       {Object.entries(BRAZIL_STATES).map(([code, name]) => (
                         <SelectItem key={code} value={code}>{name}</SelectItem>
                       ))}
