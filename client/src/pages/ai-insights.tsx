@@ -176,14 +176,14 @@ export default function AIInsightsPage() {
             <div>
               <Label>Ano Base</Label>
               <Select
-                value={filters.year?.toString() || ""}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, year: value ? parseInt(value) : undefined }))}
+                value={filters.year?.toString() || "_all"}
+                onValueChange={(value) => setFilters((prev) => ({ ...prev, year: value && value !== "_all" ? parseInt(value) : undefined }))}
               >
                 <SelectTrigger data-testid="select-year">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="_all">Todos</SelectItem>
                   {availableYears?.map((year) => (
                     <SelectItem key={year} value={year.toString()}>
                       {year}
@@ -196,14 +196,14 @@ export default function AIInsightsPage() {
             <div>
               <Label>Estado</Label>
               <Select
-                value={filters.uf || ""}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, uf: value || undefined }))}
+                value={filters.uf || "_all"}
+                onValueChange={(value) => setFilters((prev) => ({ ...prev, uf: value && value !== "_all" ? value : undefined }))}
               >
                 <SelectTrigger data-testid="select-state">
                   <SelectValue placeholder="Nacional" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nacional</SelectItem>
+                  <SelectItem value="_all">Nacional</SelectItem>
                   {Object.entries(BRAZIL_STATES).map(([code, name]) => (
                     <SelectItem key={code} value={code}>
                       {code} - {name}
@@ -216,14 +216,14 @@ export default function AIInsightsPage() {
             <div>
               <Label>Partido</Label>
               <Select
-                value={filters.party || ""}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, party: value || undefined }))}
+                value={filters.party || "_all"}
+                onValueChange={(value) => setFilters((prev) => ({ ...prev, party: value && value !== "_all" ? value : undefined }))}
               >
                 <SelectTrigger data-testid="select-party">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="_all">Todos</SelectItem>
                   {availableParties?.map((party) => (
                     <SelectItem key={party.abbreviation} value={party.abbreviation}>
                       {party.abbreviation}
@@ -236,14 +236,14 @@ export default function AIInsightsPage() {
             <div>
               <Label>Tipo de Eleição</Label>
               <Select
-                value={filters.electionType || ""}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, electionType: value || undefined }))}
+                value={filters.electionType || "_all"}
+                onValueChange={(value) => setFilters((prev) => ({ ...prev, electionType: value && value !== "_all" ? value : undefined }))}
               >
                 <SelectTrigger data-testid="select-election-type">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="_all">Todos</SelectItem>
                   <SelectItem value="Eleições Gerais">Eleições Gerais</SelectItem>
                   <SelectItem value="Eleições Municipais">Eleições Municipais</SelectItem>
                 </SelectContent>
