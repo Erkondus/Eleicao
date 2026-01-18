@@ -16,6 +16,8 @@ RUN apk add --no-cache dumb-init
 
 ENV NODE_ENV=production
 ENV PORT=5000
+# Force IPv4 DNS resolution to fix ENETUNREACH errors with cloud databases
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
