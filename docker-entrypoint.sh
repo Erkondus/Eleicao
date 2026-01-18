@@ -16,11 +16,10 @@ if [ -z "$SESSION_SECRET" ]; then
   exit 1
 fi
 
-echo "Running database migrations..."
-npm run db:push || {
-  echo "WARNING: Database migration failed, continuing anyway..."
-  echo "Make sure to run init-db.sql manually if this is a fresh database"
-}
+# Skip db:push - use init-db.sql manually in Supabase SQL Editor
+# This avoids IPv6 connectivity issues with drizzle-kit
+echo "Database migrations should be run manually via init-db.sql"
+echo "See DEPLOY.md for instructions"
 
 echo "Starting application..."
 exec npm start
