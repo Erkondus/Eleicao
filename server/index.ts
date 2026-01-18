@@ -60,6 +60,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize database with IPv4 resolution for production
+  const { initializeDatabase } = await import("./db");
+  await initializeDatabase();
+  
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
