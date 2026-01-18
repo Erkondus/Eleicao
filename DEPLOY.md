@@ -302,27 +302,31 @@ NODE_OPTIONS=--dns-result-order=ipv4first
 **Causa**: O container Docker não consegue resolver nomes DNS externos
 **Sintoma**: Logs mostram `getaddrinfo ENOTFOUND db.xxx.supabase.co`
 
-**Solução 1 - Rede Coolify (Recomendado)**:
-O `docker-compose.yaml` já está configurado para usar a rede `coolify` com `external: true`, que tem DNS configurado.
+**Solução Automática (já implementada)**:
+A aplicação agora usa DNS-over-HTTPS (Cloudflare 1.1.1.1) como fallback quando o DNS do sistema falha. Os logs devem mostrar:
+```
+System DNS failed for db.xxx.supabase.co, trying DoH...
+DoH resolved db.xxx.supabase.co to: 1.2.3.4
+```
 
 Se ainda não funcionar:
 
-**Solução 2 - Habilitar "Connect to Predefined Network" no Coolify**:
+**Solução 1 - Habilitar "Connect to Predefined Network" no Coolify**:
 1. Vá nas configurações do serviço no Coolify
 2. Em "Networks", habilite "Connect to Predefined Network"
 3. Redeploy a aplicação
 
-**Solução 3 - Usar IP direto no DATABASE_URL**:
+**Solução 2 - Usar IP direto no DATABASE_URL**:
 1. Obtenha o IP do Supabase: `nslookup db.xxx.supabase.co`
 2. Use o IP na connection string:
    ```
    postgresql://postgres:senha@IP_AQUI:5432/postgres
    ```
 
-**Solução 4 - Adicionar DNS no Coolify**:
-Nas configurações avançadas do Coolify, adicione DNS servers:
-- `8.8.8.8` (Google DNS)
-- `1.1.1.1` (Cloudflare DNS)
+**Solução 3 - Usar Connection Pooler do Supabase**:
+Use a URL do connection pooler em vez da direta:
+1. No Supabase, vá em Settings → Database → Connection Pooler
+2. Copie a URL que usa `pooler.supabase.com` em vez de `db.xxx.supabase.co`
 
 ---
 
