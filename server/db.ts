@@ -3,6 +3,7 @@ import pg from "pg";
 import * as schema from "@shared/schema";
 import dns from "dns";
 import { promisify } from "util";
+import https from "https";
 
 // Force IPv4 DNS resolution globally
 dns.setDefaultResultOrder("ipv4first");
@@ -15,7 +16,44 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Resolve hostname to IPv4 for cloud databases that only return IPv6
+// Resolve hostname using DNS-over-HTTPS (Cloudflare) - works when system DNS is blocked
+async function resolveViaDoH(hostname: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const url = `https://1.1.1.1/dns-query?name=${encodeURIComponent(hostname)}&type=A`;
+    
+    const req = https.get(url, { 
+      headers: { 'Accept': 'application/dns-json' },
+      timeout: 5000
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.Answer && json.Answer.length > 0) {
+            const aRecord = json.Answer.find((a: any) => a.type === 1);
+            if (aRecord) {
+              console.log(`DoH resolved ${hostname} to: ${aRecord.data}`);
+              resolve(aRecord.data);
+              return;
+            }
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+        resolve(null);
+      });
+    });
+    
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+
+// Resolve hostname to IPv4 - tries system DNS first, then DoH
 async function resolveToIPv4(connectionString: string): Promise<string> {
   try {
     const url = new URL(connectionString);
@@ -26,16 +64,29 @@ async function resolveToIPv4(connectionString: string): Promise<string> {
       return connectionString;
     }
     
+    // Try system DNS first
     const lookup = promisify(dns.lookup);
-    const result = await lookup(hostname, { family: 4 });
+    try {
+      const result = await lookup(hostname, { family: 4 });
+      if (result.address) {
+        url.hostname = result.address;
+        console.log(`System DNS resolved ${hostname} to: ${result.address}`);
+        return url.toString();
+      }
+    } catch (dnsErr) {
+      console.log(`System DNS failed for ${hostname}, trying DoH...`);
+    }
     
-    if (result.address) {
-      url.hostname = result.address;
-      console.log(`Resolved ${hostname} to IPv4: ${result.address}`);
+    // Fallback to DNS-over-HTTPS
+    const dohResult = await resolveViaDoH(hostname);
+    if (dohResult) {
+      url.hostname = dohResult;
       return url.toString();
     }
+    
+    console.warn(`All DNS resolution methods failed for ${hostname}`);
   } catch (err) {
-    console.warn("IPv4 resolution failed, using original URL:", err);
+    console.warn("DNS resolution failed:", err);
   }
   
   return connectionString;
@@ -67,7 +118,7 @@ export async function initializeDatabase(): Promise<void> {
       db = drizzle(pool, { schema });
       console.log("Database pool initialized with IPv4 resolution");
     } catch (err) {
-      console.error("Failed to initialize IPv4 database pool:", err);
+      console.error("Failed to initialize database pool:", err);
       throw err;
     }
   }
