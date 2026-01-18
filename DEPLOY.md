@@ -274,6 +274,29 @@ chmod +x docker-entrypoint.sh
 2. Verifique os logs
 3. Aumente o timeout de health check
 
+### Erro: ENETUNREACH ao conectar ao banco
+
+**Causa**: O servidor está tentando conectar via IPv6 mas a rede não suporta
+**Sintoma**: Logs mostram erro `ENETUNREACH` com endereço IPv6 (ex: `2600:1f1e:...`)
+
+**Solução 1 - Automática (já implementada)**:
+O docker-entrypoint.sh já força IPv4 com:
+```sh
+export NODE_OPTIONS="--dns-result-order=ipv4first"
+```
+
+**Solução 2 - Connection String IPv4**:
+Use a connection string com host IPv4 direto do Supabase:
+1. No Supabase, vá em Settings → Database
+2. Use "Direct connection" em vez de "Session pooler"
+3. Ou adicione `?options=-c%20prefer_ipv4=true` à URL
+
+**Solução 3 - Adicionar variável no Coolify**:
+Adicione esta variável de ambiente:
+```
+NODE_OPTIONS=--dns-result-order=ipv4first
+```
+
 ---
 
 ## Credenciais Padrão
