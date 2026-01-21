@@ -1,6 +1,14 @@
 # SimulaVoto - Guia de Deploy
 
-Este guia explica como fazer deploy do SimulaVoto no Coolify com Supabase como banco de dados.
+Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dados.
+
+## Opções de Deploy
+
+| Plataforma | Guia |
+|------------|------|
+| **Portainer** (Recomendado) | [DEPLOY-PORTAINER.md](./DEPLOY-PORTAINER.md) |
+| **Coolify** | Este documento |
+| **Docker direto** | Seção [Deploy Local com Docker](#deploy-local-com-docker) |
 
 ## Índice
 
@@ -17,7 +25,7 @@ Este guia explica como fazer deploy do SimulaVoto no Coolify com Supabase como b
 ## Pré-requisitos
 
 - Conta no [Supabase](https://supabase.com) (gratuito para começar)
-- Servidor com [Coolify](https://coolify.io) instalado
+- Servidor com [Coolify](https://coolify.io) ou [Portainer](https://www.portainer.io/)
 - Chave de API do OpenAI (para recursos de IA)
 - Git repository com o código fonte
 

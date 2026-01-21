@@ -1,7 +1,8 @@
 version: '3.8'
 
 services:
-  app:
+  simulavoto:
+    container_name: simulavoto
     build:
       context: .
       dockerfile: Dockerfile
@@ -13,18 +14,22 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - SESSION_SECRET=${SESSION_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    # DNS servers for external hostname resolution
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     dns:
       - 8.8.8.8
-      - 8.8.4.4
       - 1.1.1.1
-    # For Linux Docker, add host.docker.internal support
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
-    networks:
-      - coolify
-
-networks:
-  coolify:
-    external: true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simulavoto.rule=Host(`${DOMAIN:-simulavoto.localhost}`)"
+      - "traefik.http.routers.simulavoto.entrypoints=websecure"
+      - "traefik.http.routers.simulavoto.tls.certresolver=letsencrypt"
+      - "traefik.http.services.simulavoto.loadbalancer.server.port=5000"
