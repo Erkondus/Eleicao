@@ -103,40 +103,96 @@ function buildPoolConfig(connectionString: string): pg.PoolConfig {
   return config;
 }
 
-// Initial pool with original URL (for development/local)
-const initialConfig = buildPoolConfig(process.env.DATABASE_URL!);
-export let pool: pg.Pool = new Pool(initialConfig);
-export let db: NodePgDatabase<typeof schema> = drizzle(pool, { schema });
+// Database state - initialized lazily
+let _pool: pg.Pool | null = null;
+let _db: NodePgDatabase<typeof schema> | null = null;
+let _initialized = false;
 
-// Initialize with IPv4-resolved URL for production
+// Getter for pool - ensures initialization
+export function getPool(): pg.Pool {
+  if (!_pool) {
+    throw new Error("Database not initialized. Call initializeDatabase() first.");
+  }
+  return _pool;
+}
+
+// Getter for db - ensures initialization  
+export function getDb(): NodePgDatabase<typeof schema> {
+  if (!_db) {
+    throw new Error("Database not initialized. Call initializeDatabase() first.");
+  }
+  return _db;
+}
+
+// Legacy exports - use proxy object that always gets current db
+export const db = new Proxy({} as NodePgDatabase<typeof schema>, {
+  get(_target, prop) {
+    const currentDb = _db;
+    if (!currentDb) {
+      throw new Error("Database not initialized. Call initializeDatabase() first.");
+    }
+    const value = (currentDb as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(currentDb);
+    }
+    return value;
+  }
+});
+
+export const pool = new Proxy({} as pg.Pool, {
+  get(_target, prop) {
+    const currentPool = _pool;
+    if (!currentPool) {
+      throw new Error("Database pool not initialized. Call initializeDatabase() first.");
+    }
+    const value = (currentPool as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(currentPool);
+    }
+    return value;
+  }
+});
+
+// Initialize database - MUST be called before any database operations
 export async function initializeDatabase(): Promise<void> {
+  if (_initialized) {
+    console.log("Database already initialized, skipping...");
+    return;
+  }
+  
   console.log("Starting database initialization...");
   console.log("NODE_ENV:", process.env.NODE_ENV);
   console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
   
-  if (process.env.NODE_ENV === "production") {
-    try {
+  try {
+    let connectionUrl = process.env.DATABASE_URL!;
+    
+    if (process.env.NODE_ENV === "production") {
       console.log("Resolving database hostname to IPv4...");
-      const resolvedUrl = await resolveToIPv4(process.env.DATABASE_URL!);
-      console.log("Creating pool with resolved URL...");
-      const config = buildPoolConfig(resolvedUrl);
-      pool = new Pool(config);
-      db = drizzle(pool, { schema });
-      console.log("Database pool initialized with IPv4 resolution");
-    } catch (err) {
-      console.error("Failed to initialize database pool:", err);
-      throw err;
+      connectionUrl = await resolveToIPv4(connectionUrl);
     }
-  } else {
-    console.log("Development mode - using default pool");
+    
+    console.log("Creating database pool...");
+    const config = buildPoolConfig(connectionUrl);
+    _pool = new Pool(config);
+    _db = drizzle(_pool, { schema });
+    _initialized = true;
+    console.log("Database pool initialized successfully");
+  } catch (err) {
+    console.error("Failed to initialize database pool:", err);
+    throw err;
   }
 }
 
 // Test database connection
 export async function testConnection(): Promise<boolean> {
+  if (!_pool) {
+    throw new Error("Database not initialized");
+  }
+  
   try {
     console.log("Testing database connection...");
-    const client = await pool.connect();
+    const client = await _pool.connect();
     await client.query("SELECT 1");
     client.release();
     console.log("Database connection test successful!");
