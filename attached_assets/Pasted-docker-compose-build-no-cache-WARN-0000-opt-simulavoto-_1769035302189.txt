@@ -1,0 +1,332 @@
+docker compose build --no-cache
+WARN[0000] /opt/simulavoto/docker-compose.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
+[+] Building 180.4s (23/23) FINISHED
+ => [internal] load local bake definitions                                                                      0.0s 
+ => => reading from stdin 528B                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                            0.0s
+ => => transferring dockerfile: 1.09kB                                                                          0.0s 
+ => [internal] load metadata for docker.io/library/node:20-alpine                                               0.0s 
+ => [internal] load .dockerignore                                                                               0.0s 
+ => => transferring context: 150B                                                                               0.0s 
+ => [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081  0.0s 
+ => => resolve docker.io/library/node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081d2f60fd7  0.0s 
+ => [internal] load build context                                                                               0.0s 
+ => => transferring context: 849.68kB                                                                           0.0s
+ => CACHED [builder 2/6] WORKDIR /app                                                                           0.0s 
+ => [runner  3/12] RUN apk add --no-cache dumb-init                                                             0.9s 
+ => [builder 3/6] COPY package*.json ./                                                                         0.0s 
+ => [builder 4/6] RUN npm ci                                                                                   14.6s
+ => [builder 5/6] COPY . .                                                                                      0.4s
+ => [builder 6/6] RUN npm run build                                                                            16.8s 
+ => [runner  4/12] COPY --from=builder /app/dist ./dist                                                         0.1s
+ => [runner  5/12] COPY --from=builder /app/package*.json ./                                                    0.6s 
+ => [runner  6/12] COPY --from=builder /app/drizzle.config.ts ./                                                0.1s 
+ => [runner  7/12] COPY --from=builder /app/shared ./shared                                                     0.1s 
+ => [runner  8/12] COPY --from=builder /app/server ./server                                                     0.1s 
+ => [runner  9/12] COPY --from=builder /app/node_modules ./node_modules                                         5.2s 
+ => [runner 10/12] COPY docker-entrypoint.sh ./                                                                 0.3s 
+ => [runner 11/12] RUN addgroup --system --gid 1001 nodejs &&     adduser --system --uid 1001 expressjs &&     78.3s 
+ => [runner 12/12] RUN chmod +x docker-entrypoint.sh                                                            0.5s
+ => exporting to image                                                                                         52.5s 
+ => => exporting layers                                                                                        19.4s 
+ => => exporting manifest sha256:459ce17a0eb1bfeb6abbd51eeab705515040ecce008ee58cf210b90284841ce6               0.0s 
+ => => exporting config sha256:adbf9d5c3d4571aa2ca8da9be64f7616f7a4f65bbe3266a772e115e41882adb8                 0.0s 
+ => => exporting attestation manifest sha256:f3672345a31c637c713859b09587d58117f01cdddd3eed8ebae9dfd353faf7a5   0.0s 
+ => => exporting manifest list sha256:c8ae484b5cfd21f7f0f859ecd4ff2216f406707fbd5267b752aec746bfaac54e          0.0s 
+ => => naming to docker.io/library/simulavoto-simulavoto:latest                                                 0.0s 
+ => => unpacking to docker.io/library/simulavoto-simulavoto:latest                                             32.9s 
+ => resolving provenance for metadata file                                                                      0.0s 
+[+] build 1/1
+ ✔ Image simulavoto-simulavoto Built                                                                           180.5s
+root@worker1:/opt/simulavoto# docker compose up -d
+WARN[0000] /opt/simulavoto/docker-compose.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
+[+] up 1/1
+ ✔ Container simulavoto Recreated                                                                                2.7s
+root@worker1:/opt/simulavoto# docker compose logs -f
+WARN[0000] /opt/simulavoto/docker-compose.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | npm notice
+simulavoto  | npm notice New major version of npm available! 10.8.2 -> 11.7.0
+simulavoto  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.7.0
+simulavoto  | npm notice To update run: npm install -g npm@11.7.0
+simulavoto  | npm notice
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ECONNREFUSED 127.0.0.1:5432
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -111,
+simulavoto  |   code: 'ECONNREFUSED',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '127.0.0.1',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto exited with code 1 (restarting)

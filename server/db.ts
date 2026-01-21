@@ -164,16 +164,36 @@ export async function initializeDatabase(): Promise<void> {
   console.log("NODE_ENV:", process.env.NODE_ENV);
   console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
   
+  // Debug: show masked URL to verify format
+  const rawUrl = process.env.DATABASE_URL || "";
+  try {
+    const urlObj = new URL(rawUrl);
+    console.log("DATABASE_URL host:", urlObj.hostname);
+    console.log("DATABASE_URL port:", urlObj.port || "5432 (default)");
+    console.log("DATABASE_URL protocol:", urlObj.protocol);
+  } catch (e) {
+    console.error("DATABASE_URL is not a valid URL:", rawUrl.substring(0, 30) + "...");
+  }
+  
   try {
     let connectionUrl = process.env.DATABASE_URL!;
     
     if (process.env.NODE_ENV === "production") {
       console.log("Resolving database hostname to IPv4...");
       connectionUrl = await resolveToIPv4(connectionUrl);
+      
+      // Show resolved URL info
+      try {
+        const resolvedUrlObj = new URL(connectionUrl);
+        console.log("Resolved host:", resolvedUrlObj.hostname);
+      } catch (e) {
+        console.log("Could not parse resolved URL");
+      }
     }
     
     console.log("Creating database pool...");
     const config = buildPoolConfig(connectionUrl);
+    console.log("Pool config SSL:", config.ssl ? "enabled" : "disabled");
     _pool = new Pool(config);
     _db = drizzle(_pool, { schema });
     _initialized = true;
