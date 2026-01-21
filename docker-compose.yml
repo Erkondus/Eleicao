@@ -27,9 +27,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.simulavoto.rule=Host(`${DOMAIN:-simulavoto.localhost}`)"
-      - "traefik.http.routers.simulavoto.entrypoints=websecure"
-      - "traefik.http.routers.simulavoto.tls.certresolver=letsencrypt"
-      - "traefik.http.services.simulavoto.loadbalancer.server.port=5000"

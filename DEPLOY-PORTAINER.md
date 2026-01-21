@@ -104,36 +104,41 @@ Clique em **Deploy the stack**
 
 ---
 
-## 4. Configurar Proxy Reverso
+## 4. Configurar Nginx Proxy Manager
 
-### Opção A: Com Traefik (labels já configuradas)
-O docker-compose já tem labels Traefik. Certifique-se de ter:
-- Traefik rodando
-- Rede do Traefik acessível
-- Resolver `letsencrypt` configurado
+### 4.1 Adicionar Proxy Host
 
-Adicione à rede do Traefik editando o docker-compose:
-```yaml
-services:
-  simulavoto:
-    # ... resto da config
-    networks:
-      - traefik
+1. Acesse o painel do **Nginx Proxy Manager**
+2. Vá em **Hosts** → **Proxy Hosts** → **Add Proxy Host**
 
-networks:
-  traefik:
-    external: true
-```
+### 4.2 Configurar o Host
 
-### Opção B: Com Nginx Proxy Manager
-1. No Nginx Proxy Manager, adicione **Proxy Host**
-2. **Domain Names**: `simulavoto.seudominio.com`
-3. **Scheme**: `http`
-4. **Forward Hostname/IP**: `simulavoto` ou IP do container
-5. **Forward Port**: `5000`
-6. **SSL**: Request a new SSL certificate
+**Aba Details:**
+| Campo | Valor |
+|-------|-------|
+| Domain Names | `simulavoto.seudominio.com` |
+| Scheme | `http` |
+| Forward Hostname/IP | `simulavoto` (nome do container) ou `IP_DO_SERVIDOR` |
+| Forward Port | `5000` |
+| Cache Assets | ✅ (opcional) |
+| Block Common Exploits | ✅ |
+| Websockets Support | ✅ |
 
-### Opção C: Acesso Direto (sem proxy)
+### 4.3 Configurar SSL
+
+**Aba SSL:**
+| Campo | Valor |
+|-------|-------|
+| SSL Certificate | Request a new SSL Certificate |
+| Force SSL | ✅ |
+| HTTP/2 Support | ✅ |
+| HSTS Enabled | ✅ (opcional) |
+| Email | seu@email.com |
+| I Agree... | ✅ |
+
+Clique em **Save**.
+
+### 4.4 Alternativa: Acesso Direto (sem proxy)
 Acesse: `http://IP_DO_SERVIDOR:5000`
 
 ---
