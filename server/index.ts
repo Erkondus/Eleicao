@@ -62,16 +62,15 @@ app.use((req, res, next) => {
 (async () => {
   try {
     // Initialize database with IPv4 resolution for production
-    const { initializeDatabase, db } = await import("./db");
+    const { initializeDatabase, testConnection } = await import("./db");
     await initializeDatabase();
     
     // Test database connection
-    console.log("Testing database connection...");
-    const { sql } = await import("drizzle-orm");
-    await db.execute(sql`SELECT 1`);
-    console.log("Database connection successful!");
+    await testConnection();
     
+    console.log("Registering routes...");
     await registerRoutes(httpServer, app);
+    console.log("Routes registered successfully!");
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

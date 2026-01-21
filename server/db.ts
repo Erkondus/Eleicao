@@ -110,9 +110,15 @@ export let db: NodePgDatabase<typeof schema> = drizzle(pool, { schema });
 
 // Initialize with IPv4-resolved URL for production
 export async function initializeDatabase(): Promise<void> {
+  console.log("Starting database initialization...");
+  console.log("NODE_ENV:", process.env.NODE_ENV);
+  console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
+  
   if (process.env.NODE_ENV === "production") {
     try {
+      console.log("Resolving database hostname to IPv4...");
       const resolvedUrl = await resolveToIPv4(process.env.DATABASE_URL!);
+      console.log("Creating pool with resolved URL...");
       const config = buildPoolConfig(resolvedUrl);
       pool = new Pool(config);
       db = drizzle(pool, { schema });
@@ -121,5 +127,22 @@ export async function initializeDatabase(): Promise<void> {
       console.error("Failed to initialize database pool:", err);
       throw err;
     }
+  } else {
+    console.log("Development mode - using default pool");
+  }
+}
+
+// Test database connection
+export async function testConnection(): Promise<boolean> {
+  try {
+    console.log("Testing database connection...");
+    const client = await pool.connect();
+    await client.query("SELECT 1");
+    client.release();
+    console.log("Database connection test successful!");
+    return true;
+  } catch (err) {
+    console.error("Database connection test failed:", err);
+    throw err;
   }
 }
