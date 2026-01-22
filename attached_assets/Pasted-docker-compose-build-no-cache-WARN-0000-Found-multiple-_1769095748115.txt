@@ -1,0 +1,697 @@
+docker compose build --no-cache
+WARN[0000] Found multiple config files with supported names: /opt/simulavoto/docker-compose.yml, /opt/simulavoto/docker-compose.yaml
+WARN[0000] Using /opt/simulavoto/docker-compose.yml
+[+] Building 156.9s (23/23) FINISHED
+ => [internal] load local bake definitions                                                                      0.0s 
+ => => reading from stdin 528B                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                            0.0s 
+ => => transferring dockerfile: 1.09kB                                                                          0.0s 
+ => [internal] load metadata for docker.io/library/node:20-alpine                                               0.0s
+ => [internal] load .dockerignore                                                                               0.0s 
+ => => transferring context: 150B                                                                               0.0s 
+ => [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081  0.1s 
+ => => resolve docker.io/library/node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081d2f60fd7  0.1s 
+ => [internal] load build context                                                                               0.0s 
+ => => transferring context: 815.17kB                                                                           0.0s
+ => CACHED [builder 2/6] WORKDIR /app                                                                           0.0s 
+ => [runner  3/12] RUN apk add --no-cache dumb-init                                                             1.4s 
+ => [builder 3/6] COPY package*.json ./                                                                         0.1s 
+ => [builder 4/6] RUN npm ci                                                                                   24.6s
+ => [builder 5/6] COPY . .                                                                                      0.5s
+ => [builder 6/6] RUN npm run build                                                                            25.5s 
+ => [runner  4/12] COPY --from=builder /app/dist ./dist                                                         0.1s
+ => [runner  5/12] COPY --from=builder /app/package*.json ./                                                    1.0s 
+ => [runner  6/12] COPY --from=builder /app/drizzle.config.ts ./                                                0.0s 
+ => [runner  7/12] COPY --from=builder /app/shared ./shared                                                     0.0s 
+ => [runner  8/12] COPY --from=builder /app/server ./server                                                     0.3s 
+ => [runner  9/12] COPY --from=builder /app/node_modules ./node_modules                                         7.4s 
+ => [runner 10/12] COPY docker-entrypoint.sh ./                                                                 0.3s 
+ => [runner 11/12] RUN addgroup --system --gid 1001 nodejs &&     adduser --system --uid 1001 expressjs &&     59.2s 
+ => [runner 12/12] RUN chmod +x docker-entrypoint.sh                                                            0.4s 
+ => exporting to image                                                                                         31.6s 
+ => => exporting layers                                                                                        16.5s 
+ => => exporting manifest sha256:1baacbef8f7ee8ada3a7d286ff86af591875267b9058b56bc0ed93e33607f89e               0.0s
+ => => exporting config sha256:97c3cd7633ffb8d1a68b5a21b96bb5f771abb705d5f134700e222eb9ff63499d                 0.0s 
+ => => exporting attestation manifest sha256:80785de4932bbcddeae4eefe8685793d996fda75dd29cee652d04e5a500b5ae3   0.0s 
+ => => exporting manifest list sha256:01006aa63ff7ee5c2fb47803f55e38ebe7834384b480ea0e6d5bd44ca40690ca          0.0s 
+ => => naming to docker.io/library/simulavoto-simulavoto:latest                                                 0.0s 
+ => => unpacking to docker.io/library/simulavoto-simulavoto:latest                                             14.9s 
+ => resolving provenance for metadata file                                                                      0.0s 
+[+] build 1/1
+ ✔ Image simulavoto-simulavoto Built                                                                           157.0s
+root@worker1:/opt/simulavoto# docker compose up -d
+WARN[0000] Found multiple config files with supported names: /opt/simulavoto/docker-compose.yml, /opt/simulavoto/docker-compose.yaml
+WARN[0000] Using /opt/simulavoto/docker-compose.yml
+[+] up 1/1
+ ✔ Container simulavoto Recreated                                                                                6.0s
+root@worker1:/opt/simulavoto# docker compose logs -f
+WARN[0000] Found multiple config files with supported names: /opt/simulavoto/docker-compose.yml, /opt/simulavoto/docker-compose.yaml
+WARN[0000] Using /opt/simulavoto/docker-compose.yml
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | npm notice
+simulavoto  | npm notice New major version of npm available! 10.8.2 -> 11.8.0
+simulavoto  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.8.0
+simulavoto  | npm notice To update run: npm install -g npm@11.8.0
+simulavoto  | npm notice
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto exited with code 1 (restarting)
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto exited with code 1 (restarting)
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto exited with code 1 (restarting)
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: password authentication failed for user "postgres"
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:69506)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: '28P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'auth.c',
+simulavoto  |   line: '326',
+simulavoto  |   routine: 'auth_failed'
+simulavoto  | }
+simulavoto exited with code 1 (restarting)
