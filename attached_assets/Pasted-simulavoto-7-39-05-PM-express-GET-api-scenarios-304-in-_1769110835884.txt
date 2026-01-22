@@ -1,0 +1,33 @@
+simulavoto  | 7:39:05 PM [express] GET /api/scenarios 304 in 42ms :: []
+simulavoto  | 7:39:05 PM [express] GET /api/stats 304 in 56ms :: {"parties":10,"candidates":0,"scenarios":0,"simulations":0}
+simulavoto  | 7:39:09 PM [express] GET /api/imports/tse 500 in 9ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | 7:39:09 PM [express] GET /api/tse/stats 304 in 11ms :: {"totalRecords":0,"years":[],"ufs":[],"cargos":[]}
+simulavoto  | 7:39:19 PM [express] GET /api/imports/tse 500 in 17ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | 7:39:30 PM [express] GET /api/imports/tse 500 in 16ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | TSE URL import error: error: column "skipped_rows" does not exist
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:73:37970
+simulavoto  |     at async fw.findExistingImport (/app/dist/index.cjs:73:76424)
+simulavoto  |     at async /app/dist/index.cjs:710:9420 {
+simulavoto  |   length: 113,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '110',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 7:39:30 PM [express] POST /api/imports/tse/url 500 in 16ms :: {"error":"Failed to start URL import"}   
+simulavoto  | 7:39:40 PM [express] GET /api/imports/tse 500 in 15ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | 7:39:50 PM [express] GET /api/imports/tse 500 in 19ms :: {"error":"Failed to fetch import jobs"}
