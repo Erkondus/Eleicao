@@ -1,0 +1,164 @@
+Starting database initialization...
+NODE_ENV: production
+DATABASE_URL exists: true
+Resolving database hostname to IPv4...
+System DNS resolved supabase-db to: 172.18.0.14
+Creating database pool...
+Database pool initialized successfully
+Testing database connection...
+Database connection test failed: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+STARTUP ERROR: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+=== SimulaVoto - Sistema Eleitoral Brasileiro ===
+Environment: production
+Port: 5000
+NODE_OPTIONS: --dns-result-order=ipv4first
+Database migrations should be run manually via init-db.sql
+See DEPLOY.md for instructions
+Starting application...
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.cjs
+
+Starting database initialization...
+NODE_ENV: production
+DATABASE_URL exists: true
+Resolving database hostname to IPv4...
+System DNS resolved supabase-db to: 172.18.0.14
+Creating database pool...
+Database pool initialized successfully
+Testing database connection...
+Database connection test failed: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+STARTUP ERROR: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+=== SimulaVoto - Sistema Eleitoral Brasileiro ===
+Environment: production
+Port: 5000
+NODE_OPTIONS: --dns-result-order=ipv4first
+Database migrations should be run manually via init-db.sql
+See DEPLOY.md for instructions
+Starting application...
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.cjs
+
+Starting database initialization...
+NODE_ENV: production
+DATABASE_URL exists: true
+Resolving database hostname to IPv4...
+System DNS resolved supabase-db to: 172.18.0.14
+Creating database pool...
+Database pool initialized successfully
+Testing database connection...
+Database connection test failed: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+STARTUP ERROR: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+=== SimulaVoto - Sistema Eleitoral Brasileiro ===
+Environment: production
+Port: 5000
+NODE_OPTIONS: --dns-result-order=ipv4first
+Database migrations should be run manually via init-db.sql
+See DEPLOY.md for instructions
+Starting application...
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.cjs
+
+Starting database initialization...
+NODE_ENV: production
+DATABASE_URL exists: true
+Resolving database hostname to IPv4...
+System DNS resolved supabase-db to: 172.18.0.14
+Creating database pool...
+Database pool initialized successfully
+Testing database connection...
+Database connection test failed: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+STARTUP ERROR: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+=== SimulaVoto - Sistema Eleitoral Brasileiro ===
+Environment: production
+Port: 5000
+NODE_OPTIONS: --dns-result-order=ipv4first
+Database migrations should be run manually via init-db.sql
+See DEPLOY.md for instructions
+Starting application...
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.cjs
+
+Starting database initialization...
+NODE_ENV: production
+DATABASE_URL exists: true
+Resolving database hostname to IPv4...
+System DNS resolved supabase-db to: 172.18.0.14
+Creating database pool...
+Database pool initialized successfully
+Testing database connection...
+Database connection test failed: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+STARTUP ERROR: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+=== SimulaVoto - Sistema Eleitoral Brasileiro ===
+Environment: production
+Port: 5000
+NODE_OPTIONS: --dns-result-order=ipv4first
+Database migrations should be run manually via init-db.sql
+See DEPLOY.md for instructions
+Starting application...
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.cjs
+
+Starting database initialization...
+NODE_ENV: production
+DATABASE_URL exists: true
+Resolving database hostname to IPv4...
+System DNS resolved supabase-db to: 172.18.0.14
+Creating database pool...
+Database pool initialized successfully
+Testing database connection...
+Database connection test failed: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+STARTUP ERROR: Error: The server does not support SSL connections
+    at /app/dist/index.cjs:67:13330
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async dY (/app/dist/index.cjs:73:68701)
+    at async /app/dist/index.cjs:712:7757
+root@worker1:/opt/simulavoto#

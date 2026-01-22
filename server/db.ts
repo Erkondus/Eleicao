@@ -96,8 +96,28 @@ async function resolveToIPv4(connectionString: string): Promise<string> {
 function buildPoolConfig(connectionString: string): pg.PoolConfig {
   const config: pg.PoolConfig = { connectionString };
   
-  if (process.env.NODE_ENV === "production") {
-    config.ssl = { rejectUnauthorized: false };
+  // Only use SSL for external cloud databases (not for local/self-hosted)
+  // Check if connecting to a local network or localhost
+  try {
+    const url = new URL(connectionString);
+    const host = url.hostname;
+    const isLocal = host === 'localhost' || 
+                    host === '127.0.0.1' ||
+                    host.startsWith('172.') ||
+                    host.startsWith('192.168.') ||
+                    host.startsWith('10.') ||
+                    host.includes('.local') ||
+                    !host.includes('.');  // Container names like 'supabase-db'
+    
+    if (process.env.NODE_ENV === "production" && !isLocal) {
+      config.ssl = { rejectUnauthorized: false };
+      console.log("SSL enabled for external database");
+    } else {
+      console.log("SSL disabled for local/internal database");
+    }
+  } catch (e) {
+    // If URL parsing fails, don't enable SSL
+    console.log("Could not parse connection URL, SSL disabled");
   }
   
   return config;
