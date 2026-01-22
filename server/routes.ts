@@ -1816,6 +1816,69 @@ Responda em JSON:
     }
   });
 
+  // Retroactive import integrity validation endpoint
+  app.post("/api/imports/tse/:id/validate-integrity", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      const job = await storage.getTseImportJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Só é possível validar importações concluídas" });
+      }
+
+      // Count actual records in database
+      const dbRowCount = await storage.countTseCandidateVotesByJob(jobId);
+      
+      // Calculate expected count based on what we know
+      const totalFileRows = job.totalFileRows || job.processedRows || 0;
+      const skippedRows = job.skippedRows || 0;
+      const errorCount = job.errorCount || 0;
+      const expectedCount = job.processedRows || (totalFileRows - skippedRows - errorCount);
+      
+      const isValid = dbRowCount === expectedCount;
+      const validationMessage = isValid 
+        ? `Validação OK: ${dbRowCount.toLocaleString("pt-BR")} registros verificados no banco`
+        : `Discrepância detectada: esperado ${expectedCount.toLocaleString("pt-BR")}, encontrado ${dbRowCount.toLocaleString("pt-BR")} no banco`;
+
+      // Update job with validation results
+      await storage.updateTseImportJob(jobId, {
+        validationStatus: isValid ? "passed" : "failed",
+        validationMessage: validationMessage,
+        validatedAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await logAudit(req, "validate", "tse_import", String(jobId), {
+        isValid,
+        dbRowCount,
+        expectedCount,
+        validationMessage
+      });
+
+      res.json({
+        success: true,
+        isValid,
+        dbRowCount,
+        expectedCount,
+        totalFileRows,
+        skippedRows,
+        errorCount,
+        validationMessage,
+        validatedAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Failed to validate import integrity:", error);
+      res.status(500).json({ error: "Failed to validate import integrity" });
+    }
+  });
+
   app.patch("/api/validation-issues/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const issueId = parseInt(req.params.id);
@@ -2366,13 +2429,30 @@ Responda em JSON:
     const partiesResult = await storage.syncPartiesFromTseImport(jobId);
     console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.existing} existing`);
 
+    // Calculate actual imported rows (total - skipped - errors)
+    const actualImported = rowCount - filteredCount - errorCount;
+    
+    // Validate import integrity
+    const dbRowCount = await storage.countTseCandidateVotesByJob(jobId);
+    const isValid = dbRowCount === actualImported;
+    const validationMessage = isValid 
+      ? `Validação OK: ${dbRowCount.toLocaleString("pt-BR")} registros importados corretamente`
+      : `Discrepância detectada: esperado ${actualImported.toLocaleString("pt-BR")}, encontrado ${dbRowCount.toLocaleString("pt-BR")} no banco`;
+
+    console.log(`TSE Import ${jobId}: Validation - ${validationMessage}`);
+
     await storage.updateTseImportJob(jobId, {
       status: "completed",
       stage: "completed",
       completedAt: new Date(),
       updatedAt: new Date(),
-      processedRows: rowCount,
+      totalFileRows: rowCount,
+      processedRows: actualImported,
+      skippedRows: filteredCount,
       errorCount: errorCount,
+      validationStatus: isValid ? "passed" : "failed",
+      validationMessage: validationMessage,
+      validatedAt: new Date(),
     });
 
     // Trigger embedding generation for semantic search (if API key configured)

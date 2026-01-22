@@ -586,6 +586,14 @@ export class DatabaseStorage implements IStorage {
     await db.insert(tseCandidateVotes).values(votes);
   }
 
+  async countTseCandidateVotesByJob(jobId: number): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tseCandidateVotes)
+      .where(eq(tseCandidateVotes.importJobId, jobId));
+    return result[0]?.count || 0;
+  }
+
   async getTseCandidateVotes(filters: {
     year?: number;
     uf?: string;
