@@ -1,0 +1,328 @@
+docker compose logs -f
+WARN[0000] /opt/simulavoto/docker-compose.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | npm notice
+simulavoto  | npm notice New major version of npm available! 10.8.2 -> 11.8.0
+simulavoto  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.8.0
+simulavoto  | npm notice To update run: npm install -g npm@11.8.0
+simulavoto  | npm notice
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | Creating database pool...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  |
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for supabase-db, trying DoH...
+simulavoto  | All DNS resolution methods failed for supabase-db
+simulavoto  | Creating database pool...
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: getaddrinfo ENOTFOUND supabase-db
+simulavoto  |     at /app/dist/index.cjs:67:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async dY (/app/dist/index.cjs:73:68701)
+simulavoto  |     at async /app/dist/index.cjs:712:7757 {
+simulavoto  |   errno: -3008,
+simulavoto  |   code: 'ENOTFOUND',
+simulavoto  |   syscall: 'getaddrinfo',
+simulavoto  |   hostname: 'supabase-db'
+simulavoto  | }
+simulavoto exited with code 1 (restarting)
