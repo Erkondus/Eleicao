@@ -1,0 +1,61 @@
+4:00:49 PM [express] GET /api/analytics/election-years 401 in 2ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/analytics/positions 401 in 1ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/reports 401 in 1ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/analytics/parties-list 401 in 1ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/analytics/summary 401 in 1ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/analytics/votes-by-party 401 in 1ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/analytics/top-candidates 401 in 2ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/analytics/votes-by-state 401 in 1ms :: {"error":"Unauthorized"}
+
+4:00:49 PM [express] GET /api/analytics/votes-by-municipality 401 in 1ms :: {"error":"Unauthorized"}
+
+4:00:52 PM [express] GET /api/imports/tse 401 in 2ms :: {"error":"Unauthorized"}
+
+4:00:52 PM [express] GET /api/tse/stats 401 in 1ms :: {"error":"Unauthorized"}
+
+4:01:02 PM [express] GET /api/imports/tse 401 in 1ms :: {"error":"Unauthorized"}
+
+4:01:43 PM [express] GET /api/auth/me 401 in 1ms :: {"error":"Unauthorized"}
+
+4:01:51 PM [express] POST /api/auth/login 200 in 74ms :: {"id":"7ea108a0-4f20-4599-a083-8b2532963d15","username":"admin","name":"Administrador","email":"admin@simulavoto.gov.br","role":"admin","active":true,"createdAt":"2026-01-21T19:08:08.714Z"}
+
+4:01:51 PM [express] GET /api/imports/tse 401 in 0ms :: {"error":"Unauthorized"}
+
+4:01:51 PM [express] GET /api/stats 401 in 0ms :: {"error":"Unauthorized"}
+
+4:01:51 PM [express] GET /api/scenarios 401 in 1ms :: {"error":"Unauthorized"}
+
+4:01:51 PM [express] GET /api/simulations/recent 401 in 2ms :: {"error":"Unauthorized"}
+
+4:01:51 PM [express] GET /api/parties 401 in 1ms :: {"error":"Unauthorized"}
+
+4:02:00 PM [express] GET /api/imports/tse 401 in 7ms :: {"error":"Unauthorized"}
+
+4:02:00 PM [express] GET /api/tse/stats 401 in 2ms :: {"error":"Unauthorized"}
+
+4:02:30 PM [express] GET /api/imports/tse 401 in 1ms :: {"error":"Unauthorized"}
+
+4:04:12 PM [express] GET /api/imports/tse 401 in 6ms :: {"error":"Unauthorized"}
+
+4:04:13 PM [express] GET /api/parties 401 in 1ms :: {"error":"Unauthorized"}
+
+4:04:28 PM [express] GET /api/parties 401 in 1ms :: {"error":"Unauthorized"}
+
+4:04:29 PM [express] GET /api/candidates 401 in 4ms :: {"error":"Unauthorized"}
+
+4:05:07 PM [express] POST /api/auth/change-password 401 in 1ms :: {"error":"Unauthorized"}
+
+4:05:12 PM [express] GET /api/imports/tse 401 in 1ms :: {"error":"Unauthorized"}
+
+4:05:15 PM [express] GET /api/users 401 in 2ms :: {"error":"Unauthorized"}
+
+4:05:42 PM [express] GET /api/imports/tse 401 in 1ms :: {"error":"Unauthorized"}
+
+4:05:45 PM [express] POST /api/users 401 in 1ms :: {"error":"Unauthorized"}

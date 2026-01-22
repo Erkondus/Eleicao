@@ -94,6 +94,11 @@ export async function registerRoutes(
     throw new Error("SESSION_SECRET environment variable is required in production");
   }
 
+  // Trust proxy for proper session handling behind Nginx/reverse proxy
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
+
   app.use(
     session({
       secret: sessionSecret || "dev-only-secret-do-not-use-in-production",
@@ -102,6 +107,7 @@ export async function registerRoutes(
       cookie: {
         secure: process.env.NODE_ENV === "production",
         httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
         maxAge: 24 * 60 * 60 * 1000,
       },
     })
