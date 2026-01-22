@@ -166,6 +166,8 @@ export default function TseImport() {
     enabled: !!validationStatus?.runId,
   });
 
+  const [verifyingIntegrityJobId, setVerifyingIntegrityJobId] = useState<number | null>(null);
+
   const runValidationMutation = useMutation({
     mutationFn: async (jobId: number) => {
       setValidatingJobId(jobId);
@@ -190,6 +192,31 @@ export default function TseImport() {
         variant: "destructive" 
       });
       setValidatingJobId(null);
+    },
+  });
+
+  const verifyIntegrityMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      setVerifyingIntegrityJobId(jobId);
+      const response = await apiRequest("POST", `/api/imports/tse/${jobId}/validate-integrity`);
+      return response.json();
+    },
+    onSuccess: async (result, jobId) => {
+      toast({ 
+        title: result.isValid ? "Integridade OK" : "Discrepância detectada",
+        description: result.validationMessage,
+        variant: result.isValid ? "default" : "destructive"
+      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
+      setVerifyingIntegrityJobId(null);
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro na verificação", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+      setVerifyingIntegrityJobId(null);
     },
   });
 
@@ -713,7 +740,8 @@ export default function TseImport() {
                   <TableHead>Status</TableHead>
                   <TableHead>Progresso</TableHead>
                   <TableHead>Erros</TableHead>
-                  <TableHead>Validação</TableHead>
+                  <TableHead>Integridade</TableHead>
+                  <TableHead>Validação IA</TableHead>
                   <TableHead>Criado em</TableHead>
                 </TableRow>
               </TableHeader>
@@ -743,6 +771,47 @@ export default function TseImport() {
                         </Button>
                       ) : (
                         <span className="text-sm text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {job.status === "completed" ? (
+                        <div className="flex items-center gap-2">
+                          {job.validationStatus === "passed" ? (
+                            <Badge variant="outline" className="text-green-600 border-green-600">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              OK
+                            </Badge>
+                          ) : job.validationStatus === "failed" ? (
+                            <Badge variant="destructive">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Falha
+                            </Badge>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => verifyIntegrityMutation.mutate(job.id)}
+                              disabled={verifyingIntegrityJobId === job.id}
+                              data-testid={`button-verify-integrity-${job.id}`}
+                            >
+                              {verifyingIntegrityJobId === job.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <ShieldCheck className="h-4 w-4 mr-1" />
+                                  Verificar
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          {job.validationStatus && job.validationMessage && (
+                            <span className="text-xs text-muted-foreground max-w-[150px] truncate" title={job.validationMessage}>
+                              {job.validationMessage.split(":")[0]}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell>
