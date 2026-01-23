@@ -4,6 +4,9 @@
 SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
 
 ## Mudanças Recentes
+- **2026-01-23**: Função para zerar banco de dados com confirmação em duas etapas (apenas admin)
+- **2026-01-23**: Página Admin Sistema com estatísticas do banco e zona de perigo
+- **2026-01-23**: Opção para preservar usuário admin durante reset do banco
 - **2026-01-23**: Relatório de erros aprimorado com resumo estatístico, distribuição por tipo e orientações de resolução
 - **2026-01-23**: Exportação de erros de importação para CSV com dados brutos
 - **2026-01-23**: Dialog de validação IA redesenhado com melhor visualização de score, descobertas e riscos

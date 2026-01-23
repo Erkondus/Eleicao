@@ -14,7 +14,35 @@ import { pipeline } from "stream/promises";
 import path from "path";
 import { z } from "zod";
 import { storage } from "./storage";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import type { User, InsertTseCandidateVote } from "@shared/schema";
+import {
+  users,
+  parties,
+  candidates,
+  scenarios,
+  scenarioVotes,
+  scenarioCandidates,
+  simulations,
+  auditLogs,
+  alliances,
+  allianceParties,
+  tseImportJobs,
+  tseCandidateVotes,
+  tseImportErrors,
+  savedReports,
+  semanticDocuments,
+  semanticSearchQueries,
+  aiPredictions,
+  aiSentimentData,
+  projectionReports,
+  importValidationRuns,
+  importValidationIssues,
+  forecastRuns,
+  forecastResults,
+  forecastSwingRegions,
+} from "@shared/schema";
 import OpenAI from "openai";
 import { 
   processSemanticSearch, 
@@ -3523,6 +3551,123 @@ Responda em JSON:
       res.json({ configured: hasKey });
     } catch (error) {
       res.status(500).json({ error: "Failed to check API key" });
+    }
+  });
+
+  // Database reset endpoint - requires admin and confirmation phrase
+  app.post("/api/admin/reset-database", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { confirmationPhrase, preserveAdmin } = req.body;
+      const EXPECTED_PHRASE = "CONFIRMO ZERAR BANCO DE DADOS";
+
+      if (!confirmationPhrase || confirmationPhrase !== EXPECTED_PHRASE) {
+        return res.status(400).json({ 
+          error: "Frase de confirmação incorreta",
+          expectedPhrase: EXPECTED_PHRASE,
+          message: "Para confirmar a operação, digite exatamente a frase de confirmação."
+        });
+      }
+
+      // Get current admin user to preserve if requested
+      const currentAdminId = req.user?.id;
+      const currentUsername = req.user?.username;
+
+      // Delete in correct order (respecting foreign key constraints)
+      // Clear audit logs first so new entries won't be deleted
+      await db.delete(auditLogs);
+      
+      // Log the operation start (after clearing old logs)
+      await logAudit(req, "reset_database_started", "system", "all", { 
+        preserveAdmin,
+        initiatedBy: currentUsername
+      });
+
+      // Delete dependent tables in correct order
+      await db.delete(forecastSwingRegions);
+      await db.delete(forecastResults);
+      await db.delete(forecastRuns);
+      await db.delete(importValidationIssues);
+      await db.delete(importValidationRuns);
+      await db.delete(aiSentimentData);
+      await db.delete(aiPredictions);
+      await db.delete(semanticSearchQueries);
+      await db.delete(semanticDocuments);
+      await db.delete(savedReports);
+      await db.delete(projectionReports);
+      await db.delete(tseImportErrors);
+      await db.delete(tseCandidateVotes);
+      await db.delete(tseImportJobs);
+      await db.delete(allianceParties);
+      await db.delete(alliances);
+      await db.delete(simulations);
+      await db.delete(scenarioCandidates);
+      await db.delete(scenarioVotes);
+      await db.delete(scenarios);
+      await db.delete(candidates);
+      await db.delete(parties);
+
+      // Delete users except the current admin if preserveAdmin is true
+      if (preserveAdmin && currentAdminId) {
+        await db.delete(users).where(sql`${users.id} != ${currentAdminId}`);
+      } else {
+        await db.delete(users);
+      }
+
+      // Always create a completion audit log entry
+      await logAudit(req, "reset_database_completed", "system", "all", { 
+        preserveAdmin,
+        adminPreserved: preserveAdmin && !!currentAdminId,
+        tablesCleared: 22,
+        completedAt: new Date().toISOString()
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Banco de dados zerado com sucesso",
+        details: {
+          tablesCleared: 22,
+          adminPreserved: preserveAdmin && !!currentAdminId,
+          completedAt: new Date().toISOString()
+        }
+      });
+    } catch (error: any) {
+      console.error("Database reset error:", error);
+      res.status(500).json({ 
+        error: "Falha ao zerar banco de dados",
+        details: error.message
+      });
+    }
+  });
+
+  // Get database statistics for admin panel
+  app.get("/api/admin/database-stats", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const stats = await Promise.all([
+        db.select({ count: sql<number>`count(*)` }).from(users),
+        db.select({ count: sql<number>`count(*)` }).from(parties),
+        db.select({ count: sql<number>`count(*)` }).from(candidates),
+        db.select({ count: sql<number>`count(*)` }).from(scenarios),
+        db.select({ count: sql<number>`count(*)` }).from(simulations),
+        db.select({ count: sql<number>`count(*)` }).from(tseImportJobs),
+        db.select({ count: sql<number>`count(*)` }).from(tseCandidateVotes),
+        db.select({ count: sql<number>`count(*)` }).from(forecastRuns),
+        db.select({ count: sql<number>`count(*)` }).from(auditLogs),
+      ]);
+
+      res.json({
+        users: Number(stats[0][0]?.count || 0),
+        parties: Number(stats[1][0]?.count || 0),
+        candidates: Number(stats[2][0]?.count || 0),
+        scenarios: Number(stats[3][0]?.count || 0),
+        simulations: Number(stats[4][0]?.count || 0),
+        importJobs: Number(stats[5][0]?.count || 0),
+        candidateVotes: Number(stats[6][0]?.count || 0),
+        forecasts: Number(stats[7][0]?.count || 0),
+        auditLogs: Number(stats[8][0]?.count || 0),
+      });
+    } catch (error) {
+      console.error("Database stats error:", error);
+      res.status(500).json({ error: "Failed to get database stats" });
     }
   });
 

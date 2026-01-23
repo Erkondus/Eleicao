@@ -29,6 +29,7 @@ import InteractiveDashboard from "@/pages/interactive-dashboard";
 import AIInsights from "@/pages/ai-insights";
 import ProjectionReports from "@/pages/projection-reports";
 import Forecasts from "@/pages/forecasts";
+import AdminSettings from "@/pages/admin-settings";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/ai-insights" component={AIInsights} />
       <Route path="/projection-reports" component={ProjectionReports} />
       <Route path="/forecasts" component={Forecasts} />
+      <Route path="/admin-settings" component={AdminSettings} />
       <Route component={NotFound} />
     </Switch>
   );

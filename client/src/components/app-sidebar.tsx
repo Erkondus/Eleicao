@@ -18,6 +18,7 @@ import {
   PieChart,
   Search,
   Layers,
+  Database,
   Sparkles,
   Target,
 } from "lucide-react";
@@ -61,6 +62,7 @@ const adminNavItems = [
   { title: "Importação TSE", url: "/tse-import", icon: Upload, permission: "manage_users" },
   { title: "Auditoria", url: "/audit", icon: ClipboardList, permission: "view_audit" },
   { title: "Usuários", url: "/users", icon: Shield, permission: "manage_users" },
+  { title: "Admin Sistema", url: "/admin-settings", icon: Database, permission: "manage_users" },
 ];
 
 function ImportStatusIndicator() {
