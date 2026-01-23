@@ -6,7 +6,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
 import multer from "multer";
 import { createReadStream, createWriteStream } from "fs";
-import { unlink, mkdir } from "fs/promises";
+import { unlink, mkdir, readdir, stat, rm } from "fs/promises";
 import { parse } from "csv-parse";
 import iconv from "iconv-lite";
 import unzipper from "unzipper";
@@ -27,6 +27,14 @@ const upload = multer({
   dest: "/tmp/uploads/",
   limits: { fileSize: 10 * 1024 * 1024 * 1024 }
 });
+
+// Track active import jobs for cancellation
+const activeImportJobs = new Map<number, { cancelled: boolean; abortController?: AbortController }>();
+
+function isJobCancelled(jobId: number): boolean {
+  const job = activeImportJobs.get(jobId);
+  return job?.cancelled ?? false;
+}
 
 declare module "express-session" {
   interface SessionData {
@@ -1879,6 +1887,315 @@ Responda em JSON:
     }
   });
 
+  // Cancel a running import job
+  app.post("/api/imports/tse/:id/cancel", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      const job = await storage.getTseImportJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+
+      const inProgressStatuses = ["pending", "downloading", "extracting", "processing"];
+      if (!inProgressStatuses.includes(job.status || "")) {
+        return res.status(400).json({ 
+          error: "Só é possível cancelar importações em andamento",
+          currentStatus: job.status
+        });
+      }
+
+      // Signal cancellation
+      const activeJob = activeImportJobs.get(jobId);
+      if (activeJob) {
+        activeJob.cancelled = true;
+        activeJob.abortController?.abort();
+      } else {
+        activeImportJobs.set(jobId, { cancelled: true });
+      }
+
+      await storage.updateTseImportJob(jobId, {
+        status: "cancelled",
+        stage: "cancelled",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+        errorMessage: "Importação cancelada pelo usuário",
+      });
+
+      // Clean up temp files
+      const tmpDir = `/tmp/tse-import-${jobId}`;
+      await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+
+      await logAudit(req, "cancel", "tse_import", String(jobId), { previousStatus: job.status });
+
+      res.json({ success: true, message: "Importação cancelada com sucesso" });
+    } catch (error: any) {
+      console.error("Failed to cancel import:", error);
+      res.status(500).json({ error: "Failed to cancel import" });
+    }
+  });
+
+  // Restart a failed/cancelled import job
+  app.post("/api/imports/tse/:id/restart", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      const job = await storage.getTseImportJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+
+      const restartableStatuses = ["failed", "cancelled"];
+      if (!restartableStatuses.includes(job.status || "")) {
+        return res.status(400).json({ 
+          error: "Só é possível reiniciar importações falhadas ou canceladas",
+          currentStatus: job.status
+        });
+      }
+
+      // Check if it's a URL import
+      const isUrlImport = job.filename?.startsWith("[URL]");
+      if (!isUrlImport) {
+        return res.status(400).json({ 
+          error: "Apenas importações via URL podem ser reiniciadas. Para arquivos, faça upload novamente."
+        });
+      }
+
+      // Delete existing votes for this job
+      await storage.deleteTseCandidateVotesByJob(jobId);
+      
+      // Delete existing errors
+      await storage.deleteTseImportErrorsByJob(jobId);
+
+      // Reset job state
+      activeImportJobs.delete(jobId);
+      await storage.updateTseImportJob(jobId, {
+        status: "pending",
+        stage: "pending",
+        downloadedBytes: 0,
+        totalRows: 0,
+        processedRows: 0,
+        skippedRows: 0,
+        errorCount: 0,
+        errorMessage: null,
+        totalFileRows: null,
+        validationStatus: "pending",
+        validationMessage: null,
+        validatedAt: null,
+        startedAt: null,
+        completedAt: null,
+        updatedAt: new Date(),
+      });
+
+      await logAudit(req, "restart", "tse_import", String(jobId), { previousStatus: job.status });
+
+      // Use stored sourceUrl for reliable restart
+      if (job.sourceUrl) {
+        processURLImport(jobId, job.sourceUrl);
+      } else {
+        // Fallback: try to reconstruct URL from filename (legacy support)
+        const urlMatch = job.filename?.match(/\[URL\] (.+)/);
+        if (urlMatch) {
+          const filename = urlMatch[1];
+          const url = `https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_candidato_munzona/${filename}`;
+          processURLImport(jobId, url);
+        } else {
+          return res.status(400).json({ 
+            error: "URL de origem não encontrada. Faça upload do arquivo novamente."
+          });
+        }
+      }
+
+      res.json({ success: true, message: "Importação reiniciada com sucesso", jobId });
+    } catch (error: any) {
+      console.error("Failed to restart import:", error);
+      res.status(500).json({ error: "Failed to restart import" });
+    }
+  });
+
+  // Delete an import job and its data
+  app.delete("/api/imports/tse/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      const job = await storage.getTseImportJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Import job not found" });
+      }
+
+      const inProgressStatuses = ["pending", "downloading", "extracting", "processing"];
+      if (inProgressStatuses.includes(job.status || "")) {
+        return res.status(400).json({ 
+          error: "Não é possível excluir importações em andamento. Cancele primeiro.",
+          currentStatus: job.status
+        });
+      }
+
+      // Delete votes associated with this job
+      await storage.deleteTseCandidateVotesByJob(jobId);
+      
+      // Delete errors associated with this job
+      await storage.deleteTseImportErrorsByJob(jobId);
+
+      // Delete the job itself
+      await storage.deleteTseImportJob(jobId);
+
+      // Clean up temp files if any
+      const tmpDir = `/tmp/tse-import-${jobId}`;
+      await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+
+      await logAudit(req, "delete", "tse_import", String(jobId), { filename: job.filename });
+
+      res.json({ success: true, message: "Importação excluída com sucesso" });
+    } catch (error: any) {
+      console.error("Failed to delete import:", error);
+      res.status(500).json({ error: "Failed to delete import" });
+    }
+  });
+
+  // List downloaded files
+  app.get("/api/imports/files", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const baseDir = "/tmp";
+      const entries = await readdir(baseDir, { withFileTypes: true });
+      
+      const importDirs = entries.filter(entry => 
+        entry.isDirectory() && entry.name.startsWith("tse-import-")
+      );
+
+      const files: Array<{
+        jobId: number;
+        directory: string;
+        files: Array<{ name: string; size: number; modifiedAt: string }>;
+        totalSize: number;
+      }> = [];
+
+      for (const dir of importDirs) {
+        const jobIdMatch = dir.name.match(/tse-import-(\d+)/);
+        if (!jobIdMatch) continue;
+
+        const jobId = parseInt(jobIdMatch[1]);
+        const dirPath = path.join(baseDir, dir.name);
+        
+        try {
+          const dirEntries = await readdir(dirPath);
+          const fileInfos: Array<{ name: string; size: number; modifiedAt: string }> = [];
+          let totalSize = 0;
+
+          for (const fileName of dirEntries) {
+            const filePath = path.join(dirPath, fileName);
+            try {
+              const fileStat = await stat(filePath);
+              if (fileStat.isFile()) {
+                fileInfos.push({
+                  name: fileName,
+                  size: fileStat.size,
+                  modifiedAt: fileStat.mtime.toISOString()
+                });
+                totalSize += fileStat.size;
+              }
+            } catch (e) {
+              // Skip files we can't stat
+            }
+          }
+
+          if (fileInfos.length > 0) {
+            files.push({
+              jobId,
+              directory: dir.name,
+              files: fileInfos,
+              totalSize
+            });
+          }
+        } catch (e) {
+          // Skip directories we can't read
+        }
+      }
+
+      // Also check /tmp/uploads for uploaded files
+      const uploadsDir = "/tmp/uploads";
+      try {
+        const uploadEntries = await readdir(uploadsDir);
+        const uploadFiles: Array<{ name: string; size: number; modifiedAt: string }> = [];
+        let uploadsTotalSize = 0;
+
+        for (const fileName of uploadEntries) {
+          const filePath = path.join(uploadsDir, fileName);
+          try {
+            const fileStat = await stat(filePath);
+            if (fileStat.isFile()) {
+              uploadFiles.push({
+                name: fileName,
+                size: fileStat.size,
+                modifiedAt: fileStat.mtime.toISOString()
+              });
+              uploadsTotalSize += fileStat.size;
+            }
+          } catch (e) {
+            // Skip files we can't stat
+          }
+        }
+
+        if (uploadFiles.length > 0) {
+          files.push({
+            jobId: 0,
+            directory: "uploads",
+            files: uploadFiles,
+            totalSize: uploadsTotalSize
+          });
+        }
+      } catch (e) {
+        // Uploads directory doesn't exist or can't be read
+      }
+
+      res.json(files);
+    } catch (error: any) {
+      console.error("Failed to list import files:", error);
+      res.status(500).json({ error: "Failed to list import files" });
+    }
+  });
+
+  // Delete import files for a specific job
+  app.delete("/api/imports/files/:jobId", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      
+      if (jobId === 0) {
+        // Delete all uploads
+        const uploadsDir = "/tmp/uploads";
+        await rm(uploadsDir, { recursive: true, force: true });
+        await mkdir(uploadsDir, { recursive: true });
+        
+        await logAudit(req, "delete_files", "uploads", "all", {});
+        
+        return res.json({ success: true, message: "Arquivos de upload excluídos com sucesso" });
+      }
+
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      const tmpDir = `/tmp/tse-import-${jobId}`;
+      await rm(tmpDir, { recursive: true, force: true });
+
+      await logAudit(req, "delete_files", "tse_import", String(jobId), {});
+
+      res.json({ success: true, message: "Arquivos excluídos com sucesso" });
+    } catch (error: any) {
+      console.error("Failed to delete import files:", error);
+      res.status(500).json({ error: "Failed to delete import files" });
+    }
+  });
+
   app.patch("/api/validation-issues/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const issueId = parseInt(req.params.id);
@@ -2170,6 +2487,7 @@ Responda em JSON:
         electionType: electionType || null,
         uf: uf || null,
         cargoFilter: cargoFilter && !isNaN(parseInt(cargoFilter)) ? parseInt(cargoFilter) : null,
+        sourceUrl: url,
         createdBy: req.user?.id || null,
       });
 
@@ -2188,7 +2506,15 @@ Responda em JSON:
     const tmpDir = `/tmp/tse-import-${jobId}`;
     let csvPath: string | null = null;
 
+    // Track this job as active
+    activeImportJobs.set(jobId, { cancelled: false });
+
     try {
+      // Check if cancelled before starting
+      if (isJobCancelled(jobId)) {
+        throw new Error("Importação cancelada");
+      }
+
       await storage.updateTseImportJob(jobId, { 
         status: "downloading", 
         stage: "downloading",
@@ -2221,6 +2547,13 @@ Responda em JSON:
       const PROGRESS_UPDATE_INTERVAL = 2000;
       
       while (true) {
+        // Check for cancellation during download
+        if (isJobCancelled(jobId)) {
+          reader.cancel();
+          fileStream.end();
+          throw new Error("Importação cancelada");
+        }
+
         const { done, value } = await reader.read();
         if (done) break;
         fileStream.write(value);
@@ -2275,6 +2608,11 @@ Responda em JSON:
       csvPath = path.join(tmpDir, "data.csv");
       await pipeline(csvFile.stream(), createWriteStream(csvPath));
 
+      // Check for cancellation before processing
+      if (isJobCancelled(jobId)) {
+        throw new Error("Importação cancelada");
+      }
+
       await storage.updateTseImportJob(jobId, { 
         status: "processing",
         stage: "processing",
@@ -2284,15 +2622,25 @@ Responda em JSON:
 
       await unlink(zipPath).catch(() => {});
       await unlink(csvPath).catch(() => {});
+
+      // Cleanup active job tracking on success
+      activeImportJobs.delete(jobId);
     } catch (error: any) {
       console.error("URL import error:", error);
-      await storage.updateTseImportJob(jobId, {
-        status: "failed",
-        stage: "failed",
-        completedAt: new Date(),
-        updatedAt: new Date(),
-        errorMessage: error.message || "Unknown error",
-      });
+      
+      // Only update to failed if not already cancelled
+      if (!isJobCancelled(jobId)) {
+        await storage.updateTseImportJob(jobId, {
+          status: "failed",
+          stage: "failed",
+          completedAt: new Date(),
+          updatedAt: new Date(),
+          errorMessage: error.message || "Unknown error",
+        });
+      }
+
+      // Cleanup active job tracking
+      activeImportJobs.delete(jobId);
     }
   };
 

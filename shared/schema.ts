@@ -261,6 +261,7 @@ export const tseImportJobs = pgTable("tse_import_jobs", {
   electionType: text("election_type"),
   uf: text("uf"),
   cargoFilter: integer("cargo_filter"),
+  sourceUrl: text("source_url"),
   totalFileRows: integer("total_file_rows"),
   validationStatus: text("validation_status").default("pending"),
   validationMessage: text("validation_message"),

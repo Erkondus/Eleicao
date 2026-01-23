@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database, Link, Download, ShieldCheck, AlertTriangle, Info } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database, Link, Download, ShieldCheck, AlertTriangle, Info, StopCircle, RotateCcw, Trash2, FolderOpen, HardDrive } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
@@ -290,6 +291,101 @@ export default function TseImport() {
     },
   });
 
+  const [activeTab, setActiveTab] = useState<"imports" | "files">("imports");
+  const [cancellingJobId, setCancellingJobId] = useState<number | null>(null);
+  const [restartingJobId, setRestartingJobId] = useState<number | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
+  const [deletingFilesJobId, setDeletingFilesJobId] = useState<number | null>(null);
+
+  interface ImportFile {
+    jobId: number;
+    directory: string;
+    files: Array<{ name: string; size: number; modifiedAt: string }>;
+    totalSize: number;
+  }
+
+  const { data: importFiles, refetch: refetchFiles } = useQuery<ImportFile[]>({
+    queryKey: ["/api/imports/files"],
+    enabled: activeTab === "files",
+  });
+
+  const cancelJobMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      setCancellingJobId(jobId);
+      const response = await apiRequest("POST", `/api/imports/tse/${jobId}/cancel`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Importação cancelada", description: "A importação foi cancelada com sucesso." });
+      queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
+      setCancellingJobId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao cancelar", description: error.message, variant: "destructive" });
+      setCancellingJobId(null);
+    },
+  });
+
+  const restartJobMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      setRestartingJobId(jobId);
+      const response = await apiRequest("POST", `/api/imports/tse/${jobId}/restart`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Importação reiniciada", description: "A importação foi reiniciada com sucesso." });
+      queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
+      setRestartingJobId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao reiniciar", description: error.message, variant: "destructive" });
+      setRestartingJobId(null);
+    },
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      setDeletingJobId(jobId);
+      const response = await apiRequest("DELETE", `/api/imports/tse/${jobId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Importação excluída", description: "A importação e seus dados foram excluídos." });
+      queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tse/stats"] });
+      setDeletingJobId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      setDeletingJobId(null);
+    },
+  });
+
+  const deleteFilesMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      setDeletingFilesJobId(jobId);
+      const response = await apiRequest("DELETE", `/api/imports/files/${jobId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Arquivos excluídos", description: "Os arquivos temporários foram excluídos." });
+      refetchFiles();
+      setDeletingFilesJobId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir arquivos", description: error.message, variant: "destructive" });
+      setDeletingFilesJobId(null);
+    },
+  });
+
+  const isJobInProgress = (status: string) => {
+    return ["pending", "downloading", "extracting", "processing", "running"].includes(status);
+  };
+
+  const isJobRestartable = (status: string) => {
+    return ["failed", "cancelled"].includes(status);
+  };
+
   const handleUrlImport = () => {
     if (!urlInput) {
       toast({ title: "Digite uma URL", variant: "destructive" });
@@ -342,6 +438,8 @@ export default function TseImport() {
         return <Badge variant="outline" className="text-green-600 border-green-600"><CheckCircle className="h-3 w-3 mr-1" />Concluído</Badge>;
       case "failed":
         return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falhou</Badge>;
+      case "cancelled":
+        return <Badge variant="secondary"><StopCircle className="h-3 w-3 mr-1" />Cancelado</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -708,22 +806,35 @@ export default function TseImport() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Histórico de Importações
-            </CardTitle>
-            <CardDescription>
-              Acompanhe o status das importações em andamento e concluídas
-            </CardDescription>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => refetchJobs()} data-testid="button-refresh">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Atualizar
-          </Button>
-        </CardHeader>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "imports" | "files")} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="imports" className="flex items-center gap-2" data-testid="tab-imports">
+            <FileText className="h-4 w-4" />
+            Importações
+          </TabsTrigger>
+          <TabsTrigger value="files" className="flex items-center gap-2" data-testid="tab-files">
+            <HardDrive className="h-4 w-4" />
+            Arquivos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="imports">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Histórico de Importações
+                </CardTitle>
+                <CardDescription>
+                  Acompanhe o status das importações em andamento e concluídas
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetchJobs()} data-testid="button-refresh">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Atualizar
+              </Button>
+            </CardHeader>
         <CardContent>
           {jobsLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -743,6 +854,7 @@ export default function TseImport() {
                   <TableHead>Integridade</TableHead>
                   <TableHead>Validação IA</TableHead>
                   <TableHead>Criado em</TableHead>
+                  <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -847,6 +959,62 @@ export default function TseImport() {
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(job.createdAt)}
                     </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {isJobInProgress(job.status) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => cancelJobMutation.mutate(job.id)}
+                            disabled={cancellingJobId === job.id}
+                            title="Cancelar importação"
+                            data-testid={`button-cancel-job-${job.id}`}
+                          >
+                            {cancellingJobId === job.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <StopCircle className="h-4 w-4 text-orange-500" />
+                            )}
+                          </Button>
+                        )}
+                        {isJobRestartable(job.status) && job.filename?.startsWith("[URL]") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => restartJobMutation.mutate(job.id)}
+                            disabled={restartingJobId === job.id}
+                            title="Reiniciar importação"
+                            data-testid={`button-restart-job-${job.id}`}
+                          >
+                            {restartingJobId === job.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4 text-blue-500" />
+                            )}
+                          </Button>
+                        )}
+                        {!isJobInProgress(job.status) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`Excluir importação "${job.filename}" e todos os seus dados?`)) {
+                                deleteJobMutation.mutate(job.id);
+                              }
+                            }}
+                            disabled={deletingJobId === job.id}
+                            title="Excluir importação"
+                            data-testid={`button-delete-job-${job.id}`}
+                          >
+                            {deletingJobId === job.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -857,8 +1025,99 @@ export default function TseImport() {
               <p>Nenhuma importação realizada ainda</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        </TabsContent>
+
+        <TabsContent value="files">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <HardDrive className="h-5 w-5" />
+                  Arquivos Temporários
+                </CardTitle>
+                <CardDescription>
+                  Arquivos baixados e extraídos durante as importações
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetchFiles()} data-testid="button-refresh-files">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Atualizar
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!importFiles || importFiles.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>Nenhum arquivo temporário encontrado</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {importFiles.map((group) => (
+                    <div key={group.directory} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <FolderOpen className="h-5 w-5 text-muted-foreground" />
+                          <span className="font-medium">
+                            {group.directory === "uploads" ? "Uploads" : `Job #${group.jobId}`}
+                          </span>
+                          <Badge variant="outline">
+                            {group.files.length} arquivo(s)
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {formatFileSize(group.totalSize)}
+                          </span>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Excluir todos os arquivos de "${group.directory}"?`)) {
+                              deleteFilesMutation.mutate(group.jobId);
+                            }
+                          }}
+                          disabled={deletingFilesJobId === group.jobId}
+                          data-testid={`button-delete-files-${group.jobId}`}
+                        >
+                          {deletingFilesJobId === group.jobId ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Excluir
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Tamanho</TableHead>
+                            <TableHead>Modificado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {group.files.map((file) => (
+                            <TableRow key={file.name}>
+                              <TableCell className="font-mono text-sm">{file.name}</TableCell>
+                              <TableCell>{formatFileSize(file.size)}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {new Date(file.modifiedAt).toLocaleString("pt-BR")}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={!!errorsDialogJob} onOpenChange={(open) => !open && setErrorsDialogJob(null)}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
