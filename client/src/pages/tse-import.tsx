@@ -1120,43 +1120,167 @@ export default function TseImport() {
       </Tabs>
 
       <Dialog open={!!errorsDialogJob} onOpenChange={(open) => !open && setErrorsDialogJob(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Erros de Importação</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-destructive" />
+              Relatório de Erros de Importação
+            </DialogTitle>
             <DialogDescription>
-              Arquivo: {errorsDialogJob?.filename}
+              Arquivo: {errorsDialogJob?.filename} | Ano: {errorsDialogJob?.electionYear || "-"} | UF: {errorsDialogJob?.uf || "-"}
             </DialogDescription>
           </DialogHeader>
+          
           {jobErrors && jobErrors.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Linha</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Mensagem</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {jobErrors.slice(0, 100).map((error) => (
-                  <TableRow key={error.id}>
-                    <TableCell>{error.rowNumber || "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{error.errorType}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-md truncate" title={error.errorMessage}>
-                      {error.errorMessage}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="space-y-4">
+              <Card className="border-destructive/50 bg-destructive/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>Resumo de Discrepâncias</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const csvContent = [
+                          ["Linha", "Tipo de Erro", "Mensagem", "Dados Brutos"].join(";"),
+                          ...jobErrors.map(e => [
+                            e.rowNumber || "",
+                            e.errorType || "",
+                            `"${(e.errorMessage || "").replace(/"/g, '""')}"`,
+                            `"${(e.rawData || "").replace(/"/g, '""')}"`
+                          ].join(";"))
+                        ].join("\n");
+                        const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `erros_importacao_${errorsDialogJob?.id}_${new Date().toISOString().split("T")[0]}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      data-testid="button-export-errors-csv"
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Exportar CSV
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="text-center p-3 rounded-lg bg-background">
+                      <p className="text-2xl font-bold text-destructive">{jobErrors.length}</p>
+                      <p className="text-xs text-muted-foreground">Total de Erros</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-background">
+                      <p className="text-2xl font-bold">{new Set(jobErrors.map(e => e.errorType)).size}</p>
+                      <p className="text-xs text-muted-foreground">Tipos Diferentes</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-background">
+                      <p className="text-2xl font-bold">
+                        {jobErrors.filter(e => e.rowNumber).length > 0 
+                          ? Math.min(...jobErrors.filter(e => e.rowNumber).map(e => e.rowNumber!))
+                          : "-"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Primeira Linha</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-background">
+                      <p className="text-2xl font-bold">
+                        {jobErrors.filter(e => e.rowNumber).length > 0 
+                          ? Math.max(...jobErrors.filter(e => e.rowNumber).map(e => e.rowNumber!))
+                          : "-"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Última Linha</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Distribuição por Tipo de Erro:</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(
+                        jobErrors.reduce((acc, e) => {
+                          acc[e.errorType || "desconhecido"] = (acc[e.errorType || "desconhecido"] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      ).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                        <Badge key={type} variant="destructive" className="text-xs">
+                          {type}: {count} ({((count / jobErrors.length) * 100).toFixed(1)}%)
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Orientações para Resolução
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm space-y-2">
+                  {Array.from(new Set(jobErrors.map(e => e.errorType))).slice(0, 5).map(errorType => (
+                    <div key={errorType} className="p-3 rounded-lg bg-muted/50">
+                      <p className="font-medium text-destructive">{errorType}</p>
+                      <p className="text-muted-foreground mt-1">
+                        {errorType === "parse_error" && "Verifique se o arquivo CSV está no formato correto do TSE. O separador deve ser ponto-e-vírgula (;) e a codificação Latin1 ou UTF-8."}
+                        {errorType === "invalid_format" && "Alguns campos estão em formato inválido. Verifique se o arquivo corresponde ao layout esperado do TSE."}
+                        {errorType === "missing_field" && "Campos obrigatórios estão ausentes. Certifique-se de que o arquivo possui todas as colunas necessárias."}
+                        {errorType === "duplicate_entry" && "Registros duplicados foram detectados. Verifique se não há linhas repetidas no arquivo original."}
+                        {errorType === "invalid_number" && "Valores numéricos inválidos foram encontrados. Verifique se os campos de votos e números de candidato estão corretos."}
+                        {errorType === "encoding_error" && "Problemas de codificação detectados. Tente converter o arquivo para UTF-8 antes de importar."}
+                        {!["parse_error", "invalid_format", "missing_field", "duplicate_entry", "invalid_number", "encoding_error"].includes(errorType || "") && 
+                          "Revise os dados brutos das linhas afetadas para identificar o problema específico."}
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Accordion type="single" collapsible defaultValue="errors">
+                <AccordionItem value="errors">
+                  <AccordionTrigger className="text-base">
+                    Detalhes dos Erros ({Math.min(100, jobErrors.length)} de {jobErrors.length})
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-20">Linha</TableHead>
+                          <TableHead className="w-32">Tipo</TableHead>
+                          <TableHead>Mensagem</TableHead>
+                          <TableHead className="w-48">Dados Brutos</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {jobErrors.slice(0, 100).map((error) => (
+                          <TableRow key={error.id}>
+                            <TableCell className="font-mono text-sm">{error.rowNumber || "-"}</TableCell>
+                            <TableCell>
+                              <Badge variant="destructive" className="text-xs">{error.errorType}</Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">{error.errorMessage}</TableCell>
+                            <TableCell className="text-xs font-mono text-muted-foreground max-w-[200px] truncate" title={error.rawData || ""}>
+                              {error.rawData || "-"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {jobErrors.length > 100 && (
+                      <p className="text-sm text-muted-foreground mt-3 text-center">
+                        Mostrando os primeiros 100 erros. Exporte o CSV para ver todos os {jobErrors.length} erros.
+                      </p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
           ) : (
-            <p className="text-muted-foreground">Nenhum erro encontrado.</p>
-          )}
-          {jobErrors && jobErrors.length > 100 && (
-            <p className="text-sm text-muted-foreground">
-              Mostrando os primeiros 100 erros de {jobErrors.length} total.
-            </p>
+            <div className="text-center py-8">
+              <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500 opacity-70" />
+              <p className="text-muted-foreground">Nenhum erro encontrado nesta importação.</p>
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -1182,123 +1306,249 @@ export default function TseImport() {
             </div>
           ) : validationStatus?.hasValidation ? (
             <div className="space-y-6">
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const report = {
+                      arquivo: validationDialogJob?.filename,
+                      ano: validationDialogJob?.electionYear,
+                      uf: validationDialogJob?.uf,
+                      dataValidacao: validationStatus.completedAt,
+                      score: validationStatus.aiAnalysis?.overallDataQuality?.score,
+                      avaliacao: validationStatus.aiAnalysis?.overallDataQuality?.assessment,
+                      registrosVerificados: validationStatus.totalRecordsChecked,
+                      problemasEncontrados: validationStatus.issuesFound,
+                      descobertas: validationStatus.aiAnalysis?.overallDataQuality?.keyFindings,
+                      riscos: validationStatus.aiAnalysis?.overallDataQuality?.risksIdentified,
+                      analise: validationStatus.aiAnalysis?.analysis,
+                      recomendacoes: validationStatus.aiAnalysis?.recommendations,
+                      resumoPorSeveridade: validationStatus.summary?.bySeverity,
+                      resumoPorTipo: validationStatus.summary?.byType,
+                    };
+                    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `validacao_ia_${validationDialogJob?.id}_${new Date().toISOString().split("T")[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  data-testid="button-export-validation-json"
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Exportar Relatório
+                </Button>
+              </div>
+
               {validationStatus.aiAnalysis?.overallDataQuality && (
-                <Card>
+                <Card className={
+                  validationStatus.aiAnalysis.overallDataQuality.score >= 80 ? "border-green-500/50 bg-green-500/5" :
+                  validationStatus.aiAnalysis.overallDataQuality.score >= 60 ? "border-yellow-500/50 bg-yellow-500/5" :
+                  "border-destructive/50 bg-destructive/5"
+                }>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center justify-between">
-                      <span>Qualidade dos Dados</span>
-                      <Badge 
-                        variant={
-                          validationStatus.aiAnalysis.overallDataQuality.score >= 80 ? "default" :
-                          validationStatus.aiAnalysis.overallDataQuality.score >= 60 ? "secondary" :
-                          "destructive"
-                        }
-                        className="text-lg px-3"
-                      >
-                        {validationStatus.aiAnalysis.overallDataQuality.score}/100
-                      </Badge>
+                      <span className="flex items-center gap-2">
+                        {validationStatus.aiAnalysis.overallDataQuality.score >= 80 ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : validationStatus.aiAnalysis.overallDataQuality.score >= 60 ? (
+                          <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-destructive" />
+                        )}
+                        Avaliação de Qualidade dos Dados
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Score:</span>
+                        <Badge 
+                          variant={
+                            validationStatus.aiAnalysis.overallDataQuality.score >= 80 ? "default" :
+                            validationStatus.aiAnalysis.overallDataQuality.score >= 60 ? "secondary" :
+                            "destructive"
+                          }
+                          className="text-lg px-4 py-1"
+                        >
+                          {validationStatus.aiAnalysis.overallDataQuality.score}/100
+                        </Badge>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p className="text-sm">{validationStatus.aiAnalysis.overallDataQuality.assessment}</p>
+                    <div className="p-4 rounded-lg bg-background border">
+                      <p className="text-sm leading-relaxed">{validationStatus.aiAnalysis.overallDataQuality.assessment}</p>
+                    </div>
                     
-                    {validationStatus.aiAnalysis.overallDataQuality.keyFindings.length > 0 && (
-                      <div>
-                        <h4 className="font-medium mb-2 flex items-center gap-1">
-                          <Info className="h-4 w-4" />
-                          Principais Descobertas
-                        </h4>
-                        <ul className="list-disc list-inside text-sm space-y-1">
-                          {validationStatus.aiAnalysis.overallDataQuality.keyFindings.map((finding, i) => (
-                            <li key={i}>{finding}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {validationStatus.aiAnalysis.overallDataQuality.risksIdentified.length > 0 && (
-                      <div>
-                        <h4 className="font-medium mb-2 flex items-center gap-1 text-destructive">
-                          <AlertTriangle className="h-4 w-4" />
-                          Riscos Identificados
-                        </h4>
-                        <ul className="list-disc list-inside text-sm space-y-1">
-                          {validationStatus.aiAnalysis.overallDataQuality.risksIdentified.map((risk, i) => (
-                            <li key={i}>{risk}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {validationStatus.aiAnalysis.overallDataQuality.keyFindings.length > 0 && (
+                        <div className="p-4 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                          <h4 className="font-medium mb-3 flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                            <Info className="h-4 w-4" />
+                            Principais Descobertas
+                          </h4>
+                          <ul className="space-y-2">
+                            {validationStatus.aiAnalysis.overallDataQuality.keyFindings.map((finding, i) => (
+                              <li key={i} className="text-sm flex items-start gap-2">
+                                <span className="text-blue-500 mt-1">•</span>
+                                <span>{finding}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {validationStatus.aiAnalysis.overallDataQuality.risksIdentified.length > 0 && (
+                        <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20">
+                          <h4 className="font-medium mb-3 flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            Riscos Identificados
+                          </h4>
+                          <ul className="space-y-2">
+                            {validationStatus.aiAnalysis.overallDataQuality.risksIdentified.map((risk, i) => (
+                              <li key={i} className="text-sm flex items-start gap-2">
+                                <span className="text-destructive mt-1">!</span>
+                                <span>{risk}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )}
 
-              <div className="grid gap-4 grid-cols-3">
+              <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
                 <Card>
                   <CardContent className="pt-4 text-center">
                     <p className="text-3xl font-bold">{validationStatus.totalRecordsChecked?.toLocaleString("pt-BR")}</p>
-                    <p className="text-sm text-muted-foreground">Registros Verificados</p>
+                    <p className="text-xs text-muted-foreground">Registros Verificados</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-4 text-center">
                     <p className="text-3xl font-bold">{validationStatus.issuesFound || 0}</p>
-                    <p className="text-sm text-muted-foreground">Problemas Encontrados</p>
+                    <p className="text-xs text-muted-foreground">Problemas Encontrados</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-4 text-center">
-                    <p className="text-3xl font-bold">
+                    <p className="text-3xl font-bold text-destructive">
                       {validationStatus.summary?.bySeverity?.["error"] || 0}
                     </p>
-                    <p className="text-sm text-muted-foreground text-destructive">Erros Críticos</p>
+                    <p className="text-xs text-muted-foreground">Erros Críticos</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 text-center">
+                    <p className="text-3xl font-bold text-yellow-600">
+                      {validationStatus.summary?.bySeverity?.["warning"] || 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Avisos</p>
                   </CardContent>
                 </Card>
               </div>
 
               {validationStatus.summary && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Por Severidade</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(validationStatus.summary.bySeverity).map(([sev, count]) => (
-                          <Badge 
-                            key={sev} 
-                            variant={sev === "error" ? "destructive" : sev === "warning" ? "secondary" : "outline"}
-                          >
-                            {sev}: {count}
-                          </Badge>
-                        ))}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Distribuição de Problemas</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <h4 className="text-sm font-medium mb-3">Por Severidade</h4>
+                        <div className="space-y-2">
+                          {Object.entries(validationStatus.summary.bySeverity).sort((a, b) => {
+                            const order = { error: 0, warning: 1, info: 2 };
+                            return (order[a[0] as keyof typeof order] || 3) - (order[b[0] as keyof typeof order] || 3);
+                          }).map(([sev, count]) => (
+                            <div key={sev} className="flex items-center gap-2">
+                              <Badge 
+                                variant={sev === "error" ? "destructive" : sev === "warning" ? "secondary" : "outline"}
+                                className="w-20 justify-center"
+                              >
+                                {sev === "error" ? "Erro" : sev === "warning" ? "Aviso" : "Info"}
+                              </Badge>
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full ${sev === "error" ? "bg-destructive" : sev === "warning" ? "bg-yellow-500" : "bg-blue-500"}`}
+                                  style={{ width: `${Math.min(100, (count / (validationStatus.issuesFound || 1)) * 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium w-12 text-right">{count}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Por Tipo</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(validationStatus.summary.byType).slice(0, 6).map(([type, count]) => (
-                          <Badge key={type} variant="outline">
-                            {type.replace(/_/g, " ")}: {count}
-                          </Badge>
-                        ))}
+                      <div>
+                        <h4 className="text-sm font-medium mb-3">Por Tipo de Problema</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(validationStatus.summary.byType)
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 8)
+                            .map(([type, count]) => (
+                              <Badge key={type} variant="outline" className="text-xs">
+                                {type.replace(/_/g, " ")}: {count}
+                              </Badge>
+                            ))}
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               {validationStatus.aiAnalysis?.analysis && (
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Análise com IA</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Análise Detalhada da IA
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm whitespace-pre-wrap">{validationStatus.aiAnalysis.analysis}</p>
+                    <div className="p-4 rounded-lg bg-muted/50 border">
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{validationStatus.aiAnalysis.analysis}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {validationStatus.aiAnalysis?.recommendations && validationStatus.aiAnalysis.recommendations.length > 0 && (
+                <Card className="border-primary/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Info className="h-4 w-4 text-primary" />
+                      Recomendações de Ação
+                    </CardTitle>
+                    <CardDescription>
+                      Ações sugeridas pela IA para melhorar a qualidade dos dados
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {validationStatus.aiAnalysis.recommendations.map((rec, i) => (
+                        <div key={i} className="p-3 rounded-lg border bg-background flex items-start gap-3">
+                          <Badge variant={
+                            rec.severity === "error" ? "destructive" : 
+                            rec.severity === "warning" ? "secondary" : "outline"
+                          } className="shrink-0 mt-0.5">
+                            {rec.severity === "error" ? "Crítico" : rec.severity === "warning" ? "Importante" : "Sugestão"}
+                          </Badge>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">{rec.issue}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{rec.suggestedAction}</p>
+                            {rec.confidence && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Confiança: {Math.round(rec.confidence * 100)}%
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -1306,17 +1556,50 @@ export default function TseImport() {
               {validationIssues && validationIssues.length > 0 && (
                 <Accordion type="single" collapsible className="w-full">
                   <AccordionItem value="issues">
-                    <AccordionTrigger>
-                      Ver Todos os Problemas ({validationIssues.length})
+                    <AccordionTrigger className="text-base">
+                      Lista Completa de Problemas ({validationIssues.length})
                     </AccordionTrigger>
                     <AccordionContent>
+                      <div className="mb-3 flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const csvContent = [
+                              ["Severidade", "Tipo", "Categoria", "Linha", "Campo", "Valor Atual", "Mensagem", "Ação Sugerida", "Confiança"].join(";"),
+                              ...validationIssues.map(issue => [
+                                issue.severity,
+                                issue.type,
+                                issue.category || "",
+                                issue.rowReference || "",
+                                issue.field || "",
+                                `"${(issue.currentValue || "").replace(/"/g, '""')}"`,
+                                `"${(issue.message || "").replace(/"/g, '""')}"`,
+                                `"${(issue.suggestedFix?.reasoning || "").replace(/"/g, '""')}"`,
+                                issue.suggestedFix?.confidence ? `${Math.round(issue.suggestedFix.confidence * 100)}%` : ""
+                              ].join(";"))
+                            ].join("\n");
+                            const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `problemas_validacao_${validationDialogJob?.id}_${new Date().toISOString().split("T")[0]}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          data-testid="button-export-issues-csv"
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Exportar CSV
+                        </Button>
+                      </div>
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Severidade</TableHead>
-                            <TableHead>Tipo</TableHead>
+                            <TableHead className="w-24">Severidade</TableHead>
+                            <TableHead className="w-32">Tipo</TableHead>
                             <TableHead>Mensagem</TableHead>
-                            <TableHead>Sugestão</TableHead>
+                            <TableHead className="w-48">Ação Sugerida</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1327,16 +1610,21 @@ export default function TseImport() {
                                   issue.severity === "error" ? "destructive" : 
                                   issue.severity === "warning" ? "secondary" : "outline"
                                 }>
-                                  {issue.severity}
+                                  {issue.severity === "error" ? "Erro" : issue.severity === "warning" ? "Aviso" : "Info"}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-sm">
                                 {issue.type.replace(/_/g, " ")}
                               </TableCell>
-                              <TableCell className="text-sm max-w-xs truncate" title={issue.message}>
-                                {issue.message}
+                              <TableCell className="text-sm">
+                                <div>
+                                  <p>{issue.message}</p>
+                                  {issue.rowReference && (
+                                    <p className="text-xs text-muted-foreground mt-1">Linha: {issue.rowReference}</p>
+                                  )}
+                                </div>
                               </TableCell>
-                              <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={issue.suggestedFix?.reasoning}>
+                              <TableCell className="text-sm text-muted-foreground">
                                 {issue.suggestedFix?.reasoning || "-"}
                               </TableCell>
                             </TableRow>
@@ -1344,39 +1632,13 @@ export default function TseImport() {
                         </TableBody>
                       </Table>
                       {validationIssues.length > 50 && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Mostrando os primeiros 50 de {validationIssues.length} problemas.
+                        <p className="text-sm text-muted-foreground mt-3 text-center">
+                          Mostrando os primeiros 50 de {validationIssues.length} problemas. Exporte o CSV para ver todos.
                         </p>
                       )}
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
-              )}
-
-              {validationStatus.aiAnalysis?.recommendations && validationStatus.aiAnalysis.recommendations.length > 0 && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Recomendações</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2">
-                      {validationStatus.aiAnalysis.recommendations.map((rec, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <Badge variant={
-                            rec.severity === "error" ? "destructive" : 
-                            rec.severity === "warning" ? "secondary" : "outline"
-                          } className="mt-0.5 shrink-0">
-                            {rec.severity}
-                          </Badge>
-                          <div>
-                            <p className="font-medium">{rec.issue}</p>
-                            <p className="text-muted-foreground">{rec.suggestedAction}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
               )}
             </div>
           ) : (
