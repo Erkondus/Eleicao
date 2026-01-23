@@ -10,7 +10,7 @@ services:
       - NODE_ENV=production
       - PORT=5000
       # Conecta ao PostgreSQL do Supabase via nome do container
-      - DATABASE_URL=postgresql://postgres:SUA_SENHA_AQUI@supabase-db:5432/postgres
+      - DATABASE_URL=postgresql://postgres:3toxIIcQQTQVTp6FyfF9LlUjL7P1wahB3crqWwKm6Yc3mZwjyiTmtPBaVZ5egVSv1kx4yH8jLGYwYOpj@supabase-db:5432/postgres
       - SESSION_SECRET=${SESSION_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     restart: unless-stopped
