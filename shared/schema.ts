@@ -50,6 +50,10 @@ export const scenarios = pgTable("scenarios", {
   availableSeats: integer("available_seats").notNull(),
   position: text("position").notNull().default("vereador"),
   status: text("status").notNull().default("draft"),
+  // Historical election reference
+  historicalYear: integer("historical_year"),
+  historicalUf: text("historical_uf"),
+  historicalMunicipio: text("historical_municipio"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   createdBy: varchar("created_by").references(() => users.id),
@@ -362,6 +366,177 @@ export type InsertTseCandidateVote = z.infer<typeof insertTseCandidateVoteSchema
 export type TseCandidateVote = typeof tseCandidateVotes.$inferSelect;
 export type InsertTseImportError = z.infer<typeof insertTseImportErrorSchema>;
 export type TseImportError = typeof tseImportErrors.$inferSelect;
+
+// Import Batches - for tracking batch processing and enabling reprocessing
+export const tseImportBatches = pgTable("tse_import_batches", {
+  id: serial("id").primaryKey(),
+  importJobId: integer("import_job_id").notNull().references(() => tseImportJobs.id, { onDelete: "cascade" }),
+  batchIndex: integer("batch_index").notNull(),
+  status: text("status").notNull().default("pending"), // pending, processing, completed, failed
+  rowStart: integer("row_start").notNull(),
+  rowEnd: integer("row_end").notNull(),
+  totalRows: integer("total_rows").notNull(),
+  processedRows: integer("processed_rows").default(0),
+  insertedRows: integer("inserted_rows").default(0),
+  skippedRows: integer("skipped_rows").default(0),
+  errorCount: integer("error_count").default(0),
+  errorSummary: text("error_summary"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("tse_import_batches_job_idx").on(table.importJobId),
+  index("tse_import_batches_status_idx").on(table.status),
+]);
+
+// Batch Rows - store raw data for failed rows to enable reprocessing
+export const tseImportBatchRows = pgTable("tse_import_batch_rows", {
+  id: serial("id").primaryKey(),
+  batchId: integer("batch_id").notNull().references(() => tseImportBatches.id, { onDelete: "cascade" }),
+  rowNumber: integer("row_number").notNull(),
+  rawData: text("raw_data").notNull(), // Original CSV row data
+  parsedData: jsonb("parsed_data"), // Parsed fields as JSON
+  status: text("status").notNull().default("pending"), // pending, success, failed, skipped
+  errorType: text("error_type"),
+  errorMessage: text("error_message"),
+  processedAt: timestamp("processed_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("tse_import_batch_rows_batch_idx").on(table.batchId),
+  index("tse_import_batch_rows_status_idx").on(table.status),
+]);
+
+export const tseImportBatchesRelations = relations(tseImportBatches, ({ one, many }) => ({
+  importJob: one(tseImportJobs, { fields: [tseImportBatches.importJobId], references: [tseImportJobs.id] }),
+  rows: many(tseImportBatchRows),
+}));
+
+export const tseImportBatchRowsRelations = relations(tseImportBatchRows, ({ one }) => ({
+  batch: one(tseImportBatches, { fields: [tseImportBatchRows.batchId], references: [tseImportBatches.id] }),
+}));
+
+export const insertTseImportBatchSchema = createInsertSchema(tseImportBatches).omit({ id: true, createdAt: true });
+export const insertTseImportBatchRowSchema = createInsertSchema(tseImportBatchRows).omit({ id: true, createdAt: true });
+
+export type InsertTseImportBatch = z.infer<typeof insertTseImportBatchSchema>;
+export type TseImportBatch = typeof tseImportBatches.$inferSelect;
+export type InsertTseImportBatchRow = z.infer<typeof insertTseImportBatchRowSchema>;
+export type TseImportBatchRow = typeof tseImportBatchRows.$inferSelect;
+
+// TSE Electoral Statistics (DETALHE_VOTACAO_MUNZONA) - aggregate voting data per cargo/UF/municipio
+export const tseElectoralStatistics = pgTable("tse_electoral_statistics", {
+  id: serial("id").primaryKey(),
+  importJobId: integer("import_job_id").references(() => tseImportJobs.id, { onDelete: "cascade" }),
+  anoEleicao: integer("ano_eleicao").notNull(),
+  cdTipoEleicao: integer("cd_tipo_eleicao"),
+  nmTipoEleicao: text("nm_tipo_eleicao"),
+  nrTurno: integer("nr_turno").notNull().default(1),
+  cdEleicao: integer("cd_eleicao"),
+  dsEleicao: text("ds_eleicao"),
+  dtEleicao: text("dt_eleicao"),
+  tpAbrangencia: text("tp_abrangencia"),
+  sgUf: text("sg_uf").notNull(),
+  sgUe: text("sg_ue"),
+  nmUe: text("nm_ue"),
+  cdMunicipio: integer("cd_municipio"),
+  nmMunicipio: text("nm_municipio"),
+  nrZona: integer("nr_zona"),
+  cdCargo: integer("cd_cargo").notNull(),
+  dsCargo: text("ds_cargo"),
+  qtAptos: integer("qt_aptos").default(0),
+  qtSecoesPrincipais: integer("qt_secoes_principais").default(0),
+  qtSecoesAgregadas: integer("qt_secoes_agregadas").default(0),
+  qtSecoesNaoInstaladas: integer("qt_secoes_nao_instaladas").default(0),
+  qtTotalSecoes: integer("qt_total_secoes").default(0),
+  qtComparecimento: integer("qt_comparecimento").default(0),
+  qtAbstencoes: integer("qt_abstencoes").default(0),
+  stVotoEmTransito: text("st_voto_em_transito"),
+  qtVotos: integer("qt_votos").default(0),
+  qtVotosConcorrentes: integer("qt_votos_concorrentes").default(0),
+  qtTotalVotosValidos: integer("qt_total_votos_validos").default(0),
+  qtVotosNominaisValidos: integer("qt_votos_nominais_validos").default(0),
+  qtTotalVotosLegValidos: integer("qt_total_votos_leg_validos").default(0),
+  qtVotosLegValidos: integer("qt_votos_leg_validos").default(0),
+  qtVotosNomConvrLegValidos: integer("qt_votos_nom_convr_leg_validos").default(0),
+  qtTotalVotosAnulados: integer("qt_total_votos_anulados").default(0),
+  qtVotosNominaisAnulados: integer("qt_votos_nominais_anulados").default(0),
+  qtVotosLegendaAnulados: integer("qt_votos_legenda_anulados").default(0),
+  qtTotalVotosAnulSubjud: integer("qt_total_votos_anul_subjud").default(0),
+  qtVotosNominaisAnulSubjud: integer("qt_votos_nominais_anul_subjud").default(0),
+  qtVotosLegendaAnulSubjud: integer("qt_votos_legenda_anul_subjud").default(0),
+  qtVotosBrancos: integer("qt_votos_brancos").default(0),
+  qtTotalVotosNulos: integer("qt_total_votos_nulos").default(0),
+  qtVotosNulos: integer("qt_votos_nulos").default(0),
+  qtVotosNulosTecnicos: integer("qt_votos_nulos_tecnicos").default(0),
+  qtVotosAnuladosApuSep: integer("qt_votos_anulados_apu_sep").default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("tse_electoral_stats_year_uf_cargo_idx").on(table.anoEleicao, table.sgUf, table.cdCargo),
+  index("tse_electoral_stats_municipio_idx").on(table.cdMunicipio),
+]);
+
+// TSE Party Votes (VOTACAO_PARTIDO_MUNZONA) - party-level votes for proportional calculation
+export const tsePartyVotes = pgTable("tse_party_votes", {
+  id: serial("id").primaryKey(),
+  importJobId: integer("import_job_id").references(() => tseImportJobs.id, { onDelete: "cascade" }),
+  anoEleicao: integer("ano_eleicao").notNull(),
+  cdTipoEleicao: integer("cd_tipo_eleicao"),
+  nmTipoEleicao: text("nm_tipo_eleicao"),
+  nrTurno: integer("nr_turno").notNull().default(1),
+  cdEleicao: integer("cd_eleicao"),
+  dsEleicao: text("ds_eleicao"),
+  dtEleicao: text("dt_eleicao"),
+  tpAbrangencia: text("tp_abrangencia"),
+  sgUf: text("sg_uf").notNull(),
+  sgUe: text("sg_ue"),
+  nmUe: text("nm_ue"),
+  cdMunicipio: integer("cd_municipio"),
+  nmMunicipio: text("nm_municipio"),
+  nrZona: integer("nr_zona"),
+  cdCargo: integer("cd_cargo").notNull(),
+  dsCargo: text("ds_cargo"),
+  tpAgremiacao: text("tp_agremiacao"),
+  nrPartido: integer("nr_partido").notNull(),
+  sgPartido: text("sg_partido").notNull(),
+  nmPartido: text("nm_partido"),
+  nrFederacao: integer("nr_federacao"),
+  nmFederacao: text("nm_federacao"),
+  sgFederacao: text("sg_federacao"),
+  dsComposicaoFederacao: text("ds_composicao_federacao"),
+  sqColigacao: text("sq_coligacao"),
+  nmColigacao: text("nm_coligacao"),
+  dsComposicaoColigacao: text("ds_composicao_coligacao"),
+  stVotoEmTransito: text("st_voto_em_transito"),
+  qtVotosLegendaValidos: integer("qt_votos_legenda_validos").default(0),
+  qtVotosNomConvrLegValidos: integer("qt_votos_nom_convr_leg_validos").default(0),
+  qtTotalVotosLegValidos: integer("qt_total_votos_leg_validos").default(0),
+  qtVotosNominaisValidos: integer("qt_votos_nominais_validos").default(0),
+  qtVotosLegendaAnulSubjud: integer("qt_votos_legenda_anul_subjud").default(0),
+  qtVotosNominaisAnulSubjud: integer("qt_votos_nominais_anul_subjud").default(0),
+  qtVotosLegendaAnulados: integer("qt_votos_legenda_anulados").default(0),
+  qtVotosNominaisAnulados: integer("qt_votos_nominais_anulados").default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("tse_party_votes_year_uf_cargo_idx").on(table.anoEleicao, table.sgUf, table.cdCargo),
+  index("tse_party_votes_party_idx").on(table.nrPartido),
+  index("tse_party_votes_municipio_idx").on(table.cdMunicipio),
+]);
+
+export const tseElectoralStatisticsRelations = relations(tseElectoralStatistics, ({ one }) => ({
+  importJob: one(tseImportJobs, { fields: [tseElectoralStatistics.importJobId], references: [tseImportJobs.id] }),
+}));
+
+export const tsePartyVotesRelations = relations(tsePartyVotes, ({ one }) => ({
+  importJob: one(tseImportJobs, { fields: [tsePartyVotes.importJobId], references: [tseImportJobs.id] }),
+}));
+
+export const insertTseElectoralStatisticsSchema = createInsertSchema(tseElectoralStatistics).omit({ id: true, createdAt: true });
+export const insertTsePartyVotesSchema = createInsertSchema(tsePartyVotes).omit({ id: true, createdAt: true });
+
+export type InsertTseElectoralStatistics = z.infer<typeof insertTseElectoralStatisticsSchema>;
+export type TseElectoralStatistics = typeof tseElectoralStatistics.$inferSelect;
+export type InsertTsePartyVotes = z.infer<typeof insertTsePartyVotesSchema>;
+export type TsePartyVotes = typeof tsePartyVotes.$inferSelect;
 
 // Saved Reports
 export const savedReports = pgTable("saved_reports", {
@@ -711,3 +886,438 @@ export type ForecastResult = typeof forecastResults.$inferSelect;
 export const insertSwingRegionSchema = createInsertSchema(forecastSwingRegions).omit({ id: true, createdAt: true });
 export type InsertSwingRegion = z.infer<typeof insertSwingRegionSchema>;
 export type SwingRegion = typeof forecastSwingRegions.$inferSelect;
+
+// Custom Prediction Scenarios - user-defined "what-if" scenarios
+export const predictionScenarios = pgTable("prediction_scenarios", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  baseYear: integer("base_year").notNull(), // Historical year to use as base
+  targetYear: integer("target_year").notNull(), // Year to predict
+  state: text("state"), // null = nacional
+  position: text("position"), // Cargo eleitoral
+  
+  // Polling data adjustments
+  pollingData: jsonb("polling_data"), // Array of { party, pollPercent, pollDate, source, sampleSize }
+  pollingWeight: decimal("polling_weight", { precision: 3, scale: 2 }).default("0.30"), // Weight for polls vs historical
+  
+  // Custom adjustments per party
+  partyAdjustments: jsonb("party_adjustments"), // { partyName: { voteShareAdjust, turnoutAdjust, reason } }
+  
+  // Turnout assumptions
+  expectedTurnout: decimal("expected_turnout", { precision: 5, scale: 2 }), // Percentage
+  turnoutVariation: decimal("turnout_variation", { precision: 5, scale: 2 }).default("5.00"), // +/- variation
+  
+  // External factors
+  externalFactors: jsonb("external_factors"), // Array of { factor, impact: 'positive'|'negative', magnitude: 1-10 }
+  
+  // Model configuration
+  monteCarloIterations: integer("monte_carlo_iterations").default(10000),
+  confidenceLevel: decimal("confidence_level", { precision: 3, scale: 2 }).default("0.95"),
+  volatilityMultiplier: decimal("volatility_multiplier", { precision: 3, scale: 2 }).default("1.20"),
+  
+  // Model parameters (consolidated)
+  parameters: jsonb("parameters"), // { pollingWeight, historicalWeight, adjustmentWeight, monteCarloIterations, confidenceLevel }
+  
+  // Results
+  status: text("status").notNull().default("draft"), // draft, running, completed, failed
+  results: jsonb("results"), // Cached prediction results
+  narrative: text("narrative"), // AI-generated analysis
+  forecastRunId: integer("forecast_run_id").references(() => forecastRuns.id),
+  lastRunAt: timestamp("last_run_at"),
+  
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  index("prediction_scenarios_status_idx").on(table.status),
+  index("prediction_scenarios_target_year_idx").on(table.targetYear),
+]);
+
+export const predictionScenariosRelations = relations(predictionScenarios, ({ one }) => ({
+  createdByUser: one(users, { fields: [predictionScenarios.createdBy], references: [users.id] }),
+}));
+
+export const insertPredictionScenarioSchema = createInsertSchema(predictionScenarios).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPredictionScenario = z.infer<typeof insertPredictionScenarioSchema>;
+export type PredictionScenario = typeof predictionScenarios.$inferSelect;
+
+// Candidate Comparison Predictions - compare 2+ candidates performance
+export const candidateComparisons = pgTable("candidate_comparisons", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  candidateIds: jsonb("candidate_ids").notNull(), // Array of candidate IDs or names to compare
+  state: text("state"),
+  position: text("position"),
+  targetYear: integer("target_year").notNull(),
+  baseYear: integer("base_year"),
+  
+  // Comparison parameters
+  compareMetrics: jsonb("compare_metrics"), // { voteShare: true, electionProbability: true, partySupport: true, etc }
+  includeHistorical: boolean("include_historical").default(true),
+  
+  // Results
+  status: text("status").notNull().default("draft"),
+  results: jsonb("results"), // { candidates: [{ id, name, projectedVotes, voteShare, probability, trend, historicalData }], winner, margins, confidence }
+  narrative: text("narrative"),
+  aiInsights: jsonb("ai_insights"), // AI-generated comparative insights
+  
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertCandidateComparisonSchema = createInsertSchema(candidateComparisons).omit({ id: true, createdAt: true });
+export type InsertCandidateComparison = z.infer<typeof insertCandidateComparisonSchema>;
+export type CandidateComparison = typeof candidateComparisons.$inferSelect;
+
+// Event Impact Predictions - before/after projections for specific events
+export const eventImpactPredictions = pgTable("event_impact_predictions", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  eventDescription: text("event_description").notNull(), // User-described event
+  eventType: text("event_type").notNull(), // 'scandal', 'party_change', 'endorsement', 'policy', 'debate', 'economic', 'other'
+  eventDate: timestamp("event_date"),
+  
+  // Scope
+  affectedEntities: jsonb("affected_entities").notNull(), // { parties: [], candidates: [], regions: [] }
+  state: text("state"),
+  position: text("position"),
+  targetYear: integer("target_year").notNull(),
+  
+  // Impact parameters (user-defined or AI-estimated)
+  estimatedImpactMagnitude: decimal("estimated_impact_magnitude", { precision: 3, scale: 2 }), // -1 to +1
+  impactDuration: text("impact_duration"), // 'short-term', 'medium-term', 'long-term'
+  impactDistribution: jsonb("impact_distribution"), // { direct: 0.6, indirect: 0.4 }
+  
+  // Before/After projections
+  status: text("status").notNull().default("draft"),
+  beforeProjection: jsonb("before_projection"), // { parties: [], candidates: [], overall: {} }
+  afterProjection: jsonb("after_projection"), // { parties: [], candidates: [], overall: {} }
+  impactDelta: jsonb("impact_delta"), // Calculated differences
+  confidenceIntervals: jsonb("confidence_intervals"),
+  narrative: text("narrative"),
+  aiAnalysis: jsonb("ai_analysis"),
+  
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertEventImpactPredictionSchema = createInsertSchema(eventImpactPredictions).omit({ id: true, createdAt: true });
+export type InsertEventImpactPrediction = z.infer<typeof insertEventImpactPredictionSchema>;
+export type EventImpactPrediction = typeof eventImpactPredictions.$inferSelect;
+
+// Scenario Simulations for Reports - "What if" scenarios
+export const scenarioSimulations = pgTable("scenario_simulations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  simulationType: text("simulation_type").notNull(), // 'party_change', 'coalition_change', 'turnout_change', 'regional_shift', 'custom'
+  
+  // Scenario definition
+  baseScenario: jsonb("base_scenario").notNull(), // Current state/baseline
+  modifiedScenario: jsonb("modified_scenario").notNull(), // "What if" modifications
+  
+  // Parameters
+  parameters: jsonb("parameters"), // { candidate, fromParty, toParty, etc }
+  scope: jsonb("scope"), // { state, position, year }
+  
+  // Results
+  status: text("status").notNull().default("draft"),
+  baselineResults: jsonb("baseline_results"),
+  simulatedResults: jsonb("simulated_results"),
+  impactAnalysis: jsonb("impact_analysis"), // { seatChanges, voteShareChanges, winners, losers }
+  narrative: text("narrative"),
+  
+  // Link to report
+  reportId: integer("report_id"),
+  
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertScenarioSimulationSchema = createInsertSchema(scenarioSimulations).omit({ id: true, createdAt: true });
+export type InsertScenarioSimulation = z.infer<typeof insertScenarioSimulationSchema>;
+export type ScenarioSimulation = typeof scenarioSimulations.$inferSelect;
+
+// Report Templates - customizable report configurations
+export const reportTemplates = pgTable("report_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  reportType: text("report_type").notNull(), // 'voting_details', 'candidates', 'parties', 'summary'
+  filters: jsonb("filters").notNull(), // year, state, electionType, position, party, etc.
+  columns: jsonb("columns").notNull(), // which columns to include
+  groupBy: text("group_by"), // optional grouping
+  sortBy: text("sort_by"),
+  sortOrder: text("sort_order").default("desc"),
+  format: text("format").notNull().default("csv"), // 'csv', 'pdf', 'excel'
+  headerTemplate: text("header_template"), // custom header text
+  footerTemplate: text("footer_template"), // custom footer text
+  includeCharts: boolean("include_charts").default(false),
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const reportTemplatesRelations = relations(reportTemplates, ({ one, many }) => ({
+  createdByUser: one(users, { fields: [reportTemplates.createdBy], references: [users.id] }),
+  schedules: many(reportSchedules),
+}));
+
+// Report Schedules - automated report delivery
+export const reportSchedules = pgTable("report_schedules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  templateId: integer("template_id").notNull().references(() => reportTemplates.id, { onDelete: "cascade" }),
+  frequency: text("frequency").notNull(), // 'once', 'daily', 'weekly', 'monthly'
+  dayOfWeek: integer("day_of_week"), // 0-6 for weekly (0=Sunday)
+  dayOfMonth: integer("day_of_month"), // 1-31 for monthly
+  timeOfDay: text("time_of_day").notNull().default("08:00"), // HH:MM format
+  timezone: text("timezone").notNull().default("America/Sao_Paulo"),
+  recipients: jsonb("recipients").notNull(), // array of email addresses
+  emailSubject: text("email_subject"),
+  emailBody: text("email_body"),
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  lastRunStatus: text("last_run_status"), // 'success', 'failed', 'pending'
+  lastRunError: text("last_run_error"),
+  isActive: boolean("is_active").default(true),
+  runCount: integer("run_count").default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("schedule_next_run_idx").on(table.nextRunAt),
+  index("schedule_active_idx").on(table.isActive),
+]);
+
+export const reportSchedulesRelations = relations(reportSchedules, ({ one, many }) => ({
+  template: one(reportTemplates, { fields: [reportSchedules.templateId], references: [reportTemplates.id] }),
+  createdByUser: one(users, { fields: [reportSchedules.createdBy], references: [users.id] }),
+  runs: many(reportRuns),
+}));
+
+// Report Runs - execution history
+export const reportRuns = pgTable("report_runs", {
+  id: serial("id").primaryKey(),
+  scheduleId: integer("schedule_id").references(() => reportSchedules.id, { onDelete: "set null" }),
+  templateId: integer("template_id").notNull().references(() => reportTemplates.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"), // 'pending', 'running', 'completed', 'failed'
+  triggeredBy: text("triggered_by").notNull(), // 'schedule', 'manual'
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  rowCount: integer("row_count"),
+  fileSize: integer("file_size"),
+  filePath: text("file_path"), // path to generated file
+  recipients: jsonb("recipients"), // who received the report
+  emailsSent: integer("emails_sent").default(0),
+  errorMessage: text("error_message"),
+  executionTimeMs: integer("execution_time_ms"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("runs_schedule_idx").on(table.scheduleId),
+  index("runs_template_idx").on(table.templateId),
+  index("runs_status_idx").on(table.status),
+]);
+
+export const reportRunsRelations = relations(reportRuns, ({ one }) => ({
+  schedule: one(reportSchedules, { fields: [reportRuns.scheduleId], references: [reportSchedules.id] }),
+  template: one(reportTemplates, { fields: [reportRuns.templateId], references: [reportTemplates.id] }),
+  createdByUser: one(users, { fields: [reportRuns.createdBy], references: [users.id] }),
+}));
+
+// Email Recipients List - pre-defined recipients for reports
+export const reportRecipients = pgTable("report_recipients", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  department: text("department"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const reportRecipientsRelations = relations(reportRecipients, ({ one }) => ({
+  createdByUser: one(users, { fields: [reportRecipients.createdBy], references: [users.id] }),
+}));
+
+// Insert schemas and types
+export const insertReportTemplateSchema = createInsertSchema(reportTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertReportTemplate = z.infer<typeof insertReportTemplateSchema>;
+export type ReportTemplate = typeof reportTemplates.$inferSelect;
+
+export const insertReportScheduleSchema = createInsertSchema(reportSchedules).omit({ id: true, createdAt: true, updatedAt: true, lastRunAt: true, lastRunStatus: true, lastRunError: true, runCount: true });
+export type InsertReportSchedule = z.infer<typeof insertReportScheduleSchema>;
+export type ReportSchedule = typeof reportSchedules.$inferSelect;
+
+export const insertReportRunSchema = createInsertSchema(reportRuns).omit({ id: true, createdAt: true });
+export type InsertReportRun = z.infer<typeof insertReportRunSchema>;
+export type ReportRun = typeof reportRuns.$inferSelect;
+
+export const insertReportRecipientSchema = createInsertSchema(reportRecipients).omit({ id: true, createdAt: true });
+export type InsertReportRecipient = z.infer<typeof insertReportRecipientSchema>;
+export type ReportRecipient = typeof reportRecipients.$inferSelect;
+
+// Custom Dashboards - user-created dashboard configurations
+export const customDashboards = pgTable("custom_dashboards", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  isPublic: boolean("is_public").default(false),
+  layout: jsonb("layout").notNull().default([]),
+  filters: jsonb("filters").default({}),
+  widgets: jsonb("widgets").notNull().default([]),
+  theme: text("theme").default("default"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("dashboards_user_idx").on(table.userId),
+]);
+
+export const customDashboardsRelations = relations(customDashboards, ({ one }) => ({
+  user: one(users, { fields: [customDashboards.userId], references: [users.id] }),
+}));
+
+// AI Analysis Suggestions - AI-generated insights and chart recommendations
+export const aiSuggestions = pgTable("ai_suggestions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id),
+  suggestionType: text("suggestion_type").notNull(), // 'chart', 'report', 'insight', 'anomaly'
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  configuration: jsonb("configuration").notNull().default({}),
+  relevanceScore: decimal("relevance_score", { precision: 5, scale: 2 }).default("0"),
+  dataContext: jsonb("data_context").default({}),
+  dismissed: boolean("dismissed").default(false),
+  applied: boolean("applied").default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  expiresAt: timestamp("expires_at"),
+}, (table) => [
+  index("suggestions_user_idx").on(table.userId),
+  index("suggestions_type_idx").on(table.suggestionType),
+]);
+
+export const aiSuggestionsRelations = relations(aiSuggestions, ({ one }) => ({
+  user: one(users, { fields: [aiSuggestions.userId], references: [users.id] }),
+}));
+
+// Dashboard widget types
+export type DashboardWidget = {
+  id: string;
+  type: 'chart' | 'metric' | 'table' | 'map' | 'comparison';
+  title: string;
+  config: {
+    chartType?: 'bar' | 'line' | 'pie' | 'area';
+    dataSource?: string;
+    filters?: Record<string, string>;
+    metrics?: string[];
+    dimensions?: string[];
+  };
+  position: { x: number; y: number; w: number; h: number };
+};
+
+export const insertCustomDashboardSchema = createInsertSchema(customDashboards).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCustomDashboard = z.infer<typeof insertCustomDashboardSchema>;
+export type CustomDashboard = typeof customDashboards.$inferSelect;
+
+export const insertAiSuggestionSchema = createInsertSchema(aiSuggestions).omit({ id: true, createdAt: true });
+export type InsertAiSuggestion = z.infer<typeof insertAiSuggestionSchema>;
+export type AiSuggestion = typeof aiSuggestions.$inferSelect;
+
+// Sentiment Analysis Data Sources - external news, blogs, forums
+export const sentimentDataSources = pgTable("sentiment_data_sources", {
+  id: serial("id").primaryKey(),
+  sourceType: text("source_type").notNull(), // 'news', 'blog', 'forum', 'social'
+  sourceName: text("source_name").notNull(),
+  sourceUrl: text("source_url"),
+  country: text("country").default("BR"),
+  language: text("language").default("pt"),
+  isActive: boolean("is_active").default(true),
+  lastFetched: timestamp("last_fetched"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("sources_type_idx").on(table.sourceType),
+]);
+
+export const insertSentimentDataSourceSchema = createInsertSchema(sentimentDataSources).omit({ id: true, createdAt: true });
+export type InsertSentimentDataSource = z.infer<typeof insertSentimentDataSourceSchema>;
+export type SentimentDataSource = typeof sentimentDataSources.$inferSelect;
+
+// Sentiment Articles - collected articles from various sources
+export const sentimentArticles = pgTable("sentiment_articles", {
+  id: serial("id").primaryKey(),
+  sourceId: integer("source_id").references(() => sentimentDataSources.id),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  summary: text("summary"),
+  url: text("url"),
+  author: text("author"),
+  publishedAt: timestamp("published_at"),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  language: text("language").default("pt"),
+  country: text("country").default("BR"),
+  processedAt: timestamp("processed_at"),
+}, (table) => [
+  index("articles_source_idx").on(table.sourceId),
+  index("articles_published_idx").on(table.publishedAt),
+]);
+
+export const insertSentimentArticleSchema = createInsertSchema(sentimentArticles).omit({ id: true, fetchedAt: true });
+export type InsertSentimentArticle = z.infer<typeof insertSentimentArticleSchema>;
+export type SentimentArticle = typeof sentimentArticles.$inferSelect;
+
+// Sentiment Analysis Results - historical sentiment scores per entity
+export const sentimentAnalysisResults = pgTable("sentiment_analysis_results", {
+  id: serial("id").primaryKey(),
+  entityType: text("entity_type").notNull(), // 'party', 'candidate', 'topic'
+  entityId: text("entity_id").notNull(), // party abbreviation or candidate id
+  entityName: text("entity_name").notNull(),
+  analysisDate: timestamp("analysis_date").notNull(),
+  sentimentScore: decimal("sentiment_score", { precision: 5, scale: 4 }).notNull(), // -1 to 1
+  sentimentLabel: text("sentiment_label").notNull(), // 'positive', 'negative', 'neutral', 'mixed'
+  confidence: decimal("confidence", { precision: 5, scale: 4 }).notNull(),
+  mentionCount: integer("mention_count").default(0),
+  positiveCount: integer("positive_count").default(0),
+  negativeCount: integer("negative_count").default(0),
+  neutralCount: integer("neutral_count").default(0),
+  sourceBreakdown: jsonb("source_breakdown").default({}), // { news: x, blog: y, forum: z }
+  topKeywords: jsonb("top_keywords").default([]), // [{ word: string, count: number, sentiment: number }]
+  sampleMentions: jsonb("sample_mentions").default([]), // sample text snippets
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("sentiment_entity_idx").on(table.entityType, table.entityId),
+  index("sentiment_date_idx").on(table.analysisDate),
+]);
+
+export const insertSentimentAnalysisResultSchema = createInsertSchema(sentimentAnalysisResults).omit({ id: true, createdAt: true });
+export type InsertSentimentAnalysisResult = z.infer<typeof insertSentimentAnalysisResultSchema>;
+export type SentimentAnalysisResult = typeof sentimentAnalysisResults.$inferSelect;
+
+// Word Cloud Data - aggregated keywords for visualization
+export const sentimentKeywords = pgTable("sentiment_keywords", {
+  id: serial("id").primaryKey(),
+  keyword: text("keyword").notNull(),
+  entityType: text("entity_type"), // null = global, 'party', 'candidate'
+  entityId: text("entity_id"),
+  frequency: integer("frequency").notNull().default(1),
+  averageSentiment: decimal("average_sentiment", { precision: 5, scale: 4 }).default("0"),
+  firstSeen: timestamp("first_seen").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  lastSeen: timestamp("last_seen").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  trendDirection: text("trend_direction").default("stable"), // 'rising', 'falling', 'stable'
+}, (table) => [
+  index("keywords_entity_idx").on(table.entityType, table.entityId),
+  index("keywords_frequency_idx").on(table.frequency),
+]);
+
+export const insertSentimentKeywordSchema = createInsertSchema(sentimentKeywords).omit({ id: true, firstSeen: true, lastSeen: true });
+export type InsertSentimentKeyword = z.infer<typeof insertSentimentKeywordSchema>;
+export type SentimentKeyword = typeof sentimentKeywords.$inferSelect;

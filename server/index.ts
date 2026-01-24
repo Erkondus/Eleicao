@@ -2,8 +2,123 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { storage } from "./storage";
+import { executeReportRun } from "./report-executor";
+import { initWebSocketServer } from "./websocket";
 
 const app = express();
+
+// Report scheduler - runs every 5 minutes to check for due schedules
+function startReportScheduler() {
+  const SCHEDULER_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  
+  async function checkSchedules() {
+    try {
+      const dueSchedules = await storage.getDueSchedules();
+      
+      for (const schedule of dueSchedules) {
+        try {
+          const template = await storage.getReportTemplate(schedule.templateId);
+          if (!template) {
+            console.log(`Report scheduler: Template ${schedule.templateId} not found for schedule ${schedule.id}`);
+            continue;
+          }
+
+          // Create a run record
+          const run = await storage.createReportRun({
+            templateId: schedule.templateId,
+            scheduleId: schedule.id,
+            triggeredBy: "scheduled",
+            status: "pending",
+          });
+
+          console.log(`Report scheduler: Starting scheduled run ${run.id} for schedule ${schedule.name}`);
+          
+          // Get recipients for this schedule
+          const recipients = Array.isArray(schedule.recipients) 
+            ? (schedule.recipients as string[]) 
+            : [];
+          
+          // Execute the report asynchronously
+          executeReportRun(run.id, template, recipients)
+            .then(() => console.log(`Report scheduler: Run ${run.id} completed`))
+            .catch(err => console.error(`Report scheduler: Run ${run.id} failed:`, err));
+          
+          // Update the next run time based on frequency
+          const nextRunAt = calculateNextScheduleRun(
+            schedule.frequency, 
+            schedule.dayOfWeek, 
+            schedule.dayOfMonth, 
+            schedule.timeOfDay || "08:00"
+          );
+          
+          await storage.updateReportSchedule(schedule.id, {
+            nextRunAt,
+          });
+          
+        } catch (err) {
+          console.error(`Report scheduler: Error processing schedule ${schedule.id}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error("Report scheduler error:", error);
+    }
+  }
+
+  // Calculate next run time with proper day alignment
+  function calculateNextScheduleRun(
+    frequency: string, 
+    dayOfWeek?: number | null, 
+    dayOfMonth?: number | null, 
+    timeOfDay: string = "08:00"
+  ): Date {
+    const now = new Date();
+    const [hours, minutes] = timeOfDay.split(":").map(Number);
+    
+    let nextRun = new Date(now);
+    nextRun.setHours(hours, minutes, 0, 0);
+    
+    switch (frequency) {
+      case "daily":
+        // Next day at the specified time
+        nextRun.setDate(nextRun.getDate() + 1);
+        break;
+        
+      case "weekly": {
+        // Find the next occurrence of the target day
+        const targetDay = dayOfWeek ?? 1; // Default to Monday
+        nextRun.setDate(nextRun.getDate() + 1); // Start from tomorrow
+        while (nextRun.getDay() !== targetDay) {
+          nextRun.setDate(nextRun.getDate() + 1);
+        }
+        break;
+      }
+        
+      case "monthly": {
+        // Next month on the specified day
+        const targetDate = dayOfMonth ?? 1;
+        nextRun.setMonth(nextRun.getMonth() + 1);
+        nextRun.setDate(Math.min(targetDate, getDaysInMonth(nextRun.getMonth(), nextRun.getFullYear())));
+        break;
+      }
+        
+      case "once":
+        // For one-time schedules, disable by setting far in the future
+        nextRun.setFullYear(nextRun.getFullYear() + 100);
+        break;
+    }
+    
+    return nextRun;
+  }
+  
+  function getDaysInMonth(month: number, year: number): number {
+    return new Date(year, month + 1, 0).getDate();
+  }
+
+  // Run every interval
+  console.log("Report scheduler started (checking every 5 minutes)");
+  setInterval(checkSchedules, SCHEDULER_INTERVAL);
+}
 const httpServer = createServer(app);
 
 declare module "http" {
@@ -71,6 +186,10 @@ app.use((req, res, next) => {
     console.log("Registering routes...");
     await registerRoutes(httpServer, app);
     console.log("Routes registered successfully!");
+    
+    // Initialize WebSocket server for real-time import notifications
+    initWebSocketServer(httpServer);
+    console.log("WebSocket server initialized");
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -102,6 +221,9 @@ app.use((req, res, next) => {
       },
       () => {
         log(`serving on port ${port}`);
+        
+        // Start the report scheduler (check every 5 minutes)
+        startReportScheduler();
       },
     );
   } catch (error) {

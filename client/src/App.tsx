@@ -30,6 +30,8 @@ import AIInsights from "@/pages/ai-insights";
 import ProjectionReports from "@/pages/projection-reports";
 import Forecasts from "@/pages/forecasts";
 import AdminSettings from "@/pages/admin-settings";
+import ReportAutomation from "@/pages/report-automation";
+import SentimentAnalysis from "@/pages/sentiment-analysis";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -55,6 +57,8 @@ function Router() {
       <Route path="/projection-reports" component={ProjectionReports} />
       <Route path="/forecasts" component={Forecasts} />
       <Route path="/admin-settings" component={AdminSettings} />
+      <Route path="/report-automation" component={ReportAutomation} />
+      <Route path="/sentiment-analysis" component={SentimentAnalysis} />
       <Route component={NotFound} />
     </Switch>
   );

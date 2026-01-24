@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Link } from "wouter";
 import type { Scenario, Party, Candidate, Simulation } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BrazilMap } from "@/components/brazil-map";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -98,8 +99,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <BrazilMap />
+        <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
               <CardTitle className="text-lg">Distribuição de Votos por Partido</CardTitle>
@@ -137,7 +139,9 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>

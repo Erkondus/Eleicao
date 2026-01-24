@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -7,17 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip
+  PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip, LineChart, Line
 } from "recharts";
 import { 
-  Vote, Users, Building2, MapPin, TrendingUp, Download, 
+  Vote, Users, Building2, MapPin, TrendingUp, TrendingDown, Download, 
   CheckCircle2, XCircle, Loader2, Clock, RefreshCw, 
-  BarChart3, Activity, Database
+  BarChart3, Activity, Database, Play, Pause, Square, Radio, Zap, Minus
 } from "lucide-react";
 import { Link } from "wouter";
 import type { TseImportJob } from "@shared/schema";
+import { useElectionWebSocket } from "@/hooks/use-election-websocket";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const CHART_COLORS = [
   "#003366", "#1a5490", "#3475b4", "#4e96d8", "#68b7fc",
@@ -102,8 +106,56 @@ function CustomPieTooltip({ active, payload }: any) {
 }
 
 export default function ElectoralDashboard() {
+  const { toast } = useToast();
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [simulationYear, setSimulationYear] = useState<string>("2022");
+  const [simulationSpeed, setSimulationSpeed] = useState<string>("1");
+
+  const electionWs = useElectionWebSocket(activeTab === "live");
+
+  const startSimulationMutation = useMutation({
+    mutationFn: async (params: { year: number; speed: number }) => {
+      return apiRequest("POST", "/api/election-simulation/start", params);
+    },
+    onSuccess: () => {
+      toast({ title: "Simulação iniciada", description: "A apuração em tempo real começou" });
+    },
+    onError: (error) => {
+      toast({ title: "Erro", description: error instanceof Error ? error.message : "Falha ao iniciar simulação", variant: "destructive" });
+    },
+  });
+
+  const pauseSimulationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("POST", `/api/election-simulation/${id}/pause`, {});
+    },
+    onSuccess: () => {
+      electionWs.setStatus("paused");
+      toast({ title: "Simulação pausada" });
+    },
+  });
+
+  const resumeSimulationMutation = useMutation({
+    mutationFn: async ({ id, speed }: { id: string; speed: number }) => {
+      return apiRequest("POST", `/api/election-simulation/${id}/resume`, { speed });
+    },
+    onSuccess: () => {
+      electionWs.setStatus("running");
+      toast({ title: "Simulação retomada" });
+    },
+  });
+
+  const cancelSimulationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("POST", `/api/election-simulation/${id}/cancel`, {});
+    },
+    onSuccess: () => {
+      electionWs.reset();
+      toast({ title: "Simulação cancelada" });
+    },
+  });
 
   const yearQuery = selectedYear !== "all" ? `?year=${selectedYear}` : "";
 
@@ -218,35 +270,386 @@ export default function ElectoralDashboard() {
 
   const hasData = summary && (summary.totalVotes > 0 || summary.totalCandidates > 0);
 
+  const getTrendIcon = (trend: "up" | "down" | "stable") => {
+    switch (trend) {
+      case "up": return <TrendingUp className="h-4 w-4 text-green-500" />;
+      case "down": return <TrendingDown className="h-4 w-4 text-red-500" />;
+      default: return <Minus className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
   return (
     <div className="p-6 space-y-6" data-testid="electoral-dashboard">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" data-testid="text-dashboard-title">
             <BarChart3 className="h-8 w-8 text-primary" />
             Dashboard Eleitoral
           </h1>
           <p className="text-muted-foreground mt-1">
-            Visão geral consolidada dos dados eleitorais e status das importações
+            Visão geral consolidada dos dados eleitorais e análise em tempo real
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-[150px]" data-testid="select-year">
-              <SelectValue placeholder="Ano" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" data-testid="select-year-all">Todos os anos</SelectItem>
-              {years?.map(year => (
-                <SelectItem key={year} value={String(year)} data-testid={`select-year-${year}`}>{year}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-3 flex-wrap">
+          {activeTab === "overview" && (
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-[150px]" data-testid="select-year">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" data-testid="select-year-all">Todos os anos</SelectItem>
+                {years?.map(year => (
+                  <SelectItem key={year} value={String(year)} data-testid={`select-year-${year}`}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" size="icon" onClick={() => refetchImports()} data-testid="button-refresh">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-flex">
+          <TabsTrigger value="overview" className="gap-2" data-testid="tab-overview">
+            <BarChart3 className="h-4 w-4" />
+            Visão Geral
+          </TabsTrigger>
+          <TabsTrigger value="live" className="gap-2" data-testid="tab-live">
+            <Radio className="h-4 w-4" />
+            Apuração ao Vivo
+            {electionWs.status === "running" && (
+              <span className="ml-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="live" className="space-y-6">
+          <Card data-testid="card-live-simulation">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-500" />
+                Simulação de Apuração em Tempo Real
+              </CardTitle>
+              <CardDescription>
+                Simule a apuração de votos com atualizações ao vivo e projeções baseadas em dados históricos
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {electionWs.connectionError && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive mb-4" data-testid="alert-connection-error">
+                  <XCircle className="h-5 w-5" />
+                  <span data-testid="text-connection-error">Erro de conexão. A simulação pode não receber atualizações em tempo real.</span>
+                  <Button variant="outline" size="sm" onClick={() => electionWs.connect()} className="ml-auto" data-testid="button-reconnect">
+                    Reconectar
+                  </Button>
+                </div>
+              )}
+
+              {electionWs.status === "idle" ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Ano da Eleição</label>
+                      <Select value={simulationYear} onValueChange={setSimulationYear}>
+                        <SelectTrigger data-testid="select-simulation-year">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {years?.map(year => (
+                            <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                          ))}
+                          {(!years || years.length === 0) && (
+                            <SelectItem value="2022">2022</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Velocidade</label>
+                      <Select value={simulationSpeed} onValueChange={setSimulationSpeed}>
+                        <SelectTrigger data-testid="select-simulation-speed">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0.5">0.5x (Lento)</SelectItem>
+                          <SelectItem value="1">1x (Normal)</SelectItem>
+                          <SelectItem value="2">2x (Rápido)</SelectItem>
+                          <SelectItem value="5">5x (Muito Rápido)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        onClick={() => startSimulationMutation.mutate({
+                          year: parseInt(simulationYear),
+                          speed: parseFloat(simulationSpeed),
+                        })}
+                        disabled={startSimulationMutation.isPending}
+                        className="w-full"
+                        data-testid="button-start-simulation"
+                      >
+                        {startSimulationMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Play className="h-4 w-4 mr-2" />
+                        )}
+                        Iniciar Simulação
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="text-center text-muted-foreground py-8 border rounded-lg border-dashed">
+                    <Radio className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>Selecione o ano e inicie a simulação para ver a apuração ao vivo</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                      <Badge variant={electionWs.status === "running" ? "default" : electionWs.status === "completed" ? "secondary" : "outline"}>
+                        {electionWs.status === "running" && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse mr-2" />}
+                        {electionWs.status === "running" ? "Ao Vivo" : electionWs.status === "completed" ? "Concluída" : "Pausada"}
+                      </Badge>
+                      {electionWs.simulationInfo && (
+                        <span className="text-muted-foreground">
+                          Eleição de {electionWs.simulationInfo.year}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {electionWs.status === "running" && electionWs.simulationId && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => pauseSimulationMutation.mutate(electionWs.simulationId!)}
+                          disabled={pauseSimulationMutation.isPending}
+                          data-testid="button-pause-simulation"
+                        >
+                          <Pause className="h-4 w-4 mr-1" />
+                          Pausar
+                        </Button>
+                      )}
+                      {electionWs.status === "paused" && electionWs.simulationId && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => resumeSimulationMutation.mutate({ id: electionWs.simulationId!, speed: parseFloat(simulationSpeed) })}
+                          disabled={resumeSimulationMutation.isPending}
+                          data-testid="button-resume-simulation"
+                        >
+                          <Play className="h-4 w-4 mr-1" />
+                          Retomar
+                        </Button>
+                      )}
+                      {electionWs.simulationId && electionWs.status !== "completed" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => cancelSimulationMutation.mutate(electionWs.simulationId!)}
+                          disabled={cancelSimulationMutation.isPending}
+                          data-testid="button-cancel-simulation"
+                        >
+                          <Square className="h-4 w-4 mr-1" />
+                          Cancelar
+                        </Button>
+                      )}
+                      {electionWs.status === "completed" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => electionWs.reset()}
+                          data-testid="button-new-simulation"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-1" />
+                          Nova Simulação
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {electionWs.latestUpdate && (
+                    <>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">Progresso da Apuração</span>
+                          <span className="text-muted-foreground">
+                            {electionWs.latestUpdate.percentageCounted.toFixed(1)}% apurado
+                          </span>
+                        </div>
+                        <Progress value={electionWs.latestUpdate.percentageCounted} className="h-3" />
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>
+                            {formatNumber(electionWs.latestUpdate.countedVotes)} de {formatNumber(electionWs.latestUpdate.totalVotes)} votos
+                          </span>
+                          <span>
+                            {electionWs.latestUpdate.regionsCounted} de {electionWs.latestUpdate.totalRegions} regiões
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Building2 className="h-4 w-4" />
+                              Votos por Partido
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {electionWs.latestUpdate.partyResults.slice(0, 8).map((party, idx) => (
+                                <div key={party.party} className="space-y-1" data-testid={`live-party-${idx}`}>
+                                  <div className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center gap-2">
+                                      <div
+                                        className="w-3 h-3 rounded-full"
+                                        style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                                      />
+                                      <span className="font-medium">{party.party}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-muted-foreground">{formatNumber(party.votes)}</span>
+                                      <Badge variant="outline" className="font-mono text-xs">
+                                        {party.percentage.toFixed(1)}%
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  <Progress value={party.percentage} className="h-1.5" />
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Users className="h-4 w-4" />
+                              Candidatos Mais Votados
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {electionWs.latestUpdate.candidateResults.slice(0, 8).map((candidate, idx) => (
+                                <div key={candidate.name} className="flex items-center justify-between p-2 rounded-lg bg-muted/50" data-testid={`live-candidate-${idx}`}>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-lg font-bold text-muted-foreground">{idx + 1}</span>
+                                    <div>
+                                      <p className="font-medium text-sm truncate max-w-[150px]">{candidate.name.split(" ").slice(0, 2).join(" ")}</p>
+                                      <p className="text-xs text-muted-foreground">{candidate.party}</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-mono font-bold">{formatNumber(candidate.votes)}</p>
+                                    <p className="text-xs text-muted-foreground">{candidate.percentage.toFixed(1)}%</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </>
+                  )}
+
+                  {electionWs.latestProjection && electionWs.latestUpdate && electionWs.latestUpdate.percentageCounted >= 5 && (
+                    <Card className="border-yellow-500/50 bg-yellow-500/5">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-yellow-500" />
+                          Projeções em Tempo Real
+                          <Badge variant="outline" className="ml-auto">
+                            Confiança: {electionWs.latestProjection.percentageCounted.toFixed(0)}%
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div>
+                            <h4 className="text-sm font-medium mb-3">Projeção por Partido</h4>
+                            <div className="space-y-2">
+                              {electionWs.latestProjection.partyProjections.slice(0, 5).map((proj, idx) => (
+                                <div key={proj.party} className="flex items-center justify-between p-2 rounded-lg bg-background" data-testid={`projection-party-${idx}`}>
+                                  <div className="flex items-center gap-2">
+                                    {getTrendIcon(proj.trend)}
+                                    <span className="font-medium">{proj.party}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm text-muted-foreground">
+                                      Atual: {formatNumber(proj.currentVotes)}
+                                    </span>
+                                    <span className="font-mono font-bold">
+                                      Proj: {formatNumber(proj.projectedVotes)}
+                                    </span>
+                                    <Badge variant="secondary" className="text-xs">
+                                      {proj.confidence.toFixed(0)}%
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium mb-3">Candidatos Líderes</h4>
+                            <div className="space-y-2">
+                              {electionWs.latestProjection.leadingCandidates.map((candidate, idx) => (
+                                <div key={candidate.name} className="flex items-center justify-between p-2 rounded-lg bg-background" data-testid={`projection-candidate-${idx}`}>
+                                  <div>
+                                    <p className="font-medium text-sm">{candidate.name.split(" ").slice(0, 2).join(" ")}</p>
+                                    <p className="text-xs text-muted-foreground">{candidate.party}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-mono text-sm">Proj: {formatNumber(candidate.projectedVotes)}</p>
+                                    <Progress value={candidate.winProbability} className="h-1.5 w-20 mt-1" />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {electionWs.completedData && (
+                    <Card className="border-green-500/50 bg-green-500/5">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-green-600">
+                          <CheckCircle2 className="h-5 w-5" />
+                          Apuração Concluída
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-muted-foreground mb-4">
+                          Total de {formatNumber(electionWs.completedData.totalVotes)} votos apurados em {Math.floor(electionWs.completedData.duration / 1000)} segundos.
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {electionWs.completedData.partyResults.slice(0, 4).map((party, idx) => (
+                            <Card key={party.party} data-testid={`final-party-${idx}`}>
+                              <CardContent className="p-4 text-center">
+                                <div
+                                  className="w-8 h-8 rounded-full mx-auto mb-2"
+                                  style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                                />
+                                <p className="font-bold">{party.party}</p>
+                                <p className="text-2xl font-mono">{party.percentage.toFixed(1)}%</p>
+                                <p className="text-xs text-muted-foreground">{formatNumber(party.votes)} votos</p>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="overview" className="space-y-6">
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card data-testid="card-total-votes">
@@ -626,23 +1029,25 @@ export default function ElectoralDashboard() {
         </Card>
       </div>
 
-      {!hasData && !summaryLoading && (
-        <Card className="border-dashed" data-testid="card-empty-state">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <BarChart3 className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
-            <h3 className="text-lg font-semibold mb-2">Nenhum dado eleitoral encontrado</h3>
-            <p className="text-muted-foreground text-center max-w-md mb-4">
-              Importe dados do TSE para começar a visualizar análises eleitorais detalhadas.
-            </p>
-            <Link href="/tse-import">
-              <Button data-testid="button-start-import">
-                <Download className="h-4 w-4 mr-2" />
-                Importar Dados do TSE
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
+          {!hasData && !summaryLoading && (
+            <Card className="border-dashed" data-testid="card-empty-state">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <BarChart3 className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
+                <h3 className="text-lg font-semibold mb-2">Nenhum dado eleitoral encontrado</h3>
+                <p className="text-muted-foreground text-center max-w-md mb-4">
+                  Importe dados do TSE para começar a visualizar análises eleitorais detalhadas.
+                </p>
+                <Link href="/tse-import">
+                  <Button data-testid="button-start-import">
+                    <Download className="h-4 w-4 mr-2" />
+                    Importar Dados do TSE
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

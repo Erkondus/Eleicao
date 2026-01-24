@@ -60,6 +60,12 @@ import {
   GitCompare,
   SlidersHorizontal,
   ZoomIn,
+  LayoutDashboard,
+  Lightbulb,
+  Plus,
+  X,
+  Eye,
+  Globe,
 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import jsPDF from "jspdf";
@@ -153,6 +159,19 @@ export default function DataAnalysis() {
   const [aiAnswer, setAiAnswer] = useState<{ question: string; answer: string } | null>(null);
   const [historicalPrediction, setHistoricalPrediction] = useState<any>(null);
   const [anomalyReport, setAnomalyReport] = useState<any>(null);
+  
+  // AI Suggestions States
+  const [generatingSuggestions, setGeneratingSuggestions] = useState(false);
+  
+  // Custom Dashboard States
+  const [showDashboardDialog, setShowDashboardDialog] = useState(false);
+  const [dashboardName, setDashboardName] = useState("");
+  const [dashboardDescription, setDashboardDescription] = useState("");
+  const [dashboardIsPublic, setDashboardIsPublic] = useState(false);
+  const [selectedDashboard, setSelectedDashboard] = useState<number | null>(null);
+  
+  // Municipality filter
+  const [selectedMunicipality, setSelectedMunicipality] = useState<string>("all");
 
   const filters = useMemo(() => {
     const f: Record<string, string> = {};
@@ -161,10 +180,11 @@ export default function DataAnalysis() {
     if (selectedElectionType !== "all") f.electionType = selectedElectionType;
     if (selectedPosition !== "all") f.position = selectedPosition;
     if (selectedParty !== "all") f.party = selectedParty;
+    if (selectedMunicipality !== "all") f.municipality = selectedMunicipality;
     if (minVotes) f.minVotes = minVotes;
     if (maxVotes) f.maxVotes = maxVotes;
     return f;
-  }, [selectedYear, selectedState, selectedElectionType, selectedPosition, selectedParty, minVotes, maxVotes]);
+  }, [selectedYear, selectedState, selectedElectionType, selectedPosition, selectedParty, selectedMunicipality, minVotes, maxVotes]);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams(filters);
@@ -205,6 +225,46 @@ export default function DataAnalysis() {
     createdAt: string;
   }[]>({
     queryKey: ["/api/reports"],
+  });
+
+  // AI Suggestions query
+  const { data: aiSuggestions, refetch: refetchSuggestions } = useQuery<{
+    id: number;
+    suggestionType: string;
+    title: string;
+    description: string;
+    configuration: Record<string, any>;
+    relevanceScore: string;
+    dismissed: boolean;
+    applied: boolean;
+    createdAt: string;
+  }[]>({
+    queryKey: ["/api/ai/suggestions?dismissed=false"],
+  });
+
+  // Custom Dashboards query
+  const { data: customDashboards, refetch: refetchDashboards } = useQuery<{
+    id: number;
+    name: string;
+    description: string | null;
+    layout: Record<string, any>;
+    filters: Record<string, any>;
+    widgets: Record<string, any>[];
+    isPublic: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }[]>({
+    queryKey: ["/api/dashboards"],
+  });
+
+  // Municipalities query
+  const { data: municipalities } = useQuery<{
+    code: number;
+    name: string;
+    uf: string;
+  }[]>({
+    queryKey: ["/api/analytics/municipalities", { uf: selectedState !== "all" ? selectedState : undefined }],
+    enabled: selectedState !== "all",
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<{
@@ -350,6 +410,89 @@ export default function DataAnalysis() {
       refetchReports();
     },
   });
+
+  // AI Suggestions mutations
+  const generateSuggestionsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ai/generate-suggestions", { filters });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Sugestões geradas", description: "Novas sugestões de IA criadas com base nos dados." });
+      refetchSuggestions();
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao gerar sugestões.", variant: "destructive" });
+    },
+  });
+
+  const dismissSuggestionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `/api/ai/suggestions/${id}/dismiss`);
+    },
+    onSuccess: () => {
+      toast({ title: "Sugestão descartada" });
+      refetchSuggestions();
+    },
+  });
+
+  const applySuggestionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `/api/ai/suggestions/${id}/apply`);
+    },
+    onSuccess: () => {
+      toast({ title: "Sugestão aplicada", description: "A visualização foi marcada como aplicada." });
+      refetchSuggestions();
+    },
+  });
+
+  // Custom Dashboard mutations
+  const createDashboardMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/dashboards", {
+        name: dashboardName,
+        description: dashboardDescription,
+        layout: { columns: 2 },
+        filters,
+        widgets: [],
+        isPublic: dashboardIsPublic,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Dashboard criado", description: "Novo dashboard salvo com sucesso." });
+      setShowDashboardDialog(false);
+      setDashboardName("");
+      setDashboardDescription("");
+      setDashboardIsPublic(false);
+      refetchDashboards();
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao criar dashboard.", variant: "destructive" });
+    },
+  });
+
+  const deleteDashboardMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/dashboards/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Dashboard excluído" });
+      refetchDashboards();
+    },
+  });
+
+  const loadDashboard = (dashboard: { filters: Record<string, any> }) => {
+    if (dashboard.filters.year) setSelectedYear(String(dashboard.filters.year));
+    if (dashboard.filters.uf) setSelectedState(dashboard.filters.uf);
+    if (dashboard.filters.electionType) setSelectedElectionType(dashboard.filters.electionType);
+    if (dashboard.filters.position) setSelectedPosition(dashboard.filters.position);
+    if (dashboard.filters.party) setSelectedParty(dashboard.filters.party);
+    if (dashboard.filters.municipality) setSelectedMunicipality(dashboard.filters.municipality);
+    if (dashboard.filters.minVotes) setMinVotes(String(dashboard.filters.minVotes));
+    if (dashboard.filters.maxVotes) setMaxVotes(String(dashboard.filters.maxVotes));
+    toast({ title: "Dashboard carregado", description: "Filtros aplicados com sucesso." });
+  };
 
   const loadReport = (report: { filters: Record<string, string> }) => {
     if (report.filters.year) setSelectedYear(report.filters.year);
@@ -547,7 +690,7 @@ export default function DataAnalysis() {
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4 space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Cargo</label>
                   <Select value={selectedPosition} onValueChange={setSelectedPosition}>
@@ -575,6 +718,26 @@ export default function DataAnalysis() {
                       {(partiesList ?? []).map((p) => (
                         <SelectItem key={p.party} value={p.party}>
                           {p.party} ({p.number})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Município</label>
+                  <Select 
+                    value={selectedMunicipality} 
+                    onValueChange={setSelectedMunicipality}
+                    disabled={selectedState === "all"}
+                  >
+                    <SelectTrigger data-testid="select-municipality">
+                      <SelectValue placeholder={selectedState === "all" ? "Selecione um estado primeiro" : "Selecione o município"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os municípios</SelectItem>
+                      {(municipalities ?? []).map((m) => (
+                        <SelectItem key={m.code} value={m.name}>
+                          {m.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -628,6 +791,7 @@ export default function DataAnalysis() {
                 setSelectedElectionType("all");
                 setSelectedPosition("all");
                 setSelectedParty("all");
+                setSelectedMunicipality("all");
                 setMinVotes("");
                 setMaxVotes("");
                 setSelectedReport(null);
@@ -926,7 +1090,7 @@ export default function DataAnalysis() {
 
       {hasData && (
         <Tabs defaultValue="parties" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="parties" data-testid="tab-parties">
               <Building2 className="h-4 w-4 mr-2" />
               Partidos
@@ -946,6 +1110,14 @@ export default function DataAnalysis() {
             <TabsTrigger value="ai" data-testid="tab-ai">
               <Brain className="h-4 w-4 mr-2" />
               IA
+            </TabsTrigger>
+            <TabsTrigger value="suggestions" data-testid="tab-suggestions">
+              <Lightbulb className="h-4 w-4 mr-2" />
+              Sugestões
+            </TabsTrigger>
+            <TabsTrigger value="dashboards" data-testid="tab-dashboards">
+              <LayoutDashboard className="h-4 w-4 mr-2" />
+              Dashboards
             </TabsTrigger>
           </TabsList>
 
@@ -1425,8 +1597,240 @@ export default function DataAnalysis() {
               </Card>
             </div>
           </TabsContent>
+
+          {/* AI Suggestions Tab */}
+          <TabsContent value="suggestions" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Lightbulb className="h-5 w-5 text-amber-500" />
+                      Sugestões Inteligentes
+                    </CardTitle>
+                    <CardDescription>
+                      Recomendações de gráficos e análises baseadas em IA
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => generateSuggestionsMutation.mutate()}
+                    disabled={generateSuggestionsMutation.isPending}
+                    data-testid="button-generate-suggestions"
+                  >
+                    {generateSuggestionsMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    Gerar Sugestões
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {(!aiSuggestions || aiSuggestions.length === 0) ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Lightbulb className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                    <p>Nenhuma sugestão disponível.</p>
+                    <p className="text-sm">Clique em "Gerar Sugestões" para receber recomendações baseadas nos dados atuais.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {aiSuggestions.map((suggestion) => (
+                      <Card key={suggestion.id} className="relative" data-testid={`card-suggestion-${suggestion.id}`}>
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <Badge variant="outline" className="mb-2">
+                                {suggestion.suggestionType === "chart" ? "Gráfico" :
+                                 suggestion.suggestionType === "report" ? "Relatório" : "Insight"}
+                              </Badge>
+                              <CardTitle className="text-base">{suggestion.title}</CardTitle>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Badge variant="secondary" className="text-xs">
+                                {suggestion.relevanceScore}%
+                              </Badge>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => dismissSuggestionMutation.mutate(suggestion.id)}
+                                data-testid={`button-dismiss-${suggestion.id}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <p className="text-sm text-muted-foreground mb-3">{suggestion.description}</p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => applySuggestionMutation.mutate(suggestion.id)}
+                              disabled={suggestion.applied}
+                              data-testid={`button-apply-${suggestion.id}`}
+                            >
+                              {suggestion.applied ? (
+                                <>Aplicado</>
+                              ) : (
+                                <>
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Aplicar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Custom Dashboards Tab */}
+          <TabsContent value="dashboards" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <LayoutDashboard className="h-5 w-5 text-blue-500" />
+                      Dashboards Personalizados
+                    </CardTitle>
+                    <CardDescription>
+                      Crie e gerencie dashboards com filtros e visualizações personalizadas
+                    </CardDescription>
+                  </div>
+                  <Button onClick={() => setShowDashboardDialog(true)} data-testid="button-create-dashboard">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Dashboard
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {(!customDashboards || customDashboards.length === 0) ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <LayoutDashboard className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                    <p>Nenhum dashboard criado ainda.</p>
+                    <p className="text-sm">Crie um dashboard personalizado para salvar suas visualizações favoritas.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {customDashboards.map((dashboard) => (
+                      <Card key={dashboard.id} className="relative" data-testid={`card-dashboard-${dashboard.id}`}>
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <CardTitle className="text-base">{dashboard.name}</CardTitle>
+                                {dashboard.isPublic && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <Globe className="h-3 w-3 mr-1" />
+                                    Público
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteDashboardMutation.mutate(dashboard.id)}
+                              data-testid={`button-delete-dashboard-${dashboard.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          {dashboard.description && (
+                            <p className="text-sm text-muted-foreground mb-3">{dashboard.description}</p>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            Atualizado em: {new Date(dashboard.updatedAt).toLocaleDateString('pt-BR')}
+                          </div>
+                          <div className="mt-3">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => loadDashboard(dashboard)}
+                              data-testid={`button-view-dashboard-${dashboard.id}`}
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              Aplicar Filtros
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       )}
+
+      {/* Create Dashboard Dialog */}
+      <Dialog open={showDashboardDialog} onOpenChange={setShowDashboardDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar Novo Dashboard</DialogTitle>
+            <DialogDescription>
+              Salve suas configurações de filtros e visualizações em um dashboard personalizado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="dashboardName">Nome do Dashboard</Label>
+              <Input
+                id="dashboardName"
+                placeholder="Ex: Análise Eleição 2022"
+                value={dashboardName}
+                onChange={(e) => setDashboardName(e.target.value)}
+                data-testid="input-dashboard-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dashboardDesc">Descrição (opcional)</Label>
+              <Textarea
+                id="dashboardDesc"
+                placeholder="Descreva o propósito deste dashboard..."
+                value={dashboardDescription}
+                onChange={(e) => setDashboardDescription(e.target.value)}
+                data-testid="input-dashboard-description"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="dashboardPublic"
+                checked={dashboardIsPublic}
+                onCheckedChange={setDashboardIsPublic}
+                data-testid="switch-dashboard-public"
+              />
+              <Label htmlFor="dashboardPublic" className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                Dashboard público
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDashboardDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => createDashboardMutation.mutate()}
+              disabled={!dashboardName || createDashboardMutation.isPending}
+              data-testid="button-save-dashboard"
+            >
+              {createDashboardMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Criar Dashboard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

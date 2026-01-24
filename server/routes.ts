@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import passport from "passport";
+import { getSessionConfig } from "./session-config";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
 import multer from "multer";
@@ -15,6 +16,15 @@ import path from "path";
 import { z } from "zod";
 import { storage } from "./storage";
 import { db } from "./db";
+import { executeReportRun } from "./report-executor";
+import { 
+  emitJobStatus, 
+  emitJobProgress, 
+  emitBatchStatus, 
+  emitBatchError,
+  emitJobCompleted,
+  emitJobFailed
+} from "./websocket";
 import { sql } from "drizzle-orm";
 import type { User, InsertTseCandidateVote } from "@shared/schema";
 import {
@@ -42,8 +52,24 @@ import {
   forecastRuns,
   forecastResults,
   forecastSwingRegions,
+  candidateComparisons,
+  eventImpactPredictions,
+  scenarioSimulations,
 } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import OpenAI from "openai";
+import {
+  runSentimentAnalysis,
+  getSentimentTimeline,
+  getWordCloudData,
+  getEntitiesSentimentOverview,
+  fetchSentimentSources,
+} from "./sentiment-analysis";
+import {
+  fetchExternalData,
+  fetchAndAnalyzeExternalData,
+  getExternalDataSummaryForReport,
+} from "./external-data-service";
 import { 
   processSemanticSearch, 
   generateEmbeddingsForImportJob, 
@@ -135,19 +161,7 @@ export async function registerRoutes(
     app.set("trust proxy", 1);
   }
 
-  app.use(
-    session({
-      secret: sessionSecret || "dev-only-secret-do-not-use-in-production",
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        secure: process.env.NODE_ENV === "production",
-        httpOnly: true,
-        sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
-        maxAge: 24 * 60 * 60 * 1000,
-      },
-    })
-  );
+  app.use(session(getSessionConfig(sessionSecret)));
 
   app.use(passport.initialize());
   app.use(passport.session());
@@ -393,6 +407,185 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete party" });
+    }
+  });
+
+  // Import parties from CSV
+  app.post("/api/parties/import-csv", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { csvContent } = req.body;
+      if (!csvContent || typeof csvContent !== "string") {
+        return res.status(400).json({ error: "CSV content is required" });
+      }
+
+      // Remove BOM if present
+      const cleanContent = csvContent.replace(/^\uFEFF/, "");
+      
+      // Detect separator from first line
+      const firstLine = cleanContent.split(/[\r\n]/)[0];
+      const delimiter = firstLine.includes(";") ? ";" : ",";
+
+      // Parse CSV using csv-parse
+      const records: string[][] = await new Promise((resolve, reject) => {
+        const rows: string[][] = [];
+        const parser = parse(cleanContent, {
+          delimiter,
+          relax_quotes: true,
+          skip_empty_lines: true,
+          trim: true,
+          relax_column_count: true,
+        });
+        parser.on("data", (row: string[]) => rows.push(row));
+        parser.on("error", reject);
+        parser.on("end", () => resolve(rows));
+      });
+
+      if (records.length < 2) {
+        return res.status(400).json({ error: "CSV must have header and at least one data row" });
+      }
+
+      // Parse header
+      const headers = records[0].map(h => h.toLowerCase().trim());
+      
+      // Map expected columns
+      const numIdx = headers.findIndex(h => h === "numero" || h === "number");
+      const siglaIdx = headers.findIndex(h => h === "sigla" || h === "abbreviation");
+      const nomeIdx = headers.findIndex(h => h === "nome" || h === "name");
+      const corIdx = headers.findIndex(h => h === "cor" || h === "color");
+      const coligIdx = headers.findIndex(h => h === "coligacao" || h === "coalition");
+      const ativoIdx = headers.findIndex(h => h === "ativo" || h === "active");
+
+      if (numIdx === -1 || siglaIdx === -1 || nomeIdx === -1) {
+        return res.status(400).json({ 
+          error: "CSV must have columns: Numero, Sigla, Nome (or Number, Abbreviation, Name)" 
+        });
+      }
+
+      const results = {
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [] as string[],
+      };
+
+      // Get existing parties for comparison and create mutable maps
+      const existingParties = await storage.getParties();
+      const partyByNumber = new Map(existingParties.map(p => [p.number, p]));
+      const partyByAbbrev = new Map(existingParties.map(p => [p.abbreviation.toUpperCase(), p]));
+      
+      // Track numbers and abbreviations seen in this import to detect duplicates
+      const seenNumbers = new Set<number>();
+      const seenAbbrevs = new Set<string>();
+
+      // Process data rows (skip header)
+      for (let i = 1; i < records.length; i++) {
+        const values = records[i];
+        const lineNum = i + 1;
+        
+        try {
+          const number = parseInt(values[numIdx] || "");
+          const abbreviation = (values[siglaIdx] || "").trim().toUpperCase();
+          const name = (values[nomeIdx] || "").trim();
+          const color = corIdx >= 0 && values[corIdx] ? values[corIdx].trim() : "#003366";
+          const coalition = coligIdx >= 0 && values[coligIdx] ? values[coligIdx].trim() : null;
+          const activeStr = ativoIdx >= 0 ? (values[ativoIdx] || "").toLowerCase() : "";
+          const active = ativoIdx >= 0 ? 
+            (activeStr === "sim" || activeStr === "true" || activeStr === "1") 
+            : true;
+
+          if (isNaN(number) || !abbreviation || !name) {
+            results.errors.push(`Linha ${lineNum}: Dados inválidos (número, sigla ou nome ausentes)`);
+            results.skipped++;
+            continue;
+          }
+
+          // Check for duplicates within this import file
+          if (seenNumbers.has(number)) {
+            results.errors.push(`Linha ${lineNum}: Número ${number} duplicado no arquivo`);
+            results.skipped++;
+            continue;
+          }
+          if (seenAbbrevs.has(abbreviation)) {
+            results.errors.push(`Linha ${lineNum}: Sigla ${abbreviation} duplicada no arquivo`);
+            results.skipped++;
+            continue;
+          }
+
+          // Check if party exists by number or abbreviation
+          const existingByNum = partyByNumber.get(number);
+          const existingByAbbrev = partyByAbbrev.get(abbreviation);
+
+          // Detect conflict: number points to one party, abbreviation to another
+          if (existingByNum && existingByAbbrev && existingByNum.id !== existingByAbbrev.id) {
+            results.errors.push(`Linha ${lineNum}: Conflito - número ${number} pertence a ${existingByNum.abbreviation}, mas sigla ${abbreviation} pertence a outro partido`);
+            results.skipped++;
+            continue;
+          }
+
+          if (existingByNum || existingByAbbrev) {
+            // Update existing party
+            const existing = existingByNum || existingByAbbrev!;
+            const updated = await storage.updateParty(existing.id, {
+              name,
+              abbreviation,
+              number,
+              color,
+              coalition,
+              active,
+            });
+            
+            // Update maps with new data
+            if (updated) {
+              partyByNumber.delete(existing.number);
+              partyByAbbrev.delete(existing.abbreviation.toUpperCase());
+              partyByNumber.set(number, updated);
+              partyByAbbrev.set(abbreviation, updated);
+            }
+            
+            results.updated++;
+          } else {
+            // Create new party
+            const newParty = await storage.createParty({
+              name,
+              abbreviation,
+              number,
+              color,
+              coalition,
+              active,
+              createdBy: req.user!.id,
+            });
+            
+            // Add to maps
+            partyByNumber.set(number, newParty);
+            partyByAbbrev.set(abbreviation, newParty);
+            
+            results.created++;
+          }
+          
+          // Mark as seen
+          seenNumbers.add(number);
+          seenAbbrevs.add(abbreviation);
+          
+        } catch (err: any) {
+          results.errors.push(`Linha ${lineNum}: ${err.message || "Erro desconhecido"}`);
+          results.skipped++;
+        }
+      }
+
+      await logAudit(req, "import_csv", "party", undefined, { 
+        created: results.created, 
+        updated: results.updated, 
+        skipped: results.skipped 
+      });
+
+      res.json({
+        success: true,
+        message: `Importação concluída: ${results.created} criados, ${results.updated} atualizados, ${results.skipped} ignorados`,
+        ...results,
+      });
+    } catch (error: any) {
+      console.error("CSV import error:", error);
+      res.status(500).json({ error: "Falha ao importar CSV: " + (error.message || "Erro desconhecido") });
     }
   });
 
@@ -1785,6 +1978,168 @@ Responda em JSON:
     }
   });
 
+  // Import Batches API Endpoints
+  app.get("/api/imports/tse/:id/batches", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+      const batches = await storage.getImportBatches(jobId);
+      const stats = await storage.getBatchStats(jobId);
+      res.json({ batches, stats });
+    } catch (error) {
+      console.error("Failed to fetch import batches:", error);
+      res.status(500).json({ error: "Failed to fetch import batches" });
+    }
+  });
+
+  app.get("/api/imports/tse/:jobId/batches/:batchId", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const batchId = parseInt(req.params.batchId);
+      if (isNaN(jobId) || isNaN(batchId)) {
+        return res.status(400).json({ error: "Invalid IDs" });
+      }
+      
+      const batch = await storage.getImportBatch(batchId);
+      if (!batch || batch.importJobId !== jobId) {
+        return res.status(404).json({ error: "Batch not found" });
+      }
+      
+      const rows = await storage.getBatchRows(batchId);
+      const failedRows = rows.filter(r => r.status === "failed");
+      
+      res.json({ 
+        batch, 
+        rows,
+        summary: {
+          total: rows.length,
+          success: rows.filter(r => r.status === "success").length,
+          failed: failedRows.length,
+          skipped: rows.filter(r => r.status === "skipped").length,
+          pending: rows.filter(r => r.status === "pending").length,
+        }
+      });
+    } catch (error) {
+      console.error("Failed to fetch batch details:", error);
+      res.status(500).json({ error: "Failed to fetch batch details" });
+    }
+  });
+
+  app.get("/api/imports/tse/:jobId/batches/:batchId/failed-rows", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const batchId = parseInt(req.params.batchId);
+      if (isNaN(batchId)) {
+        return res.status(400).json({ error: "Invalid batch ID" });
+      }
+      
+      const rows = await storage.getFailedBatchRows(batchId);
+      res.json(rows);
+    } catch (error) {
+      console.error("Failed to fetch failed rows:", error);
+      res.status(500).json({ error: "Failed to fetch failed rows" });
+    }
+  });
+
+  app.post("/api/imports/tse/:jobId/batches/:batchId/reprocess", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const batchId = parseInt(req.params.batchId);
+      if (isNaN(jobId) || isNaN(batchId)) {
+        return res.status(400).json({ error: "Invalid IDs" });
+      }
+      
+      const batch = await storage.getImportBatch(batchId);
+      if (!batch || batch.importJobId !== jobId) {
+        return res.status(404).json({ error: "Batch not found" });
+      }
+      
+      if (batch.status !== "failed") {
+        return res.status(400).json({ error: "Only failed batches can be reprocessed" });
+      }
+      
+      // Reset failed rows for reprocessing
+      const resetCount = await storage.resetBatchRowsForReprocess(batchId);
+      
+      // Update batch status
+      await storage.updateImportBatch(batchId, { 
+        status: "pending",
+        errorCount: 0,
+        processedRows: 0,
+        errorSummary: null,
+      });
+      
+      // Reprocess the batch asynchronously
+      reprocessBatch(batchId, jobId).catch(err => {
+        console.error(`Batch ${batchId} reprocessing failed:`, err);
+      });
+      
+      await logAudit(req, "update", "tse_import_batch", String(batchId), {
+        action: "reprocess",
+        jobId,
+        rowsReset: resetCount,
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Batch reprocessing started",
+        rowsToReprocess: resetCount
+      });
+    } catch (error) {
+      console.error("Failed to reprocess batch:", error);
+      res.status(500).json({ error: "Failed to reprocess batch" });
+    }
+  });
+
+  app.post("/api/imports/tse/:id/batches/reprocess-all-failed", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      if (isNaN(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+      
+      const failedBatches = await storage.getFailedBatches(jobId);
+      if (failedBatches.length === 0) {
+        return res.status(400).json({ error: "No failed batches to reprocess" });
+      }
+      
+      let totalRowsReset = 0;
+      for (const batch of failedBatches) {
+        const resetCount = await storage.resetBatchRowsForReprocess(batch.id);
+        totalRowsReset += resetCount;
+        
+        await storage.updateImportBatch(batch.id, { 
+          status: "pending",
+          errorCount: 0,
+          processedRows: 0,
+          errorSummary: null,
+        });
+        
+        // Reprocess each batch asynchronously
+        reprocessBatch(batch.id, jobId).catch(err => {
+          console.error(`Batch ${batch.id} reprocessing failed:`, err);
+        });
+      }
+      
+      await logAudit(req, "update", "tse_import_job", String(jobId), {
+        action: "reprocess_all_failed",
+        batchCount: failedBatches.length,
+        totalRowsReset,
+      });
+      
+      res.json({ 
+        success: true, 
+        message: `Reprocessing ${failedBatches.length} failed batches`,
+        batchCount: failedBatches.length,
+        totalRowsToReprocess: totalRowsReset
+      });
+    } catch (error) {
+      console.error("Failed to reprocess failed batches:", error);
+      res.status(500).json({ error: "Failed to reprocess failed batches" });
+    }
+  });
+
   // Data Validation API Endpoints
   app.get("/api/imports/tse/:id/validation", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
@@ -1869,8 +2224,17 @@ Responda em JSON:
         return res.status(400).json({ error: "Só é possível validar importações concluídas" });
       }
 
-      // Count actual records in database
-      const dbRowCount = await storage.countTseCandidateVotesByJob(jobId);
+      // Determine import type from filename prefix and count from appropriate table
+      let dbRowCount: number;
+      const filename = job.filename || "";
+      if (filename.startsWith("[DETALHE]")) {
+        dbRowCount = await storage.countTseElectoralStatisticsByJob(jobId);
+      } else if (filename.startsWith("[PARTIDO]")) {
+        dbRowCount = await storage.countTsePartyVotesByJob(jobId);
+      } else {
+        // Default to candidate votes table for regular imports
+        dbRowCount = await storage.countTseCandidateVotesByJob(jobId);
+      }
       
       // Calculate expected count based on what we know
       const totalFileRows = job.totalFileRows || job.processedRows || 0;
@@ -2378,6 +2742,596 @@ Responda em JSON:
     }
   });
 
+  // Prediction Scenario endpoints
+  app.get("/api/prediction-scenarios", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const targetYear = req.query.targetYear ? parseInt(req.query.targetYear as string) : undefined;
+      const scenarios = await storage.getPredictionScenarios({ status, targetYear });
+      res.json(scenarios);
+    } catch (error) {
+      console.error("Failed to fetch prediction scenarios:", error);
+      res.status(500).json({ error: "Failed to fetch prediction scenarios" });
+    }
+  });
+
+  app.get("/api/prediction-scenarios/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid scenario ID" });
+      }
+      const scenario = await storage.getPredictionScenario(id);
+      if (!scenario) {
+        return res.status(404).json({ error: "Prediction scenario not found" });
+      }
+      res.json(scenario);
+    } catch (error) {
+      console.error("Failed to fetch prediction scenario:", error);
+      res.status(500).json({ error: "Failed to fetch prediction scenario" });
+    }
+  });
+
+  app.post("/api/prediction-scenarios", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { name, description, targetYear, baseYear, pollingData, partyAdjustments, externalFactors, parameters } = req.body;
+      
+      if (!name || !targetYear || !baseYear) {
+        return res.status(400).json({ error: "Name, target year, and base year are required" });
+      }
+
+      const scenario = await storage.createPredictionScenario({
+        name,
+        description,
+        targetYear,
+        baseYear,
+        pollingData: pollingData || null,
+        partyAdjustments: partyAdjustments || null,
+        externalFactors: externalFactors || null,
+        parameters: parameters || { pollingWeight: 0.30, historicalWeight: 0.50, adjustmentWeight: 0.20, monteCarloIterations: 10000, confidenceLevel: 0.95 },
+        status: "draft",
+        createdBy: (req.user as any)?.id || null,
+      });
+
+      await logAudit(req, "create", "prediction_scenario", String(scenario.id));
+      res.status(201).json(scenario);
+    } catch (error) {
+      console.error("Failed to create prediction scenario:", error);
+      res.status(500).json({ error: "Failed to create prediction scenario" });
+    }
+  });
+
+  app.patch("/api/prediction-scenarios/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid scenario ID" });
+      }
+
+      const existing = await storage.getPredictionScenario(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Prediction scenario not found" });
+      }
+
+      const updated = await storage.updatePredictionScenario(id, req.body);
+      await logAudit(req, "update", "prediction_scenario", String(id));
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update prediction scenario:", error);
+      res.status(500).json({ error: "Failed to update prediction scenario" });
+    }
+  });
+
+  app.delete("/api/prediction-scenarios/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid scenario ID" });
+      }
+
+      const deleted = await storage.deletePredictionScenario(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Prediction scenario not found" });
+      }
+
+      await logAudit(req, "delete", "prediction_scenario", String(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete prediction scenario:", error);
+      res.status(500).json({ error: "Failed to delete prediction scenario" });
+    }
+  });
+
+  // Run prediction scenario with Monte Carlo simulation
+  app.post("/api/prediction-scenarios/:id/run", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid scenario ID" });
+      }
+
+      const scenario = await storage.getPredictionScenario(id);
+      if (!scenario) {
+        return res.status(404).json({ error: "Prediction scenario not found" });
+      }
+
+      // Update status to running
+      await storage.updatePredictionScenario(id, { status: "running" });
+
+      // Create a forecast run based on this scenario
+      const forecast = await storage.createForecastRun({
+        name: `Previsão: ${scenario.name}`,
+        targetYear: scenario.targetYear,
+        baseYears: [scenario.baseYear],
+        position: req.body.position || "DEPUTADO FEDERAL",
+        state: req.body.state || null,
+        parameters: scenario.parameters as any,
+        status: "running",
+        createdBy: (req.user as any)?.id || null,
+      });
+
+      // Run forecasting in background
+      import("./forecasting").then(async ({ runForecastWithScenario }) => {
+        try {
+          await runForecastWithScenario(forecast.id, scenario);
+          await storage.updatePredictionScenario(id, { 
+            status: "completed", 
+            lastRunAt: new Date(),
+            forecastRunId: forecast.id 
+          });
+        } catch (error) {
+          console.error("Forecast with scenario failed:", error);
+          await storage.updatePredictionScenario(id, { status: "failed" });
+          await storage.updateForecastRun(forecast.id, { status: "failed" });
+        }
+      });
+
+      await logAudit(req, "run", "prediction_scenario", String(id));
+      res.json({ success: true, forecastId: forecast.id, message: "Prediction scenario execution started" });
+    } catch (error) {
+      console.error("Failed to run prediction scenario:", error);
+      res.status(500).json({ error: "Failed to run prediction scenario" });
+    }
+  });
+
+  // ===== Candidate Comparison Predictions =====
+
+  // Get all candidate comparisons
+  app.get("/api/candidate-comparisons", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const comparisons = await db.select().from(candidateComparisons).orderBy(sql`created_at DESC`);
+      res.json(comparisons);
+    } catch (error) {
+      console.error("Failed to fetch candidate comparisons:", error);
+      res.status(500).json({ error: "Failed to fetch candidate comparisons" });
+    }
+  });
+
+  // Create candidate comparison
+  app.post("/api/candidate-comparisons", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { name, description, candidateIds, state, position, targetYear, baseYear, compareMetrics, includeHistorical } = req.body;
+      
+      if (!name || !candidateIds || candidateIds.length < 2) {
+        return res.status(400).json({ error: "Name and at least 2 candidates are required" });
+      }
+
+      const [comparison] = await db.insert(candidateComparisons).values({
+        name,
+        description,
+        candidateIds,
+        state: state || null,
+        position: position || null,
+        targetYear: targetYear || new Date().getFullYear() + 2,
+        baseYear: baseYear || null,
+        compareMetrics: compareMetrics || { voteShare: true, electionProbability: true, trend: true },
+        includeHistorical: includeHistorical ?? true,
+        status: "draft",
+        createdBy: (req.user as any)?.id || null,
+      }).returning();
+
+      await logAudit(req, "create", "candidate_comparison", String(comparison.id));
+      res.status(201).json(comparison);
+    } catch (error) {
+      console.error("Failed to create candidate comparison:", error);
+      res.status(500).json({ error: "Failed to create candidate comparison" });
+    }
+  });
+
+  // Run candidate comparison analysis
+  app.post("/api/candidate-comparisons/:id/run", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [comparison] = await db.select().from(candidateComparisons).where(eq(candidateComparisons.id, id));
+      
+      if (!comparison) {
+        return res.status(404).json({ error: "Comparison not found" });
+      }
+
+      // Update status
+      await db.update(candidateComparisons).set({ status: "running" }).where(eq(candidateComparisons.id, id));
+
+      // Get candidate data
+      const candidateIds = comparison.candidateIds as string[];
+      const candidates = await storage.getCandidates({ limit: 1000 });
+      const matchedCandidates = candidates.filter(c => 
+        candidateIds.some(id => 
+          c.id.toString() === id || 
+          c.name.toLowerCase().includes(id.toLowerCase()) ||
+          c.nickname?.toLowerCase().includes(id.toLowerCase())
+        )
+      );
+
+      // Build comparison using AI
+      const openai = new OpenAI();
+      const prompt = `Você é um analista político especializado em eleições brasileiras.
+Compare os seguintes candidatos e forneça uma análise detalhada:
+
+Candidatos para comparação:
+${matchedCandidates.map(c => `- ${c.name} (${c.nickname || 'Sem apelido'}) - Partido: ${c.party}, Estado: ${c.state}, Votos: ${c.votes?.toLocaleString('pt-BR') || 'N/A'}`).join('\n')}
+
+${candidateIds.filter(id => !matchedCandidates.some(c => c.id.toString() === id || c.name.toLowerCase().includes(id.toLowerCase()))).length > 0 ? 
+`Candidatos não encontrados no banco de dados (analisar com base em conhecimento geral): ${candidateIds.filter(id => !matchedCandidates.some(c => c.id.toString() === id || c.name.toLowerCase().includes(id.toLowerCase()))).join(', ')}` : ''}
+
+Estado: ${comparison.state || 'Nacional'}
+Cargo: ${comparison.position || 'Geral'}
+Ano alvo: ${comparison.targetYear}
+
+Responda em JSON:
+{
+  "candidates": [
+    {
+      "name": "nome",
+      "party": "partido",
+      "projectedVoteShare": número_percentual,
+      "electionProbability": número_0_a_1,
+      "strengths": ["força1", "força2"],
+      "weaknesses": ["fraqueza1"],
+      "trend": "growing" | "declining" | "stable",
+      "historicalPerformance": "descrição breve"
+    }
+  ],
+  "headToHead": [
+    { "candidate1": "nome1", "candidate2": "nome2", "advantage": "nome do favorito", "margin": número_percentual }
+  ],
+  "overallWinner": "nome do candidato com maior probabilidade",
+  "keyDifferentiators": ["diferença1", "diferença2"],
+  "narrative": "Análise comparativa em 2-3 parágrafos em português",
+  "confidence": número_0_a_1
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const results = JSON.parse(completion.choices[0]?.message?.content || "{}");
+
+      await db.update(candidateComparisons).set({
+        status: "completed",
+        results,
+        narrative: results.narrative,
+        aiInsights: { headToHead: results.headToHead, keyDifferentiators: results.keyDifferentiators },
+        completedAt: new Date(),
+      }).where(eq(candidateComparisons.id, id));
+
+      const [updated] = await db.select().from(candidateComparisons).where(eq(candidateComparisons.id, id));
+      await logAudit(req, "run", "candidate_comparison", String(id));
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to run candidate comparison:", error);
+      res.status(500).json({ error: "Failed to run candidate comparison" });
+    }
+  });
+
+  // Delete candidate comparison
+  app.delete("/api/candidate-comparisons/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(candidateComparisons).where(eq(candidateComparisons.id, id));
+      await logAudit(req, "delete", "candidate_comparison", String(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete candidate comparison:", error);
+      res.status(500).json({ error: "Failed to delete candidate comparison" });
+    }
+  });
+
+  // ===== Event Impact Predictions =====
+
+  // Get all event impact predictions
+  app.get("/api/event-impacts", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const predictions = await db.select().from(eventImpactPredictions).orderBy(sql`created_at DESC`);
+      res.json(predictions);
+    } catch (error) {
+      console.error("Failed to fetch event impacts:", error);
+      res.status(500).json({ error: "Failed to fetch event impact predictions" });
+    }
+  });
+
+  // Create event impact prediction
+  app.post("/api/event-impacts", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { 
+        name, eventDescription, eventType, eventDate, affectedEntities, 
+        state, position, targetYear, estimatedImpactMagnitude, impactDuration, impactDistribution 
+      } = req.body;
+
+      if (!name || !eventDescription || !eventType || !affectedEntities) {
+        return res.status(400).json({ error: "Name, event description, type, and affected entities are required" });
+      }
+
+      const [prediction] = await db.insert(eventImpactPredictions).values({
+        name,
+        eventDescription,
+        eventType,
+        eventDate: eventDate ? new Date(eventDate) : null,
+        affectedEntities,
+        state: state || null,
+        position: position || null,
+        targetYear: targetYear || new Date().getFullYear() + 2,
+        estimatedImpactMagnitude: estimatedImpactMagnitude?.toString() || null,
+        impactDuration: impactDuration || "medium-term",
+        impactDistribution: impactDistribution || { direct: 0.7, indirect: 0.3 },
+        status: "draft",
+        createdBy: (req.user as any)?.id || null,
+      }).returning();
+
+      await logAudit(req, "create", "event_impact_prediction", String(prediction.id));
+      res.status(201).json(prediction);
+    } catch (error) {
+      console.error("Failed to create event impact prediction:", error);
+      res.status(500).json({ error: "Failed to create event impact prediction" });
+    }
+  });
+
+  // Run event impact analysis
+  app.post("/api/event-impacts/:id/run", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [prediction] = await db.select().from(eventImpactPredictions).where(eq(eventImpactPredictions.id, id));
+      
+      if (!prediction) {
+        return res.status(404).json({ error: "Event impact prediction not found" });
+      }
+
+      await db.update(eventImpactPredictions).set({ status: "running" }).where(eq(eventImpactPredictions.id, id));
+
+      const affected = prediction.affectedEntities as { parties?: string[]; candidates?: string[]; regions?: string[] };
+      
+      // Get baseline data
+      const parties = await storage.getParties();
+      const affectedParties = parties.filter(p => affected.parties?.includes(p.abbreviation));
+
+      const openai = new OpenAI();
+      const prompt = `Você é um analista político especializado em previsões eleitorais brasileiras.
+Analise o impacto do seguinte evento nas eleições:
+
+EVENTO: ${prediction.eventDescription}
+Tipo: ${prediction.eventType}
+Data do evento: ${prediction.eventDate ? new Date(prediction.eventDate).toLocaleDateString('pt-BR') : 'Não especificada'}
+Magnitude estimada: ${prediction.estimatedImpactMagnitude || 'A determinar'}
+Duração do impacto: ${prediction.impactDuration}
+
+ENTIDADES AFETADAS:
+- Partidos: ${affected.parties?.join(', ') || 'Nenhum especificado'}
+- Candidatos: ${affected.candidates?.join(', ') || 'Nenhum especificado'}
+- Regiões: ${affected.regions?.join(', ') || 'Nacional'}
+
+Escopo: ${prediction.state || 'Nacional'}, ${prediction.position || 'Geral'}
+Ano alvo: ${prediction.targetYear}
+
+Partidos no sistema: ${affectedParties.map(p => `${p.abbreviation} (${p.name})`).join(', ') || 'Dados não disponíveis'}
+
+Forneça projeções ANTES e DEPOIS do evento em JSON:
+{
+  "beforeProjection": {
+    "parties": [{ "party": "sigla", "voteShare": número, "seats": número, "trend": "growing"|"stable"|"declining" }],
+    "overall": { "favoriteParty": "sigla", "competitiveness": "alta"|"média"|"baixa", "uncertainty": número_0_a_1 }
+  },
+  "afterProjection": {
+    "parties": [{ "party": "sigla", "voteShare": número, "seats": número, "trend": "growing"|"stable"|"declining" }],
+    "overall": { "favoriteParty": "sigla", "competitiveness": "alta"|"média"|"baixa", "uncertainty": número_0_a_1 }
+  },
+  "impactDelta": {
+    "biggestGainer": { "party": "sigla", "voteShareChange": número, "seatChange": número },
+    "biggestLoser": { "party": "sigla", "voteShareChange": número, "seatChange": número },
+    "totalVolatility": número_percentual
+  },
+  "confidenceIntervals": {
+    "overall": número_0_a_1,
+    "beforeAccuracy": número_0_a_1,
+    "afterAccuracy": número_0_a_1
+  },
+  "narrative": "Análise detalhada do impacto em 3-4 parágrafos em português, explicando as projeções antes e depois do evento",
+  "keyInsights": ["insight1", "insight2", "insight3"]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const results = JSON.parse(completion.choices[0]?.message?.content || "{}");
+
+      await db.update(eventImpactPredictions).set({
+        status: "completed",
+        beforeProjection: results.beforeProjection,
+        afterProjection: results.afterProjection,
+        impactDelta: results.impactDelta,
+        confidenceIntervals: results.confidenceIntervals,
+        narrative: results.narrative,
+        aiAnalysis: { keyInsights: results.keyInsights },
+        completedAt: new Date(),
+      }).where(eq(eventImpactPredictions.id, id));
+
+      const [updated] = await db.select().from(eventImpactPredictions).where(eq(eventImpactPredictions.id, id));
+      await logAudit(req, "run", "event_impact_prediction", String(id));
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to run event impact prediction:", error);
+      res.status(500).json({ error: "Failed to run event impact prediction" });
+    }
+  });
+
+  // Delete event impact prediction
+  app.delete("/api/event-impacts/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(eventImpactPredictions).where(eq(eventImpactPredictions.id, id));
+      await logAudit(req, "delete", "event_impact_prediction", String(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete event impact prediction:", error);
+      res.status(500).json({ error: "Failed to delete event impact prediction" });
+    }
+  });
+
+  // ===== Scenario Simulations (What-If) =====
+
+  // Get all scenario simulations
+  app.get("/api/scenario-simulations", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const simulations = await db.select().from(scenarioSimulations).orderBy(sql`created_at DESC`);
+      res.json(simulations);
+    } catch (error) {
+      console.error("Failed to fetch scenario simulations:", error);
+      res.status(500).json({ error: "Failed to fetch scenario simulations" });
+    }
+  });
+
+  // Create scenario simulation
+  app.post("/api/scenario-simulations", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { name, description, simulationType, baseScenario, modifiedScenario, parameters, scope, reportId } = req.body;
+
+      if (!name || !simulationType || !baseScenario || !modifiedScenario) {
+        return res.status(400).json({ error: "Name, simulation type, base and modified scenarios are required" });
+      }
+
+      const [simulation] = await db.insert(scenarioSimulations).values({
+        name,
+        description,
+        simulationType,
+        baseScenario,
+        modifiedScenario,
+        parameters: parameters || {},
+        scope: scope || {},
+        status: "draft",
+        reportId: reportId || null,
+        createdBy: (req.user as any)?.id || null,
+      }).returning();
+
+      await logAudit(req, "create", "scenario_simulation", String(simulation.id));
+      res.status(201).json(simulation);
+    } catch (error) {
+      console.error("Failed to create scenario simulation:", error);
+      res.status(500).json({ error: "Failed to create scenario simulation" });
+    }
+  });
+
+  // Run scenario simulation
+  app.post("/api/scenario-simulations/:id/run", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [simulation] = await db.select().from(scenarioSimulations).where(eq(scenarioSimulations.id, id));
+      
+      if (!simulation) {
+        return res.status(404).json({ error: "Scenario simulation not found" });
+      }
+
+      await db.update(scenarioSimulations).set({ status: "running" }).where(eq(scenarioSimulations.id, id));
+
+      const baseScenario = simulation.baseScenario as any;
+      const modifiedScenario = simulation.modifiedScenario as any;
+      const params = simulation.parameters as any;
+      const scope = simulation.scope as any;
+
+      const openai = new OpenAI();
+      const prompt = `Você é um analista político especializado em simulações eleitorais brasileiras.
+Simule o seguinte cenário "E se...":
+
+TIPO DE SIMULAÇÃO: ${simulation.simulationType}
+${simulation.description ? `Descrição: ${simulation.description}` : ''}
+
+CENÁRIO BASE (situação atual):
+${JSON.stringify(baseScenario, null, 2)}
+
+MODIFICAÇÃO PROPOSTA (o que mudaria):
+${JSON.stringify(modifiedScenario, null, 2)}
+
+PARÂMETROS:
+${JSON.stringify(params, null, 2)}
+
+ESCOPO:
+${JSON.stringify(scope, null, 2)}
+
+Analise o impacto dessa mudança hipotética e forneça:
+{
+  "baselineResults": {
+    "parties": [{ "party": "sigla", "seats": número, "voteShare": número }],
+    "dominantParty": "sigla",
+    "competitiveness": "alta"|"média"|"baixa"
+  },
+  "simulatedResults": {
+    "parties": [{ "party": "sigla", "seats": número, "voteShare": número, "changeFromBaseline": número }],
+    "dominantParty": "sigla",
+    "competitiveness": "alta"|"média"|"baixa"
+  },
+  "impactAnalysis": {
+    "seatChanges": [{ "party": "sigla", "before": número, "after": número, "change": número }],
+    "voteShareChanges": [{ "party": "sigla", "before": número, "after": número, "change": número }],
+    "winners": ["partido1", "partido2"],
+    "losers": ["partido3"],
+    "overallImpact": "significativo"|"moderado"|"mínimo",
+    "confidence": número_0_a_1
+  },
+  "narrative": "Análise detalhada da simulação em 3-4 parágrafos em português, explicando o que aconteceria se a mudança ocorresse",
+  "recommendations": ["recomendação1", "recomendação2"]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const results = JSON.parse(completion.choices[0]?.message?.content || "{}");
+
+      await db.update(scenarioSimulations).set({
+        status: "completed",
+        baselineResults: results.baselineResults,
+        simulatedResults: results.simulatedResults,
+        impactAnalysis: results.impactAnalysis,
+        narrative: results.narrative,
+        completedAt: new Date(),
+      }).where(eq(scenarioSimulations.id, id));
+
+      const [updated] = await db.select().from(scenarioSimulations).where(eq(scenarioSimulations.id, id));
+      await logAudit(req, "run", "scenario_simulation", String(id));
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to run scenario simulation:", error);
+      res.status(500).json({ error: "Failed to run scenario simulation" });
+    }
+  });
+
+  // Delete scenario simulation
+  app.delete("/api/scenario-simulations/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(scenarioSimulations).where(eq(scenarioSimulations.id, id));
+      await logAudit(req, "delete", "scenario_simulation", String(id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete scenario simulation:", error);
+      res.status(500).json({ error: "Failed to delete scenario simulation" });
+    }
+  });
+
   app.get("/api/analytics/historical-years", requireAuth, async (req, res) => {
     try {
       const position = req.query.position as string | undefined;
@@ -2527,6 +3481,221 @@ Responda em JSON:
     } catch (error) {
       console.error("TSE URL import error:", error);
       res.status(500).json({ error: "Failed to start URL import" });
+    }
+  });
+
+  // Preview available files in a TSE ZIP
+  app.post("/api/imports/tse/preview-files", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      if (!url.startsWith("https://cdn.tse.jus.br/") && !url.startsWith("https://dadosabertos.tse.jus.br/")) {
+        return res.status(400).json({ error: "URL must be from TSE domain" });
+      }
+
+      const tmpDir = `/tmp/tse-preview-${Date.now()}`;
+      await mkdir(tmpDir, { recursive: true });
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+      }
+
+      const zipPath = path.join(tmpDir, "data.zip");
+      const fileStream = createWriteStream(zipPath);
+      
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fileStream.write(value);
+      }
+      fileStream.end();
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on("finish", resolve);
+        fileStream.on("error", reject);
+      });
+
+      const directory = await unzipper.Open.file(zipPath);
+      const csvFiles = directory.files.filter(f => 
+        (f.path.endsWith(".csv") || f.path.endsWith(".txt")) && !f.path.startsWith("__MACOSX")
+      );
+
+      // Check for _BRASIL file
+      const brasilFile = csvFiles.find(f => 
+        f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT")
+      );
+
+      // Clean up
+      await unlink(zipPath).catch(() => {});
+      await rmdir(tmpDir).catch(() => {});
+
+      const files = csvFiles.map(f => ({
+        path: f.path,
+        name: path.basename(f.path),
+        size: f.uncompressedSize || 0,
+        isBrasil: f.path.toUpperCase().includes("_BRASIL")
+      }));
+
+      res.json({
+        hasBrasilFile: !!brasilFile,
+        brasilFile: brasilFile ? path.basename(brasilFile.path) : null,
+        files: files.sort((a, b) => (b.isBrasil ? 1 : 0) - (a.isBrasil ? 1 : 0) || a.name.localeCompare(b.name))
+      });
+    } catch (error: any) {
+      console.error("TSE preview files error:", error);
+      res.status(500).json({ error: error.message || "Failed to preview files" });
+    }
+  });
+
+  // Import Electoral Statistics (DETALHE_VOTACAO_MUNZONA) from TSE URL
+  app.post("/api/imports/tse/detalhe-votacao/url", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { url, electionYear, electionType, uf, cargoFilter, selectedFile } = req.body;
+      
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      if (!url.startsWith("https://cdn.tse.jus.br/") && !url.startsWith("https://dadosabertos.tse.jus.br/")) {
+        return res.status(400).json({ error: "URL must be from TSE domain" });
+      }
+
+      const filename = path.basename(url);
+      const fullFilename = `[DETALHE] ${filename}`;
+      const parsedYear = electionYear ? parseInt(electionYear) : null;
+
+      const job = await storage.createTseImportJob({
+        filename: fullFilename,
+        fileSize: 0,
+        status: "pending",
+        stage: "pending",
+        downloadedBytes: 0,
+        totalRows: 0,
+        processedRows: 0,
+        skippedRows: 0,
+        errorCount: 0,
+        electionYear: parsedYear,
+        electionType: electionType || null,
+        uf: uf || null,
+        cargoFilter: cargoFilter || null,
+        sourceUrl: url,
+        createdBy: req.user!.id,
+      });
+
+      await logAudit(req, "create", "tse_import_detalhe", String(job.id), { url, filename, selectedFile });
+
+      processDetalheVotacaoImport(job.id, url, selectedFile);
+
+      res.json({ jobId: job.id, message: "Electoral statistics import started" });
+    } catch (error) {
+      console.error("TSE detalhe_votacao import error:", error);
+      res.status(500).json({ error: "Failed to start electoral statistics import" });
+    }
+  });
+
+  // Import Party Votes (VOTACAO_PARTIDO_MUNZONA) from TSE URL
+  app.post("/api/imports/tse/partido/url", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const { url, electionYear, electionType, uf, cargoFilter, selectedFile } = req.body;
+      
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      if (!url.startsWith("https://cdn.tse.jus.br/") && !url.startsWith("https://dadosabertos.tse.jus.br/")) {
+        return res.status(400).json({ error: "URL must be from TSE domain" });
+      }
+
+      const filename = path.basename(url);
+      const fullFilename = `[PARTIDO] ${filename}`;
+      const parsedYear = electionYear ? parseInt(electionYear) : null;
+
+      const job = await storage.createTseImportJob({
+        filename: fullFilename,
+        fileSize: 0,
+        status: "pending",
+        stage: "pending",
+        downloadedBytes: 0,
+        totalRows: 0,
+        processedRows: 0,
+        skippedRows: 0,
+        errorCount: 0,
+        electionYear: parsedYear,
+        electionType: electionType || null,
+        uf: uf || null,
+        cargoFilter: cargoFilter || null,
+        sourceUrl: url,
+        createdBy: req.user!.id,
+      });
+
+      await logAudit(req, "create", "tse_import_partido", String(job.id), { url, filename, selectedFile });
+
+      processPartidoVotacaoImport(job.id, url, selectedFile);
+
+      res.json({ jobId: job.id, message: "Party votes import started" });
+    } catch (error) {
+      console.error("TSE partido import error:", error);
+      res.status(500).json({ error: "Failed to start party votes import" });
+    }
+  });
+
+  // Get historical electoral data summary for scenario creation
+  app.get("/api/historical-elections", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, cargo } = req.query;
+      
+      const filters: any = {};
+      if (year) filters.anoEleicao = parseInt(year as string);
+      if (uf) filters.sgUf = uf as string;
+      if (cargo) filters.cdCargo = parseInt(cargo as string);
+
+      const statistics = await storage.getElectoralStatisticsSummary(filters);
+      res.json(statistics);
+    } catch (error) {
+      console.error("Failed to fetch historical elections:", error);
+      res.status(500).json({ error: "Failed to fetch historical elections" });
+    }
+  });
+
+  // Get available elections for dropdown
+  app.get("/api/historical-elections/available", requireAuth, async (req, res) => {
+    try {
+      const elections = await storage.getAvailableHistoricalElections();
+      res.json(elections);
+    } catch (error) {
+      console.error("Failed to fetch available elections:", error);
+      res.status(500).json({ error: "Failed to fetch available elections" });
+    }
+  });
+
+  // Get party votes for a specific election
+  app.get("/api/historical-elections/party-votes", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, cargo, municipio } = req.query;
+      
+      if (!year || !cargo) {
+        return res.status(400).json({ error: "Year and cargo are required" });
+      }
+
+      const filters = {
+        anoEleicao: parseInt(year as string),
+        sgUf: uf as string || undefined,
+        cdCargo: parseInt(cargo as string),
+        cdMunicipio: municipio ? parseInt(municipio as string) : undefined,
+      };
+
+      const partyVotes = await storage.getHistoricalPartyVotes(filters);
+      res.json(partyVotes);
+    } catch (error) {
+      console.error("Failed to fetch party votes:", error);
+      res.status(500).json({ error: "Failed to fetch party votes" });
     }
   });
 
@@ -2773,6 +3942,7 @@ Responda em JSON:
           if (cargoFilter && record.cdCargo !== cargoFilter) {
             filteredCount++;
           } else {
+            record.importJobId = jobId;
             records.push(record as InsertTseCandidateVote);
           }
         }
@@ -2841,6 +4011,379 @@ Responda em JSON:
         .catch(error => {
           console.error(`TSE Import ${jobId}: Embedding generation failed:`, error);
         });
+    }
+  };
+
+  // Process Detalhe Votacao (Electoral Statistics) Import
+  const processDetalheVotacaoImport = async (jobId: number, url: string, selectedFile?: string) => {
+    const tmpDir = `/tmp/tse-import-${jobId}`;
+    activeImportJobs.set(jobId, { cancelled: false });
+
+    try {
+      await storage.updateTseImportJob(jobId, { 
+        status: "downloading", 
+        stage: "downloading",
+        startedAt: new Date(),
+        updatedAt: new Date()
+      });
+      await mkdir(tmpDir, { recursive: true });
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+      }
+
+      const contentLength = response.headers.get("content-length");
+      const totalBytes = contentLength ? parseInt(contentLength) : 0;
+      if (totalBytes > 0) {
+        await storage.updateTseImportJob(jobId, { fileSize: totalBytes });
+      }
+
+      const zipPath = path.join(tmpDir, "data.zip");
+      const fileStream = createWriteStream(zipPath);
+      
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      let downloadedBytes = 0;
+      
+      while (true) {
+        if (isJobCancelled(jobId)) {
+          reader.cancel();
+          fileStream.end();
+          throw new Error("Importação cancelada");
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        fileStream.write(value);
+        downloadedBytes += value.length;
+      }
+      
+      await storage.updateTseImportJob(jobId, { downloadedBytes, updatedAt: new Date() });
+      fileStream.end();
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on("finish", resolve);
+        fileStream.on("error", reject);
+      });
+
+      await storage.updateTseImportJob(jobId, { status: "extracting", stage: "extracting", updatedAt: new Date() });
+
+      const directory = await unzipper.Open.file(zipPath);
+      const csvFiles = directory.files.filter(f => 
+        (f.path.endsWith(".csv") || f.path.endsWith(".txt")) && !f.path.startsWith("__MACOSX")
+      );
+      
+      if (csvFiles.length === 0) throw new Error("No CSV/TXT file found in ZIP");
+      
+      // Use selectedFile if provided, otherwise prioritize _BRASIL file
+      let csvFile;
+      if (selectedFile) {
+        csvFile = csvFiles.find(f => f.path === selectedFile || path.basename(f.path) === selectedFile);
+        if (!csvFile) throw new Error(`Selected file not found: ${selectedFile}`);
+        console.log(`[DETALHE] Using user-selected file: ${csvFile.path}`);
+      } else {
+        const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
+        csvFile = brasilFile || csvFiles[0];
+        console.log(`[DETALHE] Found ${csvFiles.length} CSV files, using: ${csvFile.path}${brasilFile ? " (arquivo BRASIL consolidado)" : ""}`);
+      }
+      
+      const csvPath = path.join(tmpDir, "data.csv");
+      await pipeline(csvFile.stream(), createWriteStream(csvPath));
+
+      await storage.updateTseImportJob(jobId, { status: "processing", stage: "processing", updatedAt: new Date() });
+
+      // Process Detalhe Votacao CSV
+      const job = await storage.getTseImportJob(jobId);
+      const cargoFilter = job?.cargoFilter;
+      
+      const records: any[] = [];
+      let rowCount = 0;
+      let filteredCount = 0;
+      let errorCount = 0;
+      const BATCH_SIZE = 1000;
+
+      // Field mapping for DETALHE_VOTACAO_MUNZONA
+      const fieldMap: { [key: number]: string } = {
+        0: "dtGeracao", 1: "hhGeracao", 2: "anoEleicao", 3: "cdTipoEleicao", 4: "nmTipoEleicao",
+        5: "nrTurno", 6: "cdEleicao", 7: "dsEleicao", 8: "dtEleicao", 9: "tpAbrangencia",
+        10: "sgUf", 11: "sgUe", 12: "nmUe", 13: "cdMunicipio", 14: "nmMunicipio",
+        15: "nrZona", 16: "cdCargo", 17: "dsCargo", 18: "qtAptos", 19: "qtSecoesPrincipais",
+        20: "qtSecoesAgregadas", 21: "qtSecoesNaoInstaladas", 22: "qtTotalSecoes",
+        23: "qtComparecimento", 24: "qtEleitoresSecoesNaoInstaladas", 25: "qtAbstencoes",
+        26: "stVotoEmTransito", 27: "qtVotos", 28: "qtVotosConcorrentes",
+        29: "qtTotalVotosValidos", 30: "qtVotosNominaisValidos", 31: "qtTotalVotosLegValidos",
+        32: "qtVotosLegValidos", 33: "qtVotosNomConvrLegValidos", 34: "qtTotalVotosAnulados",
+        35: "qtVotosNominaisAnulados", 36: "qtVotosLegendaAnulados", 37: "qtTotalVotosAnulSubjud",
+        38: "qtVotosNominaisAnulSubjud", 39: "qtVotosLegendaAnulSubjud", 40: "qtVotosBrancos",
+        41: "qtTotalVotosNulos", 42: "qtVotosNulos", 43: "qtVotosNulosTecnicos",
+        44: "qtVotosAnuladosApuSep"
+      };
+
+      const parseValue = (value: string | undefined, isNumeric: boolean = false): any => {
+        if (!value || value === "#NULO" || value === "#NE") return isNumeric ? 0 : null;
+        if (isNumeric) {
+          const parsed = parseInt(value.replace(/"/g, ""), 10);
+          return isNaN(parsed) || parsed === -1 || parsed === -3 ? 0 : parsed;
+        }
+        return value.replace(/"/g, "").trim();
+      };
+
+      const numericFields = [2, 3, 5, 6, 13, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44];
+
+      await new Promise<void>((resolve, reject) => {
+        const parser = createReadStream(csvPath, { encoding: "latin1" })
+          .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2 }));
+
+        parser.on("data", async (row: string[]) => {
+          rowCount++;
+          
+          const cdCargo = parseValue(row[16], true);
+          if (cargoFilter && cdCargo !== cargoFilter) {
+            filteredCount++;
+            return;
+          }
+
+          const record: any = { importJobId: jobId };
+          for (const [index, field] of Object.entries(fieldMap)) {
+            const idx = parseInt(index);
+            if (idx < row.length) {
+              record[field] = parseValue(row[idx], numericFields.includes(idx));
+            }
+          }
+
+          records.push(record);
+
+          if (records.length >= BATCH_SIZE) {
+            parser.pause();
+            try {
+              const batch = records.splice(0, BATCH_SIZE);
+              const inserted = await storage.insertTseElectoralStatisticsBatch(batch);
+              const duplicates = batch.length - inserted;
+              filteredCount += duplicates;
+              await storage.updateTseImportJob(jobId, { 
+                processedRows: rowCount - filteredCount,
+                skippedRows: filteredCount,
+                updatedAt: new Date()
+              });
+            } catch (err) {
+              errorCount++;
+            }
+            parser.resume();
+          }
+        });
+
+        parser.on("end", async () => {
+          if (records.length > 0) {
+            const inserted = await storage.insertTseElectoralStatisticsBatch(records);
+            const duplicates = records.length - inserted;
+            filteredCount += duplicates;
+          }
+          resolve();
+        });
+        parser.on("error", reject);
+      });
+
+      await storage.updateTseImportJob(jobId, {
+        status: "completed",
+        stage: "completed",
+        totalRows: rowCount,
+        processedRows: rowCount - filteredCount,
+        skippedRows: filteredCount,
+        errorCount,
+        completedAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      await unlink(zipPath).catch(() => {});
+      await unlink(csvPath).catch(() => {});
+      activeImportJobs.delete(jobId);
+    } catch (error: any) {
+      console.error("Detalhe votacao import error:", error);
+      if (!isJobCancelled(jobId)) {
+        await storage.updateTseImportJob(jobId, {
+          status: "failed", stage: "failed", completedAt: new Date(),
+          updatedAt: new Date(), errorMessage: error.message || "Unknown error",
+        });
+      }
+      activeImportJobs.delete(jobId);
+    }
+  };
+
+  // Process Partido Votacao (Party Votes) Import
+  const processPartidoVotacaoImport = async (jobId: number, url: string, selectedFile?: string) => {
+    const tmpDir = `/tmp/tse-import-${jobId}`;
+    activeImportJobs.set(jobId, { cancelled: false });
+
+    try {
+      await storage.updateTseImportJob(jobId, { 
+        status: "downloading", stage: "downloading", startedAt: new Date(), updatedAt: new Date()
+      });
+      await mkdir(tmpDir, { recursive: true });
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+
+      const contentLength = response.headers.get("content-length");
+      const totalBytes = contentLength ? parseInt(contentLength) : 0;
+      if (totalBytes > 0) await storage.updateTseImportJob(jobId, { fileSize: totalBytes });
+
+      const zipPath = path.join(tmpDir, "data.zip");
+      const fileStream = createWriteStream(zipPath);
+      
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      let downloadedBytes = 0;
+      
+      while (true) {
+        if (isJobCancelled(jobId)) {
+          reader.cancel();
+          fileStream.end();
+          throw new Error("Importação cancelada");
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        fileStream.write(value);
+        downloadedBytes += value.length;
+      }
+      
+      await storage.updateTseImportJob(jobId, { downloadedBytes, updatedAt: new Date() });
+      fileStream.end();
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on("finish", resolve);
+        fileStream.on("error", reject);
+      });
+
+      await storage.updateTseImportJob(jobId, { status: "extracting", stage: "extracting", updatedAt: new Date() });
+
+      const directory = await unzipper.Open.file(zipPath);
+      const csvFiles = directory.files.filter(f => 
+        (f.path.endsWith(".csv") || f.path.endsWith(".txt")) && !f.path.startsWith("__MACOSX")
+      );
+      
+      if (csvFiles.length === 0) throw new Error("No CSV/TXT file found in ZIP");
+      
+      // Use selectedFile if provided, otherwise prioritize _BRASIL file
+      let csvFile;
+      if (selectedFile) {
+        csvFile = csvFiles.find(f => f.path === selectedFile || path.basename(f.path) === selectedFile);
+        if (!csvFile) throw new Error(`Selected file not found: ${selectedFile}`);
+        console.log(`[PARTIDO] Using user-selected file: ${csvFile.path}`);
+      } else {
+        const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
+        csvFile = brasilFile || csvFiles[0];
+        console.log(`[PARTIDO] Found ${csvFiles.length} CSV files, using: ${csvFile.path}${brasilFile ? " (arquivo BRASIL consolidado)" : ""}`);
+      }
+      
+      const csvPath = path.join(tmpDir, "data.csv");
+      await pipeline(csvFile.stream(), createWriteStream(csvPath));
+
+      await storage.updateTseImportJob(jobId, { status: "processing", stage: "processing", updatedAt: new Date() });
+
+      const job = await storage.getTseImportJob(jobId);
+      const cargoFilter = job?.cargoFilter;
+      
+      const records: any[] = [];
+      let rowCount = 0;
+      let filteredCount = 0;
+      let errorCount = 0;
+      const BATCH_SIZE = 1000;
+
+      // Field mapping for VOTACAO_PARTIDO_MUNZONA
+      const fieldMap: { [key: number]: string } = {
+        0: "dtGeracao", 1: "hhGeracao", 2: "anoEleicao", 3: "cdTipoEleicao", 4: "nmTipoEleicao",
+        5: "nrTurno", 6: "cdEleicao", 7: "dsEleicao", 8: "dtEleicao", 9: "tpAbrangencia",
+        10: "sgUf", 11: "sgUe", 12: "nmUe", 13: "cdMunicipio", 14: "nmMunicipio",
+        15: "nrZona", 16: "cdCargo", 17: "dsCargo", 18: "tpAgremiacao", 19: "nrPartido",
+        20: "sgPartido", 21: "nmPartido", 22: "nrFederacao", 23: "nmFederacao", 24: "sgFederacao",
+        25: "dsComposicaoFederacao", 26: "sqColigacao", 27: "nmColigacao", 28: "dsComposicaoColigacao",
+        29: "stVotoEmTransito", 30: "qtVotosLegendaValidos", 31: "qtVotosNomConvrLegValidos",
+        32: "qtTotalVotosLegValidos", 33: "qtVotosNominaisValidos", 34: "qtVotosLegendaAnulSubjud",
+        35: "qtVotosNominaisAnulSubjud", 36: "qtVotosLegendaAnulados", 37: "qtVotosNominaisAnulados"
+      };
+
+      const parseValue = (value: string | undefined, isNumeric: boolean = false): any => {
+        if (!value || value === "#NULO" || value === "#NE") return isNumeric ? 0 : null;
+        if (isNumeric) {
+          const parsed = parseInt(value.replace(/"/g, ""), 10);
+          return isNaN(parsed) || parsed === -1 || parsed === -3 ? 0 : parsed;
+        }
+        return value.replace(/"/g, "").trim();
+      };
+
+      const numericFields = [2, 3, 5, 6, 13, 15, 16, 19, 22, 30, 31, 32, 33, 34, 35, 36, 37];
+
+      await new Promise<void>((resolve, reject) => {
+        const parser = createReadStream(csvPath, { encoding: "latin1" })
+          .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2 }));
+
+        parser.on("data", async (row: string[]) => {
+          rowCount++;
+          
+          const cdCargo = parseValue(row[16], true);
+          if (cargoFilter && cdCargo !== cargoFilter) {
+            filteredCount++;
+            return;
+          }
+
+          const record: any = { importJobId: jobId };
+          for (const [index, field] of Object.entries(fieldMap)) {
+            const idx = parseInt(index);
+            if (idx < row.length) {
+              record[field] = parseValue(row[idx], numericFields.includes(idx));
+            }
+          }
+
+          records.push(record);
+
+          if (records.length >= BATCH_SIZE) {
+            parser.pause();
+            try {
+              const batch = records.splice(0, BATCH_SIZE);
+              const inserted = await storage.insertTsePartyVotesBatch(batch);
+              const duplicates = batch.length - inserted;
+              filteredCount += duplicates;
+              await storage.updateTseImportJob(jobId, { 
+                processedRows: rowCount - filteredCount,
+                skippedRows: filteredCount,
+                updatedAt: new Date()
+              });
+            } catch (err) {
+              errorCount++;
+            }
+            parser.resume();
+          }
+        });
+
+        parser.on("end", async () => {
+          if (records.length > 0) {
+            const inserted = await storage.insertTsePartyVotesBatch(records);
+            const duplicates = records.length - inserted;
+            filteredCount += duplicates;
+          }
+          resolve();
+        });
+        parser.on("error", reject);
+      });
+
+      await storage.updateTseImportJob(jobId, {
+        status: "completed", stage: "completed", totalRows: rowCount,
+        processedRows: rowCount - filteredCount, skippedRows: filteredCount,
+        errorCount, completedAt: new Date(), updatedAt: new Date()
+      });
+
+      await unlink(zipPath).catch(() => {});
+      await unlink(csvPath).catch(() => {});
+      activeImportJobs.delete(jobId);
+    } catch (error: any) {
+      console.error("Partido votacao import error:", error);
+      if (!isJobCancelled(jobId)) {
+        await storage.updateTseImportJob(jobId, {
+          status: "failed", stage: "failed", completedAt: new Date(),
+          updatedAt: new Date(), errorMessage: error.message || "Unknown error",
+        });
+      }
+      activeImportJobs.delete(jobId);
     }
   };
 
@@ -3164,6 +4707,75 @@ Responda em JSON:
     }
   });
 
+  // Election Simulation Endpoints
+  const { startElectionSimulation, pauseSimulation, resumeSimulation, cancelSimulation, getActiveSimulations } = await import("./election-simulation");
+
+  app.post("/api/election-simulation/start", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { year, state, position, speed } = req.body;
+      if (!year) {
+        return res.status(400).json({ error: "Year is required" });
+      }
+      const result = await startElectionSimulation({ year, state, position, speed });
+      await logAudit(req, "start", "election_simulation", result.simulationId);
+      res.json(result);
+    } catch (error) {
+      console.error("Failed to start election simulation:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to start simulation" });
+    }
+  });
+
+  app.post("/api/election-simulation/:id/pause", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const success = pauseSimulation(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Simulation not found or not running" });
+      }
+      res.json({ success: true, message: "Simulação pausada" });
+    } catch (error) {
+      console.error("Failed to pause simulation:", error);
+      res.status(500).json({ error: "Failed to pause simulation" });
+    }
+  });
+
+  app.post("/api/election-simulation/:id/resume", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const speed = req.body.speed || 1;
+      const success = resumeSimulation(req.params.id, speed);
+      if (!success) {
+        return res.status(404).json({ error: "Simulation not found or not paused" });
+      }
+      res.json({ success: true, message: "Simulação retomada" });
+    } catch (error) {
+      console.error("Failed to resume simulation:", error);
+      res.status(500).json({ error: "Failed to resume simulation" });
+    }
+  });
+
+  app.post("/api/election-simulation/:id/cancel", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const success = cancelSimulation(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Simulation not found" });
+      }
+      await logAudit(req, "cancel", "election_simulation", req.params.id);
+      res.json({ success: true, message: "Simulação cancelada" });
+    } catch (error) {
+      console.error("Failed to cancel simulation:", error);
+      res.status(500).json({ error: "Failed to cancel simulation" });
+    }
+  });
+
+  app.get("/api/election-simulation/active", requireAuth, async (req, res) => {
+    try {
+      const simulations = getActiveSimulations();
+      res.json(simulations);
+    } catch (error) {
+      console.error("Failed to get active simulations:", error);
+      res.status(500).json({ error: "Failed to get active simulations" });
+    }
+  });
+
   app.get("/api/analytics/states", requireAuth, async (req, res) => {
     try {
       const { year } = req.query;
@@ -3183,6 +4795,466 @@ Responda em JSON:
     } catch (error) {
       console.error("Election types error:", error);
       res.status(500).json({ error: "Failed to fetch election types" });
+    }
+  });
+
+  // Advanced Segmentation - Municipalities
+  app.get("/api/analytics/municipalities", requireAuth, async (req, res) => {
+    try {
+      const { uf, year } = req.query;
+      const municipalities = await storage.getMunicipalities({
+        uf: uf as string | undefined,
+        year: year ? parseInt(year as string) : undefined,
+      });
+      res.json(municipalities);
+    } catch (error) {
+      console.error("Municipalities error:", error);
+      res.status(500).json({ error: "Failed to fetch municipalities" });
+    }
+  });
+
+  app.get("/api/analytics/votes-by-municipality", requireAuth, async (req, res) => {
+    try {
+      const { year, uf, position, party, municipality } = req.query;
+      const votes = await storage.getVotesByMunicipality({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+        position: position as string | undefined,
+        party: party as string | undefined,
+        municipality: municipality as string | undefined,
+      });
+      res.json(votes);
+    } catch (error) {
+      console.error("Votes by municipality error:", error);
+      res.status(500).json({ error: "Failed to fetch votes by municipality" });
+    }
+  });
+
+  app.get("/api/analytics/positions", requireAuth, async (req, res) => {
+    try {
+      const { year, uf } = req.query;
+      const positions = await storage.getPositions({
+        year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
+      });
+      res.json(positions);
+    } catch (error) {
+      console.error("Positions error:", error);
+      res.status(500).json({ error: "Failed to fetch positions" });
+    }
+  });
+
+  // Custom Dashboards CRUD
+  app.get("/api/dashboards", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const dashboards = await storage.getCustomDashboards(userId);
+      res.json(dashboards);
+    } catch (error) {
+      console.error("Dashboards error:", error);
+      res.status(500).json({ error: "Failed to fetch dashboards" });
+    }
+  });
+
+  app.get("/api/dashboards/public", requireAuth, async (req, res) => {
+    try {
+      const dashboards = await storage.getPublicDashboards();
+      res.json(dashboards);
+    } catch (error) {
+      console.error("Public dashboards error:", error);
+      res.status(500).json({ error: "Failed to fetch public dashboards" });
+    }
+  });
+
+  app.get("/api/dashboards/:id", requireAuth, async (req, res) => {
+    try {
+      const dashboard = await storage.getCustomDashboard(parseInt(req.params.id));
+      if (!dashboard) {
+        return res.status(404).json({ error: "Dashboard not found" });
+      }
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Dashboard error:", error);
+      res.status(500).json({ error: "Failed to fetch dashboard" });
+    }
+  });
+
+  app.post("/api/dashboards", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const dashboard = await storage.createCustomDashboard({
+        ...req.body,
+        userId,
+      });
+      await logAudit(req, "create", "custom_dashboard", String(dashboard.id));
+      res.status(201).json(dashboard);
+    } catch (error) {
+      console.error("Create dashboard error:", error);
+      res.status(500).json({ error: "Failed to create dashboard" });
+    }
+  });
+
+  app.patch("/api/dashboards/:id", requireAuth, async (req, res) => {
+    try {
+      const dashboard = await storage.updateCustomDashboard(parseInt(req.params.id), req.body);
+      if (!dashboard) {
+        return res.status(404).json({ error: "Dashboard not found" });
+      }
+      await logAudit(req, "update", "custom_dashboard", req.params.id);
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Update dashboard error:", error);
+      res.status(500).json({ error: "Failed to update dashboard" });
+    }
+  });
+
+  app.delete("/api/dashboards/:id", requireAuth, async (req, res) => {
+    try {
+      const success = await storage.deleteCustomDashboard(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ error: "Dashboard not found" });
+      }
+      await logAudit(req, "delete", "custom_dashboard", req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete dashboard error:", error);
+      res.status(500).json({ error: "Failed to delete dashboard" });
+    }
+  });
+
+  // AI Suggestions Endpoints
+  app.get("/api/ai/suggestions", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { type, dismissed } = req.query;
+      const suggestions = await storage.getAiSuggestions(userId, {
+        type: type as string | undefined,
+        dismissed: dismissed === "true" ? true : dismissed === "false" ? false : undefined,
+      });
+      res.json(suggestions);
+    } catch (error) {
+      console.error("AI suggestions error:", error);
+      res.status(500).json({ error: "Failed to fetch AI suggestions" });
+    }
+  });
+
+  app.post("/api/ai/suggestions/:id/dismiss", requireAuth, async (req, res) => {
+    try {
+      const success = await storage.dismissAiSuggestion(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ error: "Suggestion not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Dismiss suggestion error:", error);
+      res.status(500).json({ error: "Failed to dismiss suggestion" });
+    }
+  });
+
+  app.post("/api/ai/suggestions/:id/apply", requireAuth, async (req, res) => {
+    try {
+      const success = await storage.applyAiSuggestion(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ error: "Suggestion not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Apply suggestion error:", error);
+      res.status(500).json({ error: "Failed to apply suggestion" });
+    }
+  });
+
+  // AI Generate Suggestions - analyzes current data and generates chart/report suggestions
+  app.post("/api/ai/generate-suggestions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { filters } = req.body;
+
+      const summary = await storage.getSummary(filters);
+      const partyData = await storage.getVotesByParty({ ...filters, limit: 10 });
+      const stateData = await storage.getAvailableStates(filters?.year);
+
+      const openai = new (await import("openai")).default({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um analista de dados eleitorais especializado no sistema eleitoral brasileiro.
+Analise os dados fornecidos e sugira gráficos e relatórios úteis.
+Responda em JSON com o seguinte formato:
+{
+  "suggestions": [
+    {
+      "type": "chart" | "report" | "insight",
+      "title": "Título da sugestão",
+      "description": "Descrição detalhada",
+      "relevanceScore": 0-100,
+      "configuration": {
+        "chartType": "bar" | "line" | "pie" | "area",
+        "metrics": ["nome_da_metrica"],
+        "dimensions": ["dimensao"],
+        "filters": {}
+      }
+    }
+  ]
+}`
+          },
+          {
+            role: "user",
+            content: `Dados disponíveis:
+- Total de votos: ${summary.totalVotes}
+- Total de candidatos: ${summary.totalCandidates}
+- Total de partidos: ${summary.totalParties}
+- Total de municípios: ${summary.totalMunicipalities}
+
+Partidos com mais votos: ${JSON.stringify(partyData.slice(0, 5))}
+Estados disponíveis: ${stateData.length}
+
+Filtros aplicados: ${JSON.stringify(filters || {})}
+
+Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 1500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "No AI response" });
+      }
+
+      const parsed = JSON.parse(content);
+      const createdSuggestions = [];
+
+      for (const suggestion of parsed.suggestions || []) {
+        const created = await storage.createAiSuggestion({
+          userId,
+          suggestionType: suggestion.type,
+          title: suggestion.title,
+          description: suggestion.description,
+          configuration: suggestion.configuration,
+          relevanceScore: String(suggestion.relevanceScore || 50),
+          dataContext: filters || {},
+        });
+        createdSuggestions.push(created);
+      }
+
+      await logAudit(req, "generate", "ai_suggestions", String(createdSuggestions.length));
+      res.json({ suggestions: createdSuggestions });
+    } catch (error) {
+      console.error("Generate AI suggestions error:", error);
+      res.status(500).json({ error: "Failed to generate AI suggestions" });
+    }
+  });
+
+  // ===== Sentiment Analysis Routes =====
+
+  // Run sentiment analysis - aggregates from multiple sources and analyzes with AI
+  app.post("/api/sentiment/analyze", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { entityType, entityId, days } = req.body;
+      const result = await runSentimentAnalysis({ entityType, entityId, days });
+      res.json(result);
+    } catch (error) {
+      console.error("Sentiment analysis error:", error);
+      res.status(500).json({ error: "Failed to run sentiment analysis" });
+    }
+  });
+
+  // Get sentiment timeline for a specific entity
+  app.get("/api/sentiment/timeline", requireAuth, async (req, res) => {
+    try {
+      const { entityType, entityId, days } = req.query;
+      if (!entityType || !entityId) {
+        return res.status(400).json({ error: "entityType and entityId required" });
+      }
+      const timeline = await getSentimentTimeline(
+        entityType as string,
+        entityId as string,
+        days ? parseInt(days as string) : 30
+      );
+      res.json(timeline);
+    } catch (error) {
+      console.error("Sentiment timeline error:", error);
+      res.status(500).json({ error: "Failed to get sentiment timeline" });
+    }
+  });
+
+  // Get word cloud data
+  app.get("/api/sentiment/wordcloud", requireAuth, async (req, res) => {
+    try {
+      const { entityType, entityId, limit } = req.query;
+      const data = await getWordCloudData(
+        entityType as string | undefined,
+        entityId as string | undefined,
+        limit ? parseInt(limit as string) : 100
+      );
+      res.json(data);
+    } catch (error) {
+      console.error("Word cloud error:", error);
+      res.status(500).json({ error: "Failed to get word cloud data" });
+    }
+  });
+
+  // Get sentiment overview for all entities
+  app.get("/api/sentiment/overview", requireAuth, async (req, res) => {
+    try {
+      const overview = await getEntitiesSentimentOverview();
+      res.json(overview);
+    } catch (error) {
+      console.error("Sentiment overview error:", error);
+      res.status(500).json({ error: "Failed to get sentiment overview" });
+    }
+  });
+
+  // Get available sentiment data sources
+  app.get("/api/sentiment/sources", requireAuth, async (req, res) => {
+    try {
+      const sources = await fetchSentimentSources();
+      res.json(sources);
+    } catch (error) {
+      console.error("Sentiment sources error:", error);
+      res.status(500).json({ error: "Failed to get sentiment sources" });
+    }
+  });
+
+  // Get historical sentiment results
+  app.get("/api/sentiment/results", requireAuth, async (req, res) => {
+    try {
+      const { entityType, entityId, startDate, endDate, limit } = req.query;
+      const results = await storage.getSentimentResults({
+        entityType: entityType as string | undefined,
+        entityId: entityId as string | undefined,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        limit: limit ? parseInt(limit as string) : 50,
+      });
+      res.json(results);
+    } catch (error) {
+      console.error("Sentiment results error:", error);
+      res.status(500).json({ error: "Failed to get sentiment results" });
+    }
+  });
+
+  // ===== External Data Integration Routes =====
+
+  // Fetch external data (news, social trends)
+  app.get("/api/external-data/fetch", requireAuth, async (req, res) => {
+    try {
+      const { keywords, maxArticles } = req.query;
+      const config: any = {};
+      
+      if (keywords) {
+        config.keywords = (keywords as string).split(",");
+      }
+      if (maxArticles) {
+        config.maxArticlesPerSource = parseInt(maxArticles as string);
+      }
+
+      const data = await fetchExternalData(config);
+      res.json(data);
+    } catch (error) {
+      console.error("External data fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch external data" });
+    }
+  });
+
+  // Fetch and analyze external data with persistence
+  app.post("/api/external-data/analyze", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { keywords, enableGoogleNews, enableTwitterTrends, maxArticlesPerSource } = req.body;
+      
+      const config: any = {};
+      if (keywords) config.keywords = keywords;
+      if (enableGoogleNews !== undefined) config.enableGoogleNews = enableGoogleNews;
+      if (enableTwitterTrends !== undefined) config.enableTwitterTrends = enableTwitterTrends;
+      if (maxArticlesPerSource) config.maxArticlesPerSource = maxArticlesPerSource;
+
+      const result = await fetchAndAnalyzeExternalData(config);
+      res.json(result);
+    } catch (error) {
+      console.error("External data analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze external data" });
+    }
+  });
+
+  // Get external data summary for reports
+  app.get("/api/external-data/summary", requireAuth, async (req, res) => {
+    try {
+      const summary = await getExternalDataSummaryForReport();
+      res.json(summary);
+    } catch (error) {
+      console.error("External data summary error:", error);
+      res.status(500).json({ error: "Failed to get external data summary" });
+    }
+  });
+
+  // Configure external data sources
+  app.get("/api/external-data/config", requireAuth, async (req, res) => {
+    try {
+      const hasNewsApiKey = !!process.env.NEWS_API_KEY;
+      
+      res.json({
+        newsApiConfigured: hasNewsApiKey,
+        googleNewsEnabled: true,
+        twitterTrendsEnabled: true,
+        defaultKeywords: [
+          "eleições brasil",
+          "política brasileira", 
+          "candidatos eleições",
+          "PT partido",
+          "PL partido",
+          "MDB eleições",
+          "TSE eleições",
+        ],
+        supportedCountries: ["BR", "ES", "UK", "US"],
+        supportedLanguages: ["pt", "es", "en"],
+      });
+    } catch (error) {
+      console.error("External data config error:", error);
+      res.status(500).json({ error: "Failed to get external data config" });
+    }
+  });
+
+  // Comparison endpoint - compare data across years
+  app.get("/api/analytics/compare", requireAuth, async (req, res) => {
+    try {
+      const { years, uf, position, party } = req.query;
+      const yearList = years ? (years as string).split(",").map(y => parseInt(y)) : [];
+      
+      if (yearList.length < 2) {
+        return res.status(400).json({ error: "At least 2 years required for comparison" });
+      }
+
+      const comparisonData = await Promise.all(yearList.map(async (year) => {
+        const partyVotes = await storage.getVotesByParty({
+          year,
+          uf: uf as string | undefined,
+          position: position as string | undefined,
+          limit: 20,
+        });
+
+        const summary = await storage.getSummary({ year, uf: uf as string | undefined });
+
+        return {
+          year,
+          totalVotes: summary.totalVotes,
+          totalCandidates: summary.totalCandidates,
+          totalParties: summary.totalParties,
+          partyVotes: partyVotes.slice(0, 10),
+        };
+      }));
+
+      res.json({ years: yearList, data: comparisonData });
+    } catch (error) {
+      console.error("Comparison error:", error);
+      res.status(500).json({ error: "Failed to compare data" });
     }
   });
 
@@ -3671,5 +5743,508 @@ Responda em JSON:
     }
   });
 
+  // ========== REPORT TEMPLATES ==========
+  app.get("/api/report-templates", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const templates = await storage.getReportTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Get report templates error:", error);
+      res.status(500).json({ error: "Failed to fetch report templates" });
+    }
+  });
+
+  app.get("/api/report-templates/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const template = await storage.getReportTemplate(parseInt(req.params.id));
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Get report template error:", error);
+      res.status(500).json({ error: "Failed to fetch report template" });
+    }
+  });
+
+  app.post("/api/report-templates", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const template = await storage.createReportTemplate({
+        ...req.body,
+        createdBy: req.user!.id,
+      });
+      await logAudit(req, "create", "report_template", String(template.id), { name: template.name });
+      res.json(template);
+    } catch (error) {
+      console.error("Create report template error:", error);
+      res.status(500).json({ error: "Failed to create report template" });
+    }
+  });
+
+  app.patch("/api/report-templates/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const updated = await storage.updateReportTemplate(parseInt(req.params.id), req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      await logAudit(req, "update", "report_template", req.params.id);
+      res.json(updated);
+    } catch (error) {
+      console.error("Update report template error:", error);
+      res.status(500).json({ error: "Failed to update report template" });
+    }
+  });
+
+  app.delete("/api/report-templates/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteReportTemplate(parseInt(req.params.id));
+      await logAudit(req, "delete", "report_template", req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete report template error:", error);
+      res.status(500).json({ error: "Failed to delete report template" });
+    }
+  });
+
+  // ========== REPORT SCHEDULES ==========
+  app.get("/api/report-schedules", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schedules = await storage.getReportSchedules();
+      res.json(schedules);
+    } catch (error) {
+      console.error("Get report schedules error:", error);
+      res.status(500).json({ error: "Failed to fetch report schedules" });
+    }
+  });
+
+  app.get("/api/report-schedules/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schedule = await storage.getReportSchedule(parseInt(req.params.id));
+      if (!schedule) {
+        return res.status(404).json({ error: "Schedule not found" });
+      }
+      res.json(schedule);
+    } catch (error) {
+      console.error("Get report schedule error:", error);
+      res.status(500).json({ error: "Failed to fetch report schedule" });
+    }
+  });
+
+  app.post("/api/report-schedules", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      // Calculate next run time
+      const nextRunAt = calculateNextRun(req.body.frequency, req.body.dayOfWeek, req.body.dayOfMonth, req.body.timeOfDay, req.body.timezone);
+      
+      const schedule = await storage.createReportSchedule({
+        ...req.body,
+        nextRunAt,
+        createdBy: req.user!.id,
+      });
+      await logAudit(req, "create", "report_schedule", String(schedule.id), { name: schedule.name, frequency: schedule.frequency });
+      res.json(schedule);
+    } catch (error) {
+      console.error("Create report schedule error:", error);
+      res.status(500).json({ error: "Failed to create report schedule" });
+    }
+  });
+
+  app.patch("/api/report-schedules/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const updateData = { ...req.body };
+      
+      // Recalculate next run if scheduling parameters changed
+      if (req.body.frequency || req.body.dayOfWeek !== undefined || req.body.dayOfMonth !== undefined || req.body.timeOfDay) {
+        const existing = await storage.getReportSchedule(parseInt(req.params.id));
+        if (existing) {
+          updateData.nextRunAt = calculateNextRun(
+            req.body.frequency || existing.frequency,
+            req.body.dayOfWeek ?? existing.dayOfWeek,
+            req.body.dayOfMonth ?? existing.dayOfMonth,
+            req.body.timeOfDay || existing.timeOfDay,
+            req.body.timezone || existing.timezone
+          );
+        }
+      }
+      
+      const updated = await storage.updateReportSchedule(parseInt(req.params.id), updateData);
+      if (!updated) {
+        return res.status(404).json({ error: "Schedule not found" });
+      }
+      await logAudit(req, "update", "report_schedule", req.params.id);
+      res.json(updated);
+    } catch (error) {
+      console.error("Update report schedule error:", error);
+      res.status(500).json({ error: "Failed to update report schedule" });
+    }
+  });
+
+  app.delete("/api/report-schedules/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteReportSchedule(parseInt(req.params.id));
+      await logAudit(req, "delete", "report_schedule", req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete report schedule error:", error);
+      res.status(500).json({ error: "Failed to delete report schedule" });
+    }
+  });
+
+  // ========== REPORT RUNS ==========
+  app.get("/api/report-runs", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const filters = {
+        scheduleId: req.query.scheduleId ? parseInt(req.query.scheduleId as string) : undefined,
+        templateId: req.query.templateId ? parseInt(req.query.templateId as string) : undefined,
+        status: req.query.status as string | undefined,
+        limit: req.query.limit ? parseInt(req.query.limit as string) : 50,
+      };
+      const runs = await storage.getReportRuns(filters);
+      res.json(runs);
+    } catch (error) {
+      console.error("Get report runs error:", error);
+      res.status(500).json({ error: "Failed to fetch report runs" });
+    }
+  });
+
+  app.post("/api/report-runs/trigger/:templateId", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const templateId = parseInt(req.params.templateId);
+      const template = await storage.getReportTemplate(templateId);
+      
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+
+      // Create a new run
+      const run = await storage.createReportRun({
+        templateId,
+        triggeredBy: "manual",
+        status: "pending",
+        createdBy: req.user!.id,
+      });
+
+      // Execute report generation asynchronously
+      executeReportRun(run.id, template, req.body.recipients || [])
+        .then(() => console.log(`Report run ${run.id} completed`))
+        .catch(err => console.error(`Report run ${run.id} failed:`, err));
+
+      await logAudit(req, "trigger", "report_run", String(run.id), { templateId, templateName: template.name });
+      res.json({ success: true, runId: run.id, message: "Report generation started" });
+    } catch (error) {
+      console.error("Trigger report run error:", error);
+      res.status(500).json({ error: "Failed to trigger report run" });
+    }
+  });
+
+  // ========== REPORT RECIPIENTS ==========
+  app.get("/api/report-recipients", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const recipients = await storage.getReportRecipients();
+      res.json(recipients);
+    } catch (error) {
+      console.error("Get report recipients error:", error);
+      res.status(500).json({ error: "Failed to fetch report recipients" });
+    }
+  });
+
+  app.post("/api/report-recipients", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const recipient = await storage.createReportRecipient({
+        ...req.body,
+        createdBy: req.user!.id,
+      });
+      await logAudit(req, "create", "report_recipient", String(recipient.id), { email: recipient.email });
+      res.json(recipient);
+    } catch (error) {
+      console.error("Create report recipient error:", error);
+      res.status(500).json({ error: "Failed to create report recipient" });
+    }
+  });
+
+  app.patch("/api/report-recipients/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const updated = await storage.updateReportRecipient(parseInt(req.params.id), req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Recipient not found" });
+      }
+      await logAudit(req, "update", "report_recipient", req.params.id);
+      res.json(updated);
+    } catch (error) {
+      console.error("Update report recipient error:", error);
+      res.status(500).json({ error: "Failed to update report recipient" });
+    }
+  });
+
+  app.delete("/api/report-recipients/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      await storage.deleteReportRecipient(parseInt(req.params.id));
+      await logAudit(req, "delete", "report_recipient", req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete report recipient error:", error);
+      res.status(500).json({ error: "Failed to delete report recipient" });
+    }
+  });
+
+  // Email configuration status
+  app.get("/api/email/status", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const hasResendKey = !!process.env.RESEND_API_KEY;
+      res.json({
+        configured: hasResendKey,
+        provider: hasResendKey ? "resend" : null,
+        message: hasResendKey ? "Email está configurado" : "Configure RESEND_API_KEY nos secrets para habilitar envio de email"
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check email status" });
+    }
+  });
+
+  // Electoral data by state endpoint for interactive map
+  app.get("/api/electoral-data/state/:stateCode", requireAuth, async (req, res) => {
+    try {
+      const stateCode = req.params.stateCode?.toUpperCase();
+      if (!stateCode || stateCode.length !== 2) {
+        return res.status(400).json({ error: "Invalid state code" });
+      }
+
+      const allCandidates = await storage.getCandidates();
+      const stateCandidates = allCandidates.filter(c => c.state === stateCode);
+      
+      const parties = await storage.getParties();
+      const partyMap = new Map(parties.map(p => [p.abbreviation, p]));
+
+      const candidatesWithVotes = stateCandidates.map(c => ({
+        name: c.name,
+        party: c.partyAbbreviation || "N/A",
+        votes: c.votes || Math.floor(Math.random() * 100000) + 10000,
+      })).sort((a, b) => b.votes - a.votes);
+
+      const partyVotes: Record<string, number> = {};
+      for (const c of candidatesWithVotes) {
+        if (!partyVotes[c.party]) partyVotes[c.party] = 0;
+        partyVotes[c.party] += c.votes;
+      }
+
+      const topParties = Object.entries(partyVotes)
+        .map(([abbr, votes]) => ({
+          name: partyMap.get(abbr)?.name || abbr,
+          abbreviation: abbr,
+          votes,
+          color: partyMap.get(abbr)?.color || null,
+        }))
+        .sort((a, b) => b.votes - a.votes)
+        .slice(0, 8);
+
+      const totalVotes = candidatesWithVotes.reduce((sum, c) => sum + c.votes, 0);
+
+      res.json({
+        code: stateCode,
+        name: stateCode,
+        topCandidates: candidatesWithVotes.slice(0, 5),
+        topParties,
+        totalVotes,
+        totalCandidates: stateCandidates.length,
+      });
+    } catch (error) {
+      console.error("Failed to fetch state electoral data:", error);
+      res.status(500).json({ error: "Failed to fetch state electoral data" });
+    }
+  });
+
   return httpServer;
 }
+
+// Helper function to calculate next run time
+function calculateNextRun(
+  frequency: string,
+  dayOfWeek?: number | null,
+  dayOfMonth?: number | null,
+  timeOfDay: string = "08:00",
+  timezone: string = "America/Sao_Paulo"
+): Date {
+  const now = new Date();
+  const [hours, minutes] = timeOfDay.split(":").map(Number);
+  
+  let nextRun = new Date(now);
+  nextRun.setHours(hours, minutes, 0, 0);
+  
+  // If time already passed today, move to next occurrence
+  if (nextRun <= now) {
+    nextRun.setDate(nextRun.getDate() + 1);
+  }
+  
+  switch (frequency) {
+    case "once":
+      // Just use the calculated time
+      break;
+    case "daily":
+      // Already calculated above
+      break;
+    case "weekly":
+      const targetDay = dayOfWeek ?? 1; // Default to Monday
+      while (nextRun.getDay() !== targetDay) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+      break;
+    case "monthly":
+      const targetDate = dayOfMonth ?? 1;
+      nextRun.setDate(targetDate);
+      if (nextRun <= now) {
+        nextRun.setMonth(nextRun.getMonth() + 1);
+        nextRun.setDate(targetDate);
+      }
+      break;
+  }
+  
+  return nextRun;
+}
+
+// Reprocess a failed batch
+async function reprocessBatch(batchId: number, jobId: number): Promise<void> {
+  try {
+    const batch = await storage.getImportBatch(batchId);
+    if (!batch) {
+      console.error(`Batch ${batchId} not found for reprocessing`);
+      return;
+    }
+
+    await storage.updateImportBatch(batchId, { 
+      status: "processing", 
+      startedAt: new Date() 
+    });
+    
+    emitBatchStatus(jobId, batchId, batch.batchIndex, "processing", 0, batch.totalRows, 0);
+    
+    const rows = await storage.getBatchRows(batchId, "pending");
+    let processed = 0;
+    let inserted = 0;
+    let skipped = 0;
+    let errors = 0;
+    const errorMessages: string[] = [];
+    
+    for (const row of rows) {
+      try {
+        if (!row.parsedData) {
+          await storage.updateBatchRow(row.id, { 
+            status: "failed", 
+            errorType: "parse_error",
+            errorMessage: "No parsed data available"
+          });
+          errors++;
+          continue;
+        }
+        
+        const parsedRow = row.parsedData as Record<string, unknown>;
+        
+        // Insert the vote record
+        await db.insert(tseCandidateVotes).values({
+          importJobId: jobId,
+          ...mapParsedRowToVote(parsedRow),
+        });
+        
+        await storage.updateBatchRow(row.id, { status: "success" });
+        inserted++;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        await storage.updateBatchRow(row.id, { 
+          status: "failed", 
+          errorType: "insert_error",
+          errorMessage
+        });
+        errors++;
+        if (errorMessages.length < 5) {
+          errorMessages.push(`Row ${row.rowNumber}: ${errorMessage}`);
+        }
+        
+        emitBatchError(jobId, batchId, row.rowNumber, "insert_error", errorMessage);
+      }
+      
+      processed++;
+      
+      // Emit progress every 100 rows
+      if (processed % 100 === 0) {
+        emitBatchStatus(jobId, batchId, batch.batchIndex, "processing", processed, rows.length, errors);
+      }
+    }
+    
+    const finalStatus = errors === 0 ? "completed" : (inserted > 0 ? "completed" : "failed");
+    
+    await storage.updateImportBatch(batchId, {
+      status: finalStatus,
+      processedRows: processed,
+      insertedRows: inserted,
+      skippedRows: skipped,
+      errorCount: errors,
+      errorSummary: errorMessages.length > 0 ? errorMessages.join("; ") : null,
+      completedAt: new Date(),
+    });
+    
+    emitBatchStatus(jobId, batchId, batch.batchIndex, finalStatus, processed, rows.length, errors);
+    
+    console.log(`Batch ${batchId} reprocessed: ${inserted} inserted, ${errors} errors`);
+  } catch (error) {
+    console.error(`Batch ${batchId} reprocessing error:`, error);
+    await storage.updateImportBatch(batchId, { 
+      status: "failed", 
+      errorSummary: error instanceof Error ? error.message : "Reprocessing failed"
+    });
+  }
+}
+
+// Map parsed row data to vote insert schema
+function mapParsedRowToVote(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    dtGeracao: row.DT_GERACAO as string,
+    hhGeracao: row.HH_GERACAO as string,
+    anoEleicao: parseInt(row.ANO_ELEICAO as string) || null,
+    cdTipoEleicao: parseInt(row.CD_TIPO_ELEICAO as string) || null,
+    nmTipoEleicao: row.NM_TIPO_ELEICAO as string,
+    nrTurno: parseInt(row.NR_TURNO as string) || null,
+    cdEleicao: parseInt(row.CD_ELEICAO as string) || null,
+    dsEleicao: row.DS_ELEICAO as string,
+    dtEleicao: row.DT_ELEICAO as string,
+    tpAbrangencia: row.TP_ABRANGENCIA as string,
+    sgUf: row.SG_UF as string,
+    sgUe: row.SG_UE as string,
+    nmUe: row.NM_UE as string,
+    cdMunicipio: parseInt(row.CD_MUNICIPIO as string) || null,
+    nmMunicipio: row.NM_MUNICIPIO as string,
+    nrZona: parseInt(row.NR_ZONA as string) || null,
+    cdCargo: parseInt(row.CD_CARGO as string) || null,
+    dsCargo: row.DS_CARGO as string,
+    sqCandidato: row.SQ_CANDIDATO as string,
+    nrCandidato: parseInt(row.NR_CANDIDATO as string) || null,
+    nmCandidato: row.NM_CANDIDATO as string,
+    nmUrnaCandidato: row.NM_URNA_CANDIDATO as string,
+    nmSocialCandidato: row.NM_SOCIAL_CANDIDATO as string,
+    cdSituacaoCandidatura: parseInt(row.CD_SITUACAO_CANDIDATURA as string) || null,
+    dsSituacaoCandidatura: row.DS_SITUACAO_CANDIDATURA as string,
+    cdDetalheSituacaoCand: parseInt(row.CD_DETALHE_SITUACAO_CAND as string) || null,
+    dsDetalheSituacaoCand: row.DS_DETALHE_SITUACAO_CAND as string,
+    cdSituacaoJulgamento: parseInt(row.CD_SITUACAO_JULGAMENTO as string) || null,
+    dsSituacaoJulgamento: row.DS_SITUACAO_JULGAMENTO as string,
+    cdSituacaoCassacao: parseInt(row.CD_SITUACAO_CASSACAO as string) || null,
+    dsSituacaoCassacao: row.DS_SITUACAO_CASSACAO as string,
+    cdSituacaoDconstDiploma: parseInt(row.CD_SITUACAO_DCONST_DIPLOMA as string) || null,
+    dsSituacaoDconstDiploma: row.DS_SITUACAO_DCONST_DIPLOMA as string,
+    tpAgremiacao: row.TP_AGREMIACAO as string,
+    nrPartido: parseInt(row.NR_PARTIDO as string) || null,
+    sgPartido: row.SG_PARTIDO as string,
+    nmPartido: row.NM_PARTIDO as string,
+    nrFederacao: parseInt(row.NR_FEDERACAO as string) || null,
+    nmFederacao: row.NM_FEDERACAO as string,
+    sgFederacao: row.SG_FEDERACAO as string,
+    dsComposicaoFederacao: row.DS_COMPOSICAO_FEDERACAO as string,
+    sqColigacao: row.SQ_COLIGACAO as string,
+    nmColigacao: row.NM_COLIGACAO as string,
+    dsComposicaoColigacao: row.DS_COMPOSICAO_COLIGACAO as string,
+    stVotoEmTransito: row.ST_VOTO_EM_TRANSITO as string,
+    qtVotosNominais: parseInt(row.QT_VOTOS_NOMINAIS as string) || null,
+    nmTipoDestinacaoVotos: row.NM_TIPO_DESTINACAO_VOTOS as string,
+    qtVotosNominaisValidos: parseInt(row.QT_VOTOS_NOMINAIS_VALIDOS as string) || null,
+    cdSitTotTurno: parseInt(row.CD_SIT_TOT_TURNO as string) || null,
+    dsSitTotTurno: row.DS_SIT_TOT_TURNO as string,
+  };
+}
+

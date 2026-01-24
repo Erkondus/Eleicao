@@ -21,6 +21,8 @@ import {
   Database,
   Sparkles,
   Target,
+  Clock,
+  MessageSquare,
 } from "lucide-react";
 import type { TseImportJob } from "@shared/schema";
 import {
@@ -55,6 +57,8 @@ const simulationNavItems = [
   { title: "Dashboard Eleitoral", url: "/electoral-dashboard", icon: PieChart, permission: null },
   { title: "Painel Interativo", url: "/interactive-dashboard", icon: Layers, permission: null },
   { title: "Análise de Dados", url: "/data-analysis", icon: BarChart3, permission: null },
+  { title: "Automação de Relatórios", url: "/report-automation", icon: Clock, permission: "ai_predictions" },
+  { title: "Análise de Sentimento", url: "/sentiment-analysis", icon: MessageSquare, permission: "ai_predictions" },
   { title: "Busca Semântica", url: "/semantic-search", icon: Search, permission: "ai_predictions" },
 ];
 

@@ -487,3 +487,304 @@ export async function getForecastSummary(runId: number): Promise<{
     swingRegions,
   };
 }
+
+interface ScenarioPollingData {
+  party: string;
+  pollPercent: number;
+  pollDate?: string;
+  source?: string;
+  sampleSize?: number;
+}
+
+interface ScenarioPartyAdjustment {
+  voteShareAdjust?: number;
+  turnoutAdjust?: number;
+  reason?: string;
+}
+
+interface PredictionScenarioData {
+  id: number;
+  name: string;
+  baseYear: number;
+  targetYear: number;
+  state?: string | null;
+  position?: string | null;
+  pollingData?: ScenarioPollingData[] | null;
+  pollingWeight?: string | null;
+  partyAdjustments?: Record<string, ScenarioPartyAdjustment> | null;
+  expectedTurnout?: string | null;
+  turnoutVariation?: string | null;
+  externalFactors?: { factor: string; impact: 'positive' | 'negative'; magnitude: number }[] | null;
+  monteCarloIterations?: number;
+  confidenceLevel?: string | null;
+  volatilityMultiplier?: string | null;
+  parameters?: {
+    pollingWeight?: number;
+    historicalWeight?: number;
+    adjustmentWeight?: number;
+    monteCarloIterations?: number;
+    confidenceLevel?: number;
+  } | null;
+}
+
+export async function runForecastWithScenario(
+  runId: number,
+  scenario: PredictionScenarioData
+): Promise<{
+  partyResults: ForecastResult[];
+  swingRegions: SwingRegion[];
+  narrative: string;
+}> {
+  const scenarioParams = scenario.parameters || {};
+  const params: ModelParameters = {
+    monteCarloIterations: scenarioParams.monteCarloIterations || scenario.monteCarloIterations || 10000,
+    confidenceLevel: scenarioParams.confidenceLevel || parseFloat(scenario.confidenceLevel || "0.95"),
+    historicalWeightDecay: 0.85,
+    sentimentWeight: scenarioParams.adjustmentWeight || 0.20,
+    trendWeight: scenarioParams.historicalWeight || 0.50,
+    volatilityMultiplier: parseFloat(scenario.volatilityMultiplier || "1.20"),
+  };
+  
+  await storage.updateForecastRun(runId, {
+    status: "running",
+    startedAt: new Date(),
+  } as any);
+  
+  const historicalData = await storage.getHistoricalVotesByParty({
+    years: [scenario.baseYear, scenario.baseYear - 4, scenario.baseYear - 8].filter(y => y >= 2002),
+    position: scenario.position || undefined,
+    state: scenario.state || undefined,
+  });
+  
+  if (historicalData.length === 0) {
+    await storage.updateForecastRun(runId, { 
+      status: "failed",
+      completedAt: new Date(),
+    } as any);
+    throw new Error("No historical data available for the specified parameters");
+  }
+  
+  const partyTrends = analyzePartyTrends(historicalData, params);
+  
+  // Apply polling data adjustments if available
+  if (scenario.pollingData && scenario.pollingData.length > 0) {
+    const pollingWeight = scenarioParams.pollingWeight || parseFloat(scenario.pollingWeight || "0.30");
+    for (const poll of scenario.pollingData) {
+      const partyTrend = partyTrends.find(t => t.party === poll.party);
+      if (partyTrend && partyTrend.historicalVotes.length > 0) {
+        const lastHistorical = partyTrend.historicalVotes[partyTrend.historicalVotes.length - 1];
+        const blendedShare = (lastHistorical.share * (1 - pollingWeight)) + (poll.pollPercent * pollingWeight);
+        partyTrend.historicalVotes[partyTrend.historicalVotes.length - 1].share = blendedShare;
+      }
+    }
+  }
+  
+  // Apply party-specific adjustments
+  if (scenario.partyAdjustments) {
+    for (const [partyName, adjustment] of Object.entries(scenario.partyAdjustments)) {
+      const partyTrend = partyTrends.find(t => t.party === partyName);
+      if (partyTrend && partyTrend.historicalVotes.length > 0 && adjustment.voteShareAdjust) {
+        const lastIdx = partyTrend.historicalVotes.length - 1;
+        partyTrend.historicalVotes[lastIdx].share += adjustment.voteShareAdjust;
+      }
+    }
+  }
+  
+  // Apply external factors as overall volatility adjustments
+  if (scenario.externalFactors && scenario.externalFactors.length > 0) {
+    let totalImpact = 0;
+    for (const factor of scenario.externalFactors) {
+      const impact = factor.impact === 'positive' ? factor.magnitude : -factor.magnitude;
+      totalImpact += impact / 100;
+    }
+    params.volatilityMultiplier = Math.max(0.1, params.volatilityMultiplier + totalImpact * 0.1);
+  }
+  
+  // Run Monte Carlo for each party
+  const partyPredictions = new Map<string, {
+    prediction: MonteCarloResult;
+    trend: PartyTrendData;
+  }>();
+  
+  for (const trend of partyTrends) {
+    const baseShare = trend.historicalVotes.length > 0
+      ? trend.historicalVotes[trend.historicalVotes.length - 1].share
+      : 5;
+    const prediction = runMonteCarloSimulation(
+      baseShare,
+      trend.volatility * params.volatilityMultiplier,
+      trend.trendSlope,
+      params.monteCarloIterations,
+      params.confidenceLevel
+    );
+    partyPredictions.set(trend.party, { prediction, trend });
+  }
+  
+  // Normalize predictions
+  const totalShare = Array.from(partyPredictions.values())
+    .reduce((sum, p) => sum + p.prediction.mean, 0);
+  const normalizationFactor = totalShare > 0 ? 100 / totalShare : 1;
+  
+  const partyResults: InsertForecastResult[] = [];
+  for (const [party, data] of partyPredictions) {
+    const normalizedShare = data.prediction.mean * normalizationFactor;
+    const normalizedLower = data.prediction.lower * normalizationFactor;
+    const normalizedUpper = data.prediction.upper * normalizationFactor;
+    
+    partyResults.push({
+      runId,
+      resultType: "party",
+      party,
+      region: scenario.state || null,
+      predictedVoteShare: normalizedShare,
+      confidenceIntervalLower: normalizedLower,
+      confidenceIntervalUpper: normalizedUpper,
+      historicalAverage: data.trend.historicalVotes.reduce((sum, v) => sum + v.share, 0) / data.trend.historicalVotes.length,
+      trendDirection: data.trend.trendSlope > 0.01 ? "up" : data.trend.trendSlope < -0.01 ? "down" : "stable",
+      volatilityScore: data.trend.volatility,
+    });
+  }
+  
+  // Sort by predicted vote share
+  partyResults.sort((a, b) => (b.predictedVoteShare || 0) - (a.predictedVoteShare || 0));
+  
+  const savedResults = await storage.createForecastResults(partyResults);
+  
+  // Identify swing regions if running national forecast
+  let swingRegions: SwingRegion[] = [];
+  if (!scenario.state) {
+    const stateVolatility = await calculateStateVolatility(scenario.baseYear, scenario.position);
+    const swingData: InsertSwingRegion[] = stateVolatility
+      .slice(0, 10)
+      .map(sv => ({
+        runId,
+        region: sv.state,
+        volatilityScore: sv.volatility,
+        historicalSwing: sv.swing,
+        keyParties: sv.topParties,
+      }));
+    
+    if (swingData.length > 0) {
+      swingRegions = await storage.createSwingRegions(swingData);
+    }
+  }
+  
+  // Generate narrative with AI
+  let narrative = "";
+  try {
+    const openai = getOpenAI();
+    const topParties = partyResults.slice(0, 5);
+    const promptParts = [
+      `Análise de previsão eleitoral para ${scenario.targetYear}:`,
+      `Cenário: ${scenario.name}`,
+      `Baseado em dados históricos de ${scenario.baseYear}`,
+      scenario.state ? `Estado: ${scenario.state}` : "Âmbito Nacional",
+      "",
+      "Partidos principais previstos:",
+      ...topParties.map((p, i) => 
+        `${i + 1}. ${p.party}: ${p.predictedVoteShare?.toFixed(1)}% (IC: ${p.confidenceIntervalLower?.toFixed(1)}%-${p.confidenceIntervalUpper?.toFixed(1)}%)`
+      ),
+    ];
+    
+    if (scenario.pollingData && scenario.pollingData.length > 0) {
+      promptParts.push("", "Dados de pesquisas incorporados:");
+      for (const poll of scenario.pollingData) {
+        promptParts.push(`- ${poll.party}: ${poll.pollPercent}% (${poll.source || 'pesquisa'})`);
+      }
+    }
+    
+    if (scenario.externalFactors && scenario.externalFactors.length > 0) {
+      promptParts.push("", "Fatores externos considerados:");
+      for (const factor of scenario.externalFactors) {
+        promptParts.push(`- ${factor.factor}: impacto ${factor.impact} (magnitude ${factor.magnitude}/10)`);
+      }
+    }
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "Você é um analista político especializado em eleições brasileiras. Forneça uma análise concisa e objetiva das previsões eleitorais, destacando tendências, riscos e oportunidades. Responda em português brasileiro.",
+        },
+        {
+          role: "user",
+          content: promptParts.join("\n") + "\n\nGere uma análise narrativa de 2-3 parágrafos sobre estas previsões, considerando o contexto histórico e os fatores incorporados no cenário.",
+        },
+      ],
+      max_tokens: 500,
+    });
+    
+    narrative = response.choices[0]?.message?.content || "";
+  } catch (error) {
+    console.error("Failed to generate AI narrative for scenario:", error);
+    narrative = `Previsão para ${scenario.targetYear} baseada no cenário "${scenario.name}". Top 3 partidos: ${partyResults.slice(0, 3).map(p => `${p.party} (${p.predictedVoteShare?.toFixed(1)}%)`).join(", ")}.`;
+  }
+  
+  await storage.updateForecastRun(runId, {
+    status: "completed",
+    completedAt: new Date(),
+    narrative,
+    summary: {
+      totalPartiesAnalyzed: partyResults.length,
+      topParty: partyResults[0]?.party,
+      confidenceLevel: params.confidenceLevel,
+      scenarioId: scenario.id,
+      scenarioName: scenario.name,
+    },
+  } as any);
+  
+  return {
+    partyResults: savedResults,
+    swingRegions,
+    narrative,
+  };
+}
+
+async function calculateStateVolatility(
+  baseYear: number,
+  position?: string | null
+): Promise<{ state: string; volatility: number; swing: number; topParties: string[] }[]> {
+  const states = Object.keys(BRAZILIAN_STATES);
+  const results: { state: string; volatility: number; swing: number; topParties: string[] }[] = [];
+  
+  for (const state of states) {
+    const data = await storage.getHistoricalVotesByParty({
+      years: [baseYear, baseYear - 4],
+      position: position || undefined,
+      state,
+    });
+    
+    if (data.length === 0) continue;
+    
+    const partyShares = new Map<string, number[]>();
+    for (const d of data) {
+      if (!partyShares.has(d.party)) {
+        partyShares.set(d.party, []);
+      }
+      partyShares.get(d.party)!.push(d.totalVotes);
+    }
+    
+    let volatility = 0;
+    let count = 0;
+    const topParties: string[] = [];
+    
+    for (const [party, votes] of partyShares) {
+      if (votes.length >= 2) {
+        const change = Math.abs(votes[0] - votes[1]) / Math.max(votes[0], votes[1], 1);
+        volatility += change;
+        count++;
+      }
+      topParties.push(party);
+    }
+    
+    results.push({
+      state,
+      volatility: count > 0 ? volatility / count : 0,
+      swing: volatility,
+      topParties: topParties.slice(0, 3),
+    });
+  }
+  
+  return results.sort((a, b) => b.volatility - a.volatility);
+}

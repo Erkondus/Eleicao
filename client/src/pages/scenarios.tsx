@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, FileText, PlayCircle, Eye, Handshake, Users } from "lucide-react";
+import { Plus, Edit, Trash2, FileText, PlayCircle, Eye, Handshake, Users, History, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { useToast } from "@/hooks/use-toast";
@@ -47,9 +49,56 @@ export default function Scenarios() {
     position: "vereador",
   });
 
+  // Historical election selection
+  const [useHistoricalData, setUseHistoricalData] = useState(false);
+  const [historicalYear, setHistoricalYear] = useState("");
+  const [historicalUf, setHistoricalUf] = useState("");
+  const [historicalCargo, setHistoricalCargo] = useState("");
+
+  interface AvailableElection {
+    year: number;
+    ufs: string[];
+    cargos: Array<{ code: number; name: string }>;
+  }
+
   const { data: scenarios, isLoading } = useQuery<Scenario[]>({
     queryKey: ["/api/scenarios"],
   });
+
+  const { data: availableElections } = useQuery<AvailableElection[]>({
+    queryKey: ["/api/historical-elections/available"],
+  });
+
+  interface ElectionSummary {
+    totalVoters: number;
+    validVotes: number;
+    availableSeats: number;
+  }
+
+  const { data: electionSummary, isLoading: isLoadingSummary } = useQuery<ElectionSummary>({
+    queryKey: ["/api/historical-elections", historicalYear, historicalUf, historicalCargo],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("year", historicalYear);
+      params.set("cargo", historicalCargo);
+      if (historicalUf && historicalUf !== "all") params.set("uf", historicalUf);
+      const response = await fetch(`/api/historical-elections?${params}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch election summary");
+      return response.json();
+    },
+    enabled: !!historicalYear && !!historicalCargo,
+  });
+
+  useEffect(() => {
+    if (electionSummary && useHistoricalData) {
+      setFormData(f => ({
+        ...f,
+        totalVoters: String(electionSummary.totalVoters || 0),
+        validVotes: String(electionSummary.validVotes || 0),
+        availableSeats: String(electionSummary.availableSeats || 0),
+      }));
+    }
+  }, [electionSummary, useHistoricalData]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertScenario) => {
@@ -104,9 +153,29 @@ export default function Scenarios() {
       availableSeats: "",
       position: "vereador",
     });
+    setUseHistoricalData(false);
+    setHistoricalYear("");
+    setHistoricalUf("");
+    setHistoricalCargo("");
     setEditingScenario(null);
     setIsDialogOpen(false);
   }
+
+  const selectedElection = availableElections?.find(e => e.year === parseInt(historicalYear));
+  const cargoCodeToPosition: Record<number, string> = {
+    7: "deputado_federal",
+    8: "deputado_estadual",
+    13: "vereador",
+  };
+  const cargoCodeToLabel: Record<number, string> = {
+    7: "Deputado Federal",
+    8: "Deputado Estadual",
+    13: "Vereador",
+    11: "Prefeito",
+    3: "Governador",
+    5: "Senador",
+    1: "Presidente",
+  };
 
   function handleEdit(scenario: Scenario) {
     setEditingScenario(scenario);
@@ -123,7 +192,7 @@ export default function Scenarios() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
+    const payload: Record<string, any> = {
       name: formData.name,
       description: formData.description || null,
       totalVoters: parseInt(formData.totalVoters, 10),
@@ -131,6 +200,13 @@ export default function Scenarios() {
       availableSeats: parseInt(formData.availableSeats, 10),
       position: formData.position,
     };
+
+    // Include historical election reference if using historical data
+    if (useHistoricalData && historicalYear) {
+      payload.historicalYear = parseInt(historicalYear, 10);
+      payload.historicalUf = historicalUf && historicalUf !== "all" ? historicalUf : null;
+      payload.historicalMunicipio = null;
+    }
 
     if (editingScenario) {
       updateMutation.mutate({ id: editingScenario.id, data: payload });
@@ -335,6 +411,84 @@ export default function Scenarios() {
                 data-testid="input-scenario-description"
               />
             </div>
+
+            {!editingScenario && availableElections && availableElections.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="useHistorical"
+                      checked={useHistoricalData}
+                      onCheckedChange={(checked) => setUseHistoricalData(checked === true)}
+                      data-testid="checkbox-use-historical"
+                    />
+                    <Label htmlFor="useHistorical" className="flex items-center gap-2 cursor-pointer">
+                      <History className="h-4 w-4" />
+                      Usar dados de eleição histórica
+                    </Label>
+                  </div>
+                  
+                  {useHistoricalData && (
+                    <div className="grid grid-cols-3 gap-2 p-3 bg-muted rounded-lg">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Ano</Label>
+                        <Select value={historicalYear} onValueChange={(v) => { setHistoricalYear(v); setHistoricalUf(""); setHistoricalCargo(""); }}>
+                          <SelectTrigger data-testid="select-historical-year">
+                            <SelectValue placeholder="Ano" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableElections.map((e) => (
+                              <SelectItem key={e.year} value={String(e.year)}>{e.year}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">UF</Label>
+                        <Select value={historicalUf} onValueChange={setHistoricalUf} disabled={!selectedElection}>
+                          <SelectTrigger data-testid="select-historical-uf">
+                            <SelectValue placeholder="UF" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos</SelectItem>
+                            {selectedElection?.ufs.map((uf) => (
+                              <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Cargo</Label>
+                        <Select value={historicalCargo} onValueChange={(v) => {
+                          setHistoricalCargo(v);
+                          const pos = cargoCodeToPosition[parseInt(v)];
+                          if (pos) setFormData(f => ({ ...f, position: pos }));
+                        }} disabled={!selectedElection}>
+                          <SelectTrigger data-testid="select-historical-cargo">
+                            <SelectValue placeholder="Cargo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectedElection?.cargos.map((c) => (
+                              <SelectItem key={c.code} value={String(c.code)}>
+                                {cargoCodeToLabel[c.code] || c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {isLoadingSummary && (
+                        <div className="col-span-3 flex items-center justify-center py-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Carregando dados...
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <Separator />
+              </>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="totalVoters">Total de Eleitores</Label>

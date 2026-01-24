@@ -14,6 +14,10 @@ import {
   type TseImportJob, type InsertTseImportJob, tseImportJobs,
   type TseCandidateVote, type InsertTseCandidateVote, tseCandidateVotes,
   type TseImportError, type InsertTseImportError, tseImportErrors,
+  type TseImportBatch, type InsertTseImportBatch, tseImportBatches,
+  type TseImportBatchRow, type InsertTseImportBatchRow, tseImportBatchRows,
+  type TseElectoralStatistics, type InsertTseElectoralStatistics, tseElectoralStatistics,
+  type TsePartyVotes, type InsertTsePartyVotes, tsePartyVotes,
   type ScenarioCandidate, type InsertScenarioCandidate, scenarioCandidates,
   type SavedReport, type InsertSavedReport, savedReports,
   type AiPrediction, aiPredictions,
@@ -23,6 +27,17 @@ import {
   type ForecastRun, type InsertForecastRun, forecastRuns,
   type ForecastResult, type InsertForecastResult, forecastResults,
   type SwingRegion, type InsertSwingRegion, forecastSwingRegions,
+  type ReportTemplate, type InsertReportTemplate, reportTemplates,
+  type ReportSchedule, type InsertReportSchedule, reportSchedules,
+  type ReportRun, type InsertReportRun, reportRuns,
+  type ReportRecipient, type InsertReportRecipient, reportRecipients,
+  type PredictionScenario, type InsertPredictionScenario, predictionScenarios,
+  type CustomDashboard, type InsertCustomDashboard, customDashboards,
+  type AiSuggestion, type InsertAiSuggestion, aiSuggestions,
+  type SentimentDataSource, type InsertSentimentDataSource, sentimentDataSources,
+  type SentimentArticle, type InsertSentimentArticle, sentimentArticles,
+  type SentimentAnalysisResult, type InsertSentimentAnalysisResult, sentimentAnalysisResults,
+  type SentimentKeyword, type InsertSentimentKeyword, sentimentKeywords,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -176,6 +191,70 @@ export interface IStorage {
     voteShare: number;
     seats?: number;
   }[]>;
+
+  // Prediction Scenario methods
+  getPredictionScenarios(filters?: { status?: string; targetYear?: number }): Promise<PredictionScenario[]>;
+  getPredictionScenario(id: number): Promise<PredictionScenario | undefined>;
+  createPredictionScenario(data: InsertPredictionScenario): Promise<PredictionScenario>;
+  updatePredictionScenario(id: number, data: Partial<InsertPredictionScenario>): Promise<PredictionScenario | undefined>;
+  deletePredictionScenario(id: number): Promise<boolean>;
+
+  // Report Template methods
+  getReportTemplates(): Promise<ReportTemplate[]>;
+  getReportTemplate(id: number): Promise<ReportTemplate | undefined>;
+  createReportTemplate(data: InsertReportTemplate): Promise<ReportTemplate>;
+  updateReportTemplate(id: number, data: Partial<InsertReportTemplate>): Promise<ReportTemplate | undefined>;
+  deleteReportTemplate(id: number): Promise<boolean>;
+
+  // Report Schedule methods
+  getReportSchedules(): Promise<ReportSchedule[]>;
+  getReportSchedule(id: number): Promise<ReportSchedule | undefined>;
+  getDueSchedules(): Promise<ReportSchedule[]>;
+  createReportSchedule(data: InsertReportSchedule): Promise<ReportSchedule>;
+  updateReportSchedule(id: number, data: Partial<InsertReportSchedule>): Promise<ReportSchedule | undefined>;
+  deleteReportSchedule(id: number): Promise<boolean>;
+
+  // Report Run methods
+  getReportRuns(filters?: { scheduleId?: number; templateId?: number; status?: string; limit?: number }): Promise<ReportRun[]>;
+  getReportRun(id: number): Promise<ReportRun | undefined>;
+  createReportRun(data: InsertReportRun): Promise<ReportRun>;
+  updateReportRun(id: number, data: Partial<InsertReportRun>): Promise<ReportRun | undefined>;
+
+  // Report Recipients methods
+  getReportRecipients(): Promise<ReportRecipient[]>;
+  getReportRecipient(id: number): Promise<ReportRecipient | undefined>;
+  createReportRecipient(data: InsertReportRecipient): Promise<ReportRecipient>;
+  updateReportRecipient(id: number, data: Partial<InsertReportRecipient>): Promise<ReportRecipient | undefined>;
+  deleteReportRecipient(id: number): Promise<boolean>;
+
+  // Custom Dashboard methods
+  getCustomDashboards(userId?: string): Promise<CustomDashboard[]>;
+  getCustomDashboard(id: number): Promise<CustomDashboard | undefined>;
+  createCustomDashboard(data: InsertCustomDashboard): Promise<CustomDashboard>;
+  updateCustomDashboard(id: number, data: Partial<InsertCustomDashboard>): Promise<CustomDashboard | undefined>;
+  deleteCustomDashboard(id: number): Promise<boolean>;
+  getPublicDashboards(): Promise<CustomDashboard[]>;
+
+  // AI Suggestions methods
+  getAiSuggestions(userId?: string, filters?: { type?: string; dismissed?: boolean }): Promise<AiSuggestion[]>;
+  getAiSuggestion(id: number): Promise<AiSuggestion | undefined>;
+  createAiSuggestion(data: InsertAiSuggestion): Promise<AiSuggestion>;
+  updateAiSuggestion(id: number, data: Partial<InsertAiSuggestion>): Promise<AiSuggestion | undefined>;
+  deleteAiSuggestion(id: number): Promise<boolean>;
+  dismissAiSuggestion(id: number): Promise<boolean>;
+  applyAiSuggestion(id: number): Promise<boolean>;
+
+  // Advanced segmentation methods
+  getMunicipalities(filters?: { uf?: string; year?: number }): Promise<{ code: number; name: string; uf: string }[]>;
+  getVotesByMunicipality(filters: { year?: number; uf?: string; position?: string; party?: string; municipality?: string }): Promise<{
+    municipality: string;
+    municipalityCode: number;
+    state: string;
+    votes: number;
+    candidateCount: number;
+    partyCount: number;
+  }[]>;
+  getPositions(filters?: { year?: number; uf?: string }): Promise<{ code: number; name: string; votes: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -586,11 +665,206 @@ export class DatabaseStorage implements IStorage {
     await db.insert(tseCandidateVotes).values(votes);
   }
 
+  async insertTseElectoralStatisticsBatch(records: InsertTseElectoralStatistics[]): Promise<number> {
+    if (records.length === 0) return 0;
+    // Use raw SQL to handle duplicates - check by unique combination of fields
+    let insertedCount = 0;
+    for (const record of records) {
+      try {
+        // Check if record already exists
+        const existing = await db
+          .select({ id: tseElectoralStatistics.id })
+          .from(tseElectoralStatistics)
+          .where(and(
+            eq(tseElectoralStatistics.anoEleicao, record.anoEleicao),
+            eq(tseElectoralStatistics.sgUf, record.sgUf || ''),
+            eq(tseElectoralStatistics.cdMunicipio, record.cdMunicipio || 0),
+            eq(tseElectoralStatistics.nrZona, record.nrZona || 0),
+            eq(tseElectoralStatistics.cdCargo, record.cdCargo || 0),
+            eq(tseElectoralStatistics.nrTurno, record.nrTurno || 0)
+          ))
+          .limit(1);
+        
+        if (existing.length === 0) {
+          await db.insert(tseElectoralStatistics).values(record);
+          insertedCount++;
+        }
+      } catch (err) {
+        // Skip on error (likely duplicate)
+      }
+    }
+    return insertedCount;
+  }
+
+  async insertTsePartyVotesBatch(records: InsertTsePartyVotes[]): Promise<number> {
+    if (records.length === 0) return 0;
+    let insertedCount = 0;
+    for (const record of records) {
+      try {
+        // Check if record already exists
+        const existing = await db
+          .select({ id: tsePartyVotes.id })
+          .from(tsePartyVotes)
+          .where(and(
+            eq(tsePartyVotes.anoEleicao, record.anoEleicao),
+            eq(tsePartyVotes.sgUf, record.sgUf || ''),
+            eq(tsePartyVotes.cdMunicipio, record.cdMunicipio || 0),
+            eq(tsePartyVotes.nrZona, record.nrZona || 0),
+            eq(tsePartyVotes.cdCargo, record.cdCargo || 0),
+            eq(tsePartyVotes.nrTurno, record.nrTurno || 0),
+            eq(tsePartyVotes.nrPartido, record.nrPartido || 0)
+          ))
+          .limit(1);
+        
+        if (existing.length === 0) {
+          await db.insert(tsePartyVotes).values(record);
+          insertedCount++;
+        }
+      } catch (err) {
+        // Skip on error (likely duplicate)
+      }
+    }
+    return insertedCount;
+  }
+
+  async getElectoralStatisticsSummary(filters: {
+    anoEleicao?: number;
+    sgUf?: string;
+    cdCargo?: number;
+    cdMunicipio?: number;
+  }): Promise<any> {
+    const conditions: SQL[] = [];
+    if (filters.anoEleicao) conditions.push(eq(tseElectoralStatistics.anoEleicao, filters.anoEleicao));
+    if (filters.sgUf) conditions.push(eq(tseElectoralStatistics.sgUf, filters.sgUf));
+    if (filters.cdCargo) conditions.push(eq(tseElectoralStatistics.cdCargo, filters.cdCargo));
+    if (filters.cdMunicipio) conditions.push(eq(tseElectoralStatistics.cdMunicipio, filters.cdMunicipio));
+
+    const result = await db.select({
+      anoEleicao: tseElectoralStatistics.anoEleicao,
+      sgUf: tseElectoralStatistics.sgUf,
+      cdCargo: tseElectoralStatistics.cdCargo,
+      dsCargo: tseElectoralStatistics.dsCargo,
+      totalAptos: sql<number>`SUM(${tseElectoralStatistics.qtAptos})::int`,
+      totalComparecimento: sql<number>`SUM(${tseElectoralStatistics.qtComparecimento})::int`,
+      totalAbstencoes: sql<number>`SUM(${tseElectoralStatistics.qtAbstencoes})::int`,
+      totalVotosValidos: sql<number>`SUM(${tseElectoralStatistics.qtTotalVotosValidos})::int`,
+      totalVotosBrancos: sql<number>`SUM(${tseElectoralStatistics.qtVotosBrancos})::int`,
+      totalVotosNulos: sql<number>`SUM(${tseElectoralStatistics.qtTotalVotosNulos})::int`,
+      totalVotosLegenda: sql<number>`SUM(${tseElectoralStatistics.qtTotalVotosLegValidos})::int`,
+      totalVotosNominais: sql<number>`SUM(${tseElectoralStatistics.qtVotosNominaisValidos})::int`,
+    })
+    .from(tseElectoralStatistics)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .groupBy(tseElectoralStatistics.anoEleicao, tseElectoralStatistics.sgUf, tseElectoralStatistics.cdCargo, tseElectoralStatistics.dsCargo);
+
+    return result;
+  }
+
+  async getAvailableHistoricalElections(): Promise<Array<{
+    year: number;
+    states: string[];
+    cargos: Array<{ code: number; name: string }>;
+  }>> {
+    const yearsResult = await db.selectDistinct({
+      year: tseElectoralStatistics.anoEleicao,
+    }).from(tseElectoralStatistics).where(sql`${tseElectoralStatistics.anoEleicao} IS NOT NULL`);
+
+    const elections: Array<{
+      year: number;
+      states: string[];
+      cargos: Array<{ code: number; name: string }>;
+    }> = [];
+
+    for (const { year } of yearsResult) {
+      if (!year) continue;
+
+      const statesResult = await db.selectDistinct({
+        uf: tseElectoralStatistics.sgUf,
+      }).from(tseElectoralStatistics).where(eq(tseElectoralStatistics.anoEleicao, year));
+
+      const cargosResult = await db.selectDistinct({
+        code: tseElectoralStatistics.cdCargo,
+        name: tseElectoralStatistics.dsCargo,
+      }).from(tseElectoralStatistics).where(eq(tseElectoralStatistics.anoEleicao, year));
+
+      elections.push({
+        year,
+        states: statesResult.map(s => s.uf!).filter(Boolean).sort(),
+        cargos: cargosResult.filter(c => c.code).map(c => ({ code: c.code!, name: c.name || "Unknown" })),
+      });
+    }
+
+    return elections.sort((a, b) => b.year - a.year);
+  }
+
+  async getHistoricalPartyVotes(filters: {
+    anoEleicao: number;
+    sgUf?: string;
+    cdCargo: number;
+    cdMunicipio?: number;
+  }): Promise<Array<{
+    nrPartido: number;
+    sgPartido: string;
+    nmPartido: string | null;
+    votosNominais: number;
+    votosLegenda: number;
+    totalVotos: number;
+    federacao: string | null;
+    coligacao: string | null;
+  }>> {
+    const conditions: SQL[] = [
+      eq(tsePartyVotes.anoEleicao, filters.anoEleicao),
+      eq(tsePartyVotes.cdCargo, filters.cdCargo),
+    ];
+    if (filters.sgUf) conditions.push(eq(tsePartyVotes.sgUf, filters.sgUf));
+    if (filters.cdMunicipio) conditions.push(eq(tsePartyVotes.cdMunicipio, filters.cdMunicipio));
+
+    const result = await db.select({
+      nrPartido: tsePartyVotes.nrPartido,
+      sgPartido: tsePartyVotes.sgPartido,
+      nmPartido: tsePartyVotes.nmPartido,
+      votosNominais: sql<number>`SUM(COALESCE(${tsePartyVotes.qtVotosNominaisValidos}, 0))::int`,
+      votosLegenda: sql<number>`SUM(COALESCE(${tsePartyVotes.qtTotalVotosLegValidos}, 0))::int`,
+      federacao: sql<string>`MAX(${tsePartyVotes.dsComposicaoFederacao})`,
+      coligacao: sql<string>`MAX(${tsePartyVotes.dsComposicaoColigacao})`,
+    })
+    .from(tsePartyVotes)
+    .where(and(...conditions))
+    .groupBy(tsePartyVotes.nrPartido, tsePartyVotes.sgPartido, tsePartyVotes.nmPartido);
+
+    return result.map(r => ({
+      nrPartido: r.nrPartido,
+      sgPartido: r.sgPartido,
+      nmPartido: r.nmPartido,
+      votosNominais: r.votosNominais || 0,
+      votosLegenda: r.votosLegenda || 0,
+      totalVotos: (r.votosNominais || 0) + (r.votosLegenda || 0),
+      federacao: r.federacao,
+      coligacao: r.coligacao,
+    }));
+  }
+
   async countTseCandidateVotesByJob(jobId: number): Promise<number> {
     const result = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(tseCandidateVotes)
       .where(eq(tseCandidateVotes.importJobId, jobId));
+    return result[0]?.count || 0;
+  }
+
+  async countTseElectoralStatisticsByJob(jobId: number): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tseElectoralStatistics)
+      .where(eq(tseElectoralStatistics.importJobId, jobId));
+    return result[0]?.count || 0;
+  }
+
+  async countTsePartyVotesByJob(jobId: number): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tsePartyVotes)
+      .where(eq(tsePartyVotes.importJobId, jobId));
     return result[0]?.count || 0;
   }
 
@@ -1699,6 +1973,643 @@ export class DatabaseStorage implements IStorage {
       year: r.year || 0,
       party: r.party || "",
       voteShare: r.totalVotesInYear > 0 ? (r.votes / r.totalVotesInYear) * 100 : 0,
+    }));
+  }
+
+  // Prediction Scenario methods
+  async getPredictionScenarios(filters?: { status?: string; targetYear?: number }): Promise<PredictionScenario[]> {
+    const conditions: SQL[] = [];
+    if (filters?.status) {
+      conditions.push(eq(predictionScenarios.status, filters.status));
+    }
+    if (filters?.targetYear) {
+      conditions.push(eq(predictionScenarios.targetYear, filters.targetYear));
+    }
+    return db.select()
+      .from(predictionScenarios)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(predictionScenarios.createdAt));
+  }
+
+  async getPredictionScenario(id: number): Promise<PredictionScenario | undefined> {
+    const [scenario] = await db.select().from(predictionScenarios).where(eq(predictionScenarios.id, id));
+    return scenario;
+  }
+
+  async createPredictionScenario(data: InsertPredictionScenario): Promise<PredictionScenario> {
+    const [created] = await db.insert(predictionScenarios).values(data).returning();
+    return created;
+  }
+
+  async updatePredictionScenario(id: number, data: Partial<InsertPredictionScenario>): Promise<PredictionScenario | undefined> {
+    const [updated] = await db.update(predictionScenarios)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(predictionScenarios.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePredictionScenario(id: number): Promise<boolean> {
+    await db.delete(predictionScenarios).where(eq(predictionScenarios.id, id));
+    return true;
+  }
+
+  // Report Template methods
+  async getReportTemplates(): Promise<ReportTemplate[]> {
+    return db.select().from(reportTemplates).orderBy(desc(reportTemplates.createdAt));
+  }
+
+  async getReportTemplate(id: number): Promise<ReportTemplate | undefined> {
+    const [template] = await db.select().from(reportTemplates).where(eq(reportTemplates.id, id));
+    return template;
+  }
+
+  async createReportTemplate(data: InsertReportTemplate): Promise<ReportTemplate> {
+    const [created] = await db.insert(reportTemplates).values(data).returning();
+    return created;
+  }
+
+  async updateReportTemplate(id: number, data: Partial<InsertReportTemplate>): Promise<ReportTemplate | undefined> {
+    const [updated] = await db.update(reportTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(reportTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteReportTemplate(id: number): Promise<boolean> {
+    await db.delete(reportTemplates).where(eq(reportTemplates.id, id));
+    return true;
+  }
+
+  // Report Schedule methods
+  async getReportSchedules(): Promise<ReportSchedule[]> {
+    return db.select().from(reportSchedules).orderBy(desc(reportSchedules.createdAt));
+  }
+
+  async getReportSchedule(id: number): Promise<ReportSchedule | undefined> {
+    const [schedule] = await db.select().from(reportSchedules).where(eq(reportSchedules.id, id));
+    return schedule;
+  }
+
+  async getDueSchedules(): Promise<ReportSchedule[]> {
+    const now = new Date();
+    return db.select().from(reportSchedules)
+      .where(and(
+        eq(reportSchedules.isActive, true),
+        sql`${reportSchedules.nextRunAt} <= ${now}`
+      ));
+  }
+
+  async createReportSchedule(data: InsertReportSchedule): Promise<ReportSchedule> {
+    const [created] = await db.insert(reportSchedules).values(data).returning();
+    return created;
+  }
+
+  async updateReportSchedule(id: number, data: Partial<InsertReportSchedule>): Promise<ReportSchedule | undefined> {
+    const [updated] = await db.update(reportSchedules)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(reportSchedules.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteReportSchedule(id: number): Promise<boolean> {
+    await db.delete(reportSchedules).where(eq(reportSchedules.id, id));
+    return true;
+  }
+
+  // Report Run methods
+  async getReportRuns(filters?: { scheduleId?: number; templateId?: number; status?: string; limit?: number }): Promise<ReportRun[]> {
+    const conditions: SQL[] = [];
+    if (filters?.scheduleId) {
+      conditions.push(eq(reportRuns.scheduleId, filters.scheduleId));
+    }
+    if (filters?.templateId) {
+      conditions.push(eq(reportRuns.templateId, filters.templateId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(reportRuns.status, filters.status));
+    }
+    
+    let query = db.select().from(reportRuns)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(reportRuns.createdAt));
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    
+    return query;
+  }
+
+  async getReportRun(id: number): Promise<ReportRun | undefined> {
+    const [run] = await db.select().from(reportRuns).where(eq(reportRuns.id, id));
+    return run;
+  }
+
+  async createReportRun(data: InsertReportRun): Promise<ReportRun> {
+    const [created] = await db.insert(reportRuns).values(data).returning();
+    return created;
+  }
+
+  async updateReportRun(id: number, data: Partial<InsertReportRun>): Promise<ReportRun | undefined> {
+    const [updated] = await db.update(reportRuns)
+      .set(data)
+      .where(eq(reportRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Report Recipients methods
+  async getReportRecipients(): Promise<ReportRecipient[]> {
+    return db.select().from(reportRecipients).orderBy(reportRecipients.name);
+  }
+
+  async getReportRecipient(id: number): Promise<ReportRecipient | undefined> {
+    const [recipient] = await db.select().from(reportRecipients).where(eq(reportRecipients.id, id));
+    return recipient;
+  }
+
+  async createReportRecipient(data: InsertReportRecipient): Promise<ReportRecipient> {
+    const [created] = await db.insert(reportRecipients).values(data).returning();
+    return created;
+  }
+
+  async updateReportRecipient(id: number, data: Partial<InsertReportRecipient>): Promise<ReportRecipient | undefined> {
+    const [updated] = await db.update(reportRecipients)
+      .set(data)
+      .where(eq(reportRecipients.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteReportRecipient(id: number): Promise<boolean> {
+    await db.delete(reportRecipients).where(eq(reportRecipients.id, id));
+    return true;
+  }
+
+  // Import Batch methods
+  async createImportBatch(data: InsertTseImportBatch): Promise<TseImportBatch> {
+    const [batch] = await db.insert(tseImportBatches).values(data).returning();
+    return batch;
+  }
+
+  async getImportBatches(jobId: number): Promise<TseImportBatch[]> {
+    return db.select().from(tseImportBatches)
+      .where(eq(tseImportBatches.importJobId, jobId))
+      .orderBy(tseImportBatches.batchIndex);
+  }
+
+  async getImportBatch(batchId: number): Promise<TseImportBatch | undefined> {
+    const [batch] = await db.select().from(tseImportBatches)
+      .where(eq(tseImportBatches.id, batchId));
+    return batch;
+  }
+
+  async updateImportBatch(batchId: number, data: Partial<InsertTseImportBatch>): Promise<TseImportBatch | undefined> {
+    const [updated] = await db.update(tseImportBatches)
+      .set(data)
+      .where(eq(tseImportBatches.id, batchId))
+      .returning();
+    return updated;
+  }
+
+  async getFailedBatches(jobId: number): Promise<TseImportBatch[]> {
+    return db.select().from(tseImportBatches)
+      .where(and(
+        eq(tseImportBatches.importJobId, jobId),
+        eq(tseImportBatches.status, "failed")
+      ))
+      .orderBy(tseImportBatches.batchIndex);
+  }
+
+  async getBatchStats(jobId: number): Promise<{
+    total: number;
+    completed: number;
+    failed: number;
+    pending: number;
+    processing: number;
+    totalRows: number;
+    processedRows: number;
+    errorCount: number;
+  }> {
+    const batches = await this.getImportBatches(jobId);
+    return {
+      total: batches.length,
+      completed: batches.filter(b => b.status === "completed").length,
+      failed: batches.filter(b => b.status === "failed").length,
+      pending: batches.filter(b => b.status === "pending").length,
+      processing: batches.filter(b => b.status === "processing").length,
+      totalRows: batches.reduce((sum, b) => sum + (b.totalRows || 0), 0),
+      processedRows: batches.reduce((sum, b) => sum + (b.processedRows || 0), 0),
+      errorCount: batches.reduce((sum, b) => sum + (b.errorCount || 0), 0),
+    };
+  }
+
+  // Import Batch Row methods
+  async createBatchRows(rows: InsertTseImportBatchRow[]): Promise<TseImportBatchRow[]> {
+    if (rows.length === 0) return [];
+    return db.insert(tseImportBatchRows).values(rows).returning();
+  }
+
+  async getBatchRows(batchId: number, status?: string): Promise<TseImportBatchRow[]> {
+    const conditions = [eq(tseImportBatchRows.batchId, batchId)];
+    if (status) {
+      conditions.push(eq(tseImportBatchRows.status, status));
+    }
+    return db.select().from(tseImportBatchRows)
+      .where(and(...conditions))
+      .orderBy(tseImportBatchRows.rowNumber);
+  }
+
+  async getFailedBatchRows(batchId: number): Promise<TseImportBatchRow[]> {
+    return this.getBatchRows(batchId, "failed");
+  }
+
+  async updateBatchRow(rowId: number, data: Partial<InsertTseImportBatchRow>): Promise<TseImportBatchRow | undefined> {
+    const [updated] = await db.update(tseImportBatchRows)
+      .set({ ...data, processedAt: new Date() })
+      .where(eq(tseImportBatchRows.id, rowId))
+      .returning();
+    return updated;
+  }
+
+  async resetBatchRowsForReprocess(batchId: number): Promise<number> {
+    const result = await db.update(tseImportBatchRows)
+      .set({ status: "pending", errorType: null, errorMessage: null, processedAt: null })
+      .where(and(
+        eq(tseImportBatchRows.batchId, batchId),
+        eq(tseImportBatchRows.status, "failed")
+      ));
+    return (result as any).rowCount || 0;
+  }
+
+  async deleteBatchesByJob(jobId: number): Promise<void> {
+    await db.delete(tseImportBatches).where(eq(tseImportBatches.importJobId, jobId));
+  }
+
+  // Custom Dashboard methods
+  async getCustomDashboards(userId?: string): Promise<CustomDashboard[]> {
+    if (userId) {
+      return db.select().from(customDashboards)
+        .where(eq(customDashboards.userId, userId))
+        .orderBy(desc(customDashboards.updatedAt));
+    }
+    return db.select().from(customDashboards).orderBy(desc(customDashboards.updatedAt));
+  }
+
+  async getCustomDashboard(id: number): Promise<CustomDashboard | undefined> {
+    const [dashboard] = await db.select().from(customDashboards).where(eq(customDashboards.id, id));
+    return dashboard;
+  }
+
+  async createCustomDashboard(data: InsertCustomDashboard): Promise<CustomDashboard> {
+    const [dashboard] = await db.insert(customDashboards).values(data).returning();
+    return dashboard;
+  }
+
+  async updateCustomDashboard(id: number, data: Partial<InsertCustomDashboard>): Promise<CustomDashboard | undefined> {
+    const [updated] = await db.update(customDashboards)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(customDashboards.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCustomDashboard(id: number): Promise<boolean> {
+    const result = await db.delete(customDashboards).where(eq(customDashboards.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  async getPublicDashboards(): Promise<CustomDashboard[]> {
+    return db.select().from(customDashboards)
+      .where(eq(customDashboards.isPublic, true))
+      .orderBy(desc(customDashboards.updatedAt));
+  }
+
+  // AI Suggestions methods
+  async getAiSuggestions(userId?: string, filters?: { type?: string; dismissed?: boolean }): Promise<AiSuggestion[]> {
+    const conditions: SQL[] = [];
+    if (userId) conditions.push(eq(aiSuggestions.userId, userId));
+    if (filters?.type) conditions.push(eq(aiSuggestions.suggestionType, filters.type));
+    if (filters?.dismissed !== undefined) conditions.push(eq(aiSuggestions.dismissed, filters.dismissed));
+    
+    return db.select().from(aiSuggestions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(aiSuggestions.createdAt));
+  }
+
+  async getAiSuggestion(id: number): Promise<AiSuggestion | undefined> {
+    const [suggestion] = await db.select().from(aiSuggestions).where(eq(aiSuggestions.id, id));
+    return suggestion;
+  }
+
+  async createAiSuggestion(data: InsertAiSuggestion): Promise<AiSuggestion> {
+    const [suggestion] = await db.insert(aiSuggestions).values(data).returning();
+    return suggestion;
+  }
+
+  async updateAiSuggestion(id: number, data: Partial<InsertAiSuggestion>): Promise<AiSuggestion | undefined> {
+    const [updated] = await db.update(aiSuggestions)
+      .set(data)
+      .where(eq(aiSuggestions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteAiSuggestion(id: number): Promise<boolean> {
+    const result = await db.delete(aiSuggestions).where(eq(aiSuggestions.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  async dismissAiSuggestion(id: number): Promise<boolean> {
+    const [updated] = await db.update(aiSuggestions)
+      .set({ dismissed: true })
+      .where(eq(aiSuggestions.id, id))
+      .returning();
+    return !!updated;
+  }
+
+  async applyAiSuggestion(id: number): Promise<boolean> {
+    const [updated] = await db.update(aiSuggestions)
+      .set({ applied: true })
+      .where(eq(aiSuggestions.id, id))
+      .returning();
+    return !!updated;
+  }
+
+  // Advanced segmentation methods
+  async getMunicipalities(filters?: { uf?: string; year?: number }): Promise<{ code: number; name: string; uf: string }[]> {
+    const conditions: SQL[] = [];
+    if (filters?.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters?.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+
+    const result = await db.selectDistinct({
+      code: tseCandidateVotes.cdMunicipio,
+      name: tseCandidateVotes.nmMunicipio,
+      uf: tseCandidateVotes.sgUf,
+    }).from(tseCandidateVotes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(tseCandidateVotes.nmMunicipio);
+
+    return result.map(r => ({
+      code: r.code || 0,
+      name: r.name || "N/A",
+      uf: r.uf || "N/A",
+    }));
+  }
+
+  async getVotesByMunicipality(filters: { year?: number; uf?: string; position?: string; party?: string; municipality?: string }): Promise<{
+    municipality: string;
+    municipalityCode: number;
+    state: string;
+    votes: number;
+    candidateCount: number;
+    partyCount: number;
+  }[]> {
+    const conditions: SQL[] = [];
+    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    if (filters.party) conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
+    if (filters.municipality) conditions.push(eq(tseCandidateVotes.nmMunicipio, filters.municipality));
+
+    const result = await db.select({
+      municipality: tseCandidateVotes.nmMunicipio,
+      municipalityCode: tseCandidateVotes.cdMunicipio,
+      state: tseCandidateVotes.sgUf,
+      votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0)::int`,
+      candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})::int`,
+      partyCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})::int`,
+    }).from(tseCandidateVotes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(tseCandidateVotes.nmMunicipio, tseCandidateVotes.cdMunicipio, tseCandidateVotes.sgUf)
+      .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0) DESC`);
+
+    return result.map(r => ({
+      municipality: r.municipality || "N/A",
+      municipalityCode: r.municipalityCode || 0,
+      state: r.state || "N/A",
+      votes: r.votes,
+      candidateCount: r.candidateCount,
+      partyCount: r.partyCount,
+    }));
+  }
+
+  async getPositions(filters?: { year?: number; uf?: string }): Promise<{ code: number; name: string; votes: number }[]> {
+    const conditions: SQL[] = [];
+    if (filters?.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+    if (filters?.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+
+    const result = await db.select({
+      code: tseCandidateVotes.cdCargo,
+      name: tseCandidateVotes.dsCargo,
+      votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0)::int`,
+    }).from(tseCandidateVotes)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(tseCandidateVotes.cdCargo, tseCandidateVotes.dsCargo)
+      .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0) DESC`);
+
+    return result.map(r => ({
+      code: r.code || 0,
+      name: r.name || "N/A",
+      votes: r.votes,
+    }));
+  }
+
+  // Sentiment Data Sources methods
+  async getSentimentDataSources(filters?: { sourceType?: string; isActive?: boolean }): Promise<SentimentDataSource[]> {
+    const conditions: SQL[] = [];
+    if (filters?.sourceType) conditions.push(eq(sentimentDataSources.sourceType, filters.sourceType));
+    if (filters?.isActive !== undefined) conditions.push(eq(sentimentDataSources.isActive, filters.isActive));
+    
+    return db.select().from(sentimentDataSources)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(sentimentDataSources.createdAt));
+  }
+
+  async createSentimentDataSource(data: InsertSentimentDataSource): Promise<SentimentDataSource> {
+    const [source] = await db.insert(sentimentDataSources).values(data).returning();
+    return source;
+  }
+
+  async updateSentimentDataSource(id: number, data: Partial<InsertSentimentDataSource>): Promise<SentimentDataSource | undefined> {
+    const [updated] = await db.update(sentimentDataSources)
+      .set(data)
+      .where(eq(sentimentDataSources.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Sentiment Articles methods
+  async getSentimentArticles(filters?: { sourceId?: number; startDate?: Date; endDate?: Date; limit?: number }): Promise<SentimentArticle[]> {
+    const conditions: SQL[] = [];
+    if (filters?.sourceId) conditions.push(eq(sentimentArticles.sourceId, filters.sourceId));
+    if (filters?.startDate) conditions.push(sql`${sentimentArticles.publishedAt} >= ${filters.startDate}`);
+    if (filters?.endDate) conditions.push(sql`${sentimentArticles.publishedAt} <= ${filters.endDate}`);
+    
+    let query = db.select().from(sentimentArticles)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(sentimentArticles.publishedAt));
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    
+    return query;
+  }
+
+  async createSentimentArticle(data: InsertSentimentArticle): Promise<SentimentArticle> {
+    const [article] = await db.insert(sentimentArticles).values(data).returning();
+    return article;
+  }
+
+  async createSentimentArticles(data: InsertSentimentArticle[]): Promise<SentimentArticle[]> {
+    if (data.length === 0) return [];
+    const articles = await db.insert(sentimentArticles).values(data).returning();
+    return articles;
+  }
+
+  // Sentiment Analysis Results methods
+  async getSentimentResults(filters: { 
+    entityType?: string; 
+    entityId?: string; 
+    startDate?: Date; 
+    endDate?: Date;
+    limit?: number;
+  }): Promise<SentimentAnalysisResult[]> {
+    const conditions: SQL[] = [];
+    if (filters.entityType) conditions.push(eq(sentimentAnalysisResults.entityType, filters.entityType));
+    if (filters.entityId) conditions.push(eq(sentimentAnalysisResults.entityId, filters.entityId));
+    if (filters.startDate) conditions.push(sql`${sentimentAnalysisResults.analysisDate} >= ${filters.startDate}`);
+    if (filters.endDate) conditions.push(sql`${sentimentAnalysisResults.analysisDate} <= ${filters.endDate}`);
+    
+    let query = db.select().from(sentimentAnalysisResults)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(sentimentAnalysisResults.analysisDate));
+    
+    if (filters.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    
+    return query;
+  }
+
+  async getLatestSentimentByEntity(entityType: string): Promise<SentimentAnalysisResult[]> {
+    const subquery = db.select({
+      entityId: sentimentAnalysisResults.entityId,
+      maxDate: sql<Date>`MAX(${sentimentAnalysisResults.analysisDate})`.as("max_date"),
+    }).from(sentimentAnalysisResults)
+      .where(eq(sentimentAnalysisResults.entityType, entityType))
+      .groupBy(sentimentAnalysisResults.entityId)
+      .as("latest");
+
+    return db.select()
+      .from(sentimentAnalysisResults)
+      .innerJoin(subquery, and(
+        eq(sentimentAnalysisResults.entityId, subquery.entityId),
+        eq(sentimentAnalysisResults.analysisDate, subquery.maxDate)
+      ))
+      .orderBy(desc(sentimentAnalysisResults.mentionCount));
+  }
+
+  async createSentimentResult(data: InsertSentimentAnalysisResult): Promise<SentimentAnalysisResult> {
+    const [result] = await db.insert(sentimentAnalysisResults).values(data).returning();
+    return result;
+  }
+
+  async getSentimentTimeline(entityType: string, entityId: string, days: number = 30): Promise<{
+    date: Date;
+    sentimentScore: number;
+    mentionCount: number;
+    label: string;
+  }[]> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const results = await db.select({
+      date: sentimentAnalysisResults.analysisDate,
+      sentimentScore: sentimentAnalysisResults.sentimentScore,
+      mentionCount: sentimentAnalysisResults.mentionCount,
+      label: sentimentAnalysisResults.sentimentLabel,
+    }).from(sentimentAnalysisResults)
+      .where(and(
+        eq(sentimentAnalysisResults.entityType, entityType),
+        eq(sentimentAnalysisResults.entityId, entityId),
+        sql`${sentimentAnalysisResults.analysisDate} >= ${startDate}`
+      ))
+      .orderBy(sentimentAnalysisResults.analysisDate);
+
+    return results.map(r => ({
+      date: r.date,
+      sentimentScore: parseFloat(String(r.sentimentScore)),
+      mentionCount: r.mentionCount || 0,
+      label: r.label,
+    }));
+  }
+
+  // Sentiment Keywords methods
+  async getKeywords(filters?: { entityType?: string; entityId?: string; limit?: number }): Promise<SentimentKeyword[]> {
+    const conditions: SQL[] = [];
+    if (filters?.entityType) conditions.push(eq(sentimentKeywords.entityType, filters.entityType));
+    if (filters?.entityId) conditions.push(eq(sentimentKeywords.entityId, filters.entityId));
+    
+    let query = db.select().from(sentimentKeywords)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(sentimentKeywords.frequency));
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    
+    return query;
+  }
+
+  async upsertKeyword(data: InsertSentimentKeyword): Promise<SentimentKeyword> {
+    const existing = await db.select().from(sentimentKeywords)
+      .where(and(
+        eq(sentimentKeywords.keyword, data.keyword),
+        data.entityType ? eq(sentimentKeywords.entityType, data.entityType) : sql`${sentimentKeywords.entityType} IS NULL`,
+        data.entityId ? eq(sentimentKeywords.entityId, data.entityId) : sql`${sentimentKeywords.entityId} IS NULL`
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(sentimentKeywords)
+        .set({
+          frequency: sql`${sentimentKeywords.frequency} + ${data.frequency}`,
+          lastSeen: new Date(),
+          averageSentiment: data.averageSentiment,
+          trendDirection: data.trendDirection,
+        })
+        .where(eq(sentimentKeywords.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
+    const [keyword] = await db.insert(sentimentKeywords).values(data).returning();
+    return keyword;
+  }
+
+  async getWordCloudData(entityType?: string, entityId?: string, limit: number = 100): Promise<{
+    word: string;
+    value: number;
+    sentiment: number;
+  }[]> {
+    const conditions: SQL[] = [];
+    if (entityType) conditions.push(eq(sentimentKeywords.entityType, entityType));
+    if (entityId) conditions.push(eq(sentimentKeywords.entityId, entityId));
+
+    const keywords = await db.select().from(sentimentKeywords)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(sentimentKeywords.frequency))
+      .limit(limit);
+
+    return keywords.map(k => ({
+      word: k.keyword,
+      value: k.frequency,
+      sentiment: parseFloat(String(k.averageSentiment || 0)),
     }));
   }
 }

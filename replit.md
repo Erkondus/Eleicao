@@ -1,175 +1,67 @@
 # SimulaVoto - Sistema de Simulação Eleitoral Brasileiro
 
-## Visão Geral
-SimulaVoto é um sistema web completo para simular resultados eleitorais proporcionais brasileiros seguindo o sistema do TSE (Tribunal Superior Eleitoral). Inclui cálculo de quociente eleitoral, distribuição de cadeiras pelo método D'Hondt, previsões com IA, controle de acesso baseado em funções e trilha de auditoria completa.
+## Overview
+SimulaVoto is a comprehensive web system designed to simulate Brazilian proportional electoral results according to the TSE (Tribunal Superior Eleitoral) system. It calculates electoral quotients, distributes seats using the D'Hondt method, incorporates AI-powered predictions, provides role-based access control, and maintains a full audit trail. The project aims to offer advanced analytical capabilities for electoral data, including real-time import monitoring, automated report generation, AI-driven data validation, and predictive modeling for future elections. It targets market potential in political analysis, academic research, and electoral campaign strategizing by providing detailed insights, scenario analysis, and robust data management.
 
-## Mudanças Recentes
-- **2026-01-23**: Função para zerar banco de dados com confirmação em duas etapas (apenas admin)
-- **2026-01-23**: Página Admin Sistema com estatísticas do banco e zona de perigo
-- **2026-01-23**: Opção para preservar usuário admin durante reset do banco
-- **2026-01-23**: Relatório de erros aprimorado com resumo estatístico, distribuição por tipo e orientações de resolução
-- **2026-01-23**: Exportação de erros de importação para CSV com dados brutos
-- **2026-01-23**: Dialog de validação IA redesenhado com melhor visualização de score, descobertas e riscos
-- **2026-01-23**: Barras de progresso visuais para distribuição de severidade de problemas
-- **2026-01-23**: Exportação de relatório de validação IA para JSON e problemas para CSV
-- **2026-01-23**: Recomendações de ação com nível de confiança da IA
-- **2026-01-23**: Campo sourceUrl adicionado ao schema para armazenar URL original de importações TSE
-- **2026-01-23**: Reinício de importações via URL usa campo sourceUrl em vez de reconstrução de URL
-- **2026-01-23**: Sistema de cancelamento robusto com verificações durante download e antes do processamento
-- **2026-01-23**: Rastreamento de jobs ativos com activeImportJobs Map para cancelamento
-- **2026-01-23**: Limpeza automática de tracking após conclusão/falha de importação
-- **2026-01-17**: **Previsões Eleitorais** - Sistema de modelagem preditiva para eleições futuras
-- **2026-01-17**: Simulações Monte Carlo com 10.000 iterações para intervalos de confiança robustos
-- **2026-01-17**: Análise de tendências históricas por partido com detecção de crescimento/queda
-- **2026-01-17**: Identificação de regiões voláteis (swing regions) onde pequenas mudanças alteram resultados
-- **2026-01-17**: Tabelas forecast_runs, forecast_results, forecast_swing_regions para armazenar previsões
-- **2026-01-17**: API endpoints para criar, listar, visualizar e excluir previsões
-- **2026-01-17**: Interface frontend com criação de previsões, visualização de resultados e gráficos de incerteza
-- **2026-01-17**: Geração de narrativas com IA para explicar cenários competitivos e riscos
-- **2026-01-17**: **Validação de Dados com IA** - Sistema completo de validação de dados importados do TSE
-- **2026-01-17**: Validação com 7 verificações determinísticas (votos negativos, campos vazios, duplicatas, votos irreais, números de candidato inválidos, outliers estatísticos, inconsistência de números de partido)
-- **2026-01-17**: Análise com IA usando GPT-4o para score de qualidade (0-100), recomendações e avaliação de riscos
-- **2026-01-17**: Tabelas import_validation_runs e import_validation_issues para armazenar resultados
-- **2026-01-17**: Interface de validação integrada à página de importação TSE com botões Validar/Ver
-- **2026-01-17**: Dialog de validação com score de qualidade, descobertas, riscos e lista de problemas
-- **2026-01-17**: Fluxo de status de issues: open → resolved/ignored com rastreamento de responsável
-- **2026-01-17**: **Relatórios de Projeção** - Sistema completo de relatórios preditivos com margens de erro e intervalos de confiança
-- **2026-01-17**: Projeções de comparecimento eleitoral com fatores de influência e base histórica
-- **2026-01-17**: Projeções por partido com estimativa de votos e cadeiras (min/esperado/max)
-- **2026-01-17**: Projeções de candidatos com probabilidade de eleição e ranking
-- **2026-01-17**: Análise de cenários com probabilidades e resultados esperados
-- **2026-01-17**: Avaliação de riscos com categorias, probabilidades e mitigações
-- **2026-01-17**: Exportação de relatórios em CSV com dados completos
-- **2026-01-17**: Página AI Insights com análises preditivas avançadas (comparecimento, candidatos, partidos)
-- **2026-01-17**: Previsão de comparecimento eleitoral baseada em padrões históricos
-- **2026-01-17**: Probabilidade de sucesso de candidatos com fatores de influência
-- **2026-01-17**: Previsão de desempenho partidário com análise de tendências
-- **2026-01-17**: Insights estratégicos com descobertas, riscos e recomendações
-- **2026-01-17**: Análise de sentimento (extensível para notícias e mídias sociais)
-- **2026-01-17**: Cache de previsões de IA para otimização de custos
-- **2026-01-17**: Painel interativo com drill-down por região, partido e cargo
-- **2026-01-17**: Busca Semântica com pgvector para consultas em linguagem natural sobre dados eleitorais
-- **2026-01-17**: Embeddings automáticos gerados após importação TSE via OpenAI text-embedding-3-small
-- **2026-01-17**: Interface de busca semântica com filtros, exemplos de perguntas, histórico e citações
-- **2026-01-17**: Dashboard Eleitoral com mapa do Brasil interativo, métricas consolidadas e status de importações
-- **2026-01-17**: Sincronização automática de partidos durante importação TSE (cria partidos que não existem)
-- **2026-01-16**: Progresso detalhado de importação (download %, tempo decorrido, linhas processadas)
-- **2026-01-16**: Indicador global de importações ativas na sidebar
-- **2026-01-16**: Atualização de progresso em tempo real durante download e processamento
-- **2026-01-16**: Priorização de arquivos _BRASIL.csv em ZIPs com múltiplos CSVs
-- **2026-01-16**: Filtro de cargo na importação (Deputado, Senador, Vereador, etc.)
-- **2026-01-16**: Prevenção de importação duplicada com feedback detalhado ao usuário
-- **2026-01-15**: Filtros avançados: cargo, partido específico, faixa de votos (min/max)
-- **2026-01-15**: Sistema de relatórios salvos para acesso rápido
-- **2026-01-15**: Modo de comparação entre eleições/estados com visualizações
-- **2026-01-15**: Tooltips interativos detalhados nos gráficos
-- **2026-01-15**: Assistente de IA para perguntas em linguagem natural sobre dados eleitorais
-- **2026-01-15**: Análise de tendências históricas com previsões de IA
-- **2026-01-15**: Detecção de anomalias estatísticas nos dados de votação
-- **2026-01-15**: Seção de Análise de Dados com relatórios personalizados e visualizações
-- **2026-01-15**: Filtros por ano, estado e tipo de eleição para análises
-- **2026-01-15**: Gráficos (barras, pizza, área) para distribuição de votos
-- **2026-01-15**: Exportação de relatórios em CSV e PDF
-- **2026-01-15**: Importação via URL direta do TSE (cdn.tse.jus.br)
-- **2026-01-14**: Sistema de importação de dados CSV do TSE (até 5GB) com streaming e progresso
-- **2026-01-14**: Tabelas para armazenar todos os 50 campos do layout de candidatos do TSE
-- **2026-01-14**: Suporte a Federações (2022+) e Coligações (pré-2022) - afetam distribuição de vagas
-- **2026-01-14**: Cálculo eleitoral agora agrega votos por aliança antes de distribuir vagas
-- **2026-01-14**: Interface para gerenciar federações/coligações por cenário
-- **2026-01-14**: Implementação completa do backend com cálculo eleitoral server-side
-- **2026-01-14**: Sistema de autenticação com passport-local e bcrypt
-- **2026-01-14**: RBAC implementado (admin/analyst/viewer)
-- **2026-01-14**: Trilha de auditoria completa com logging de todas as operações
-
-## Arquitetura do Projeto
-
-### Stack Tecnológica
-- **Frontend**: React + Vite + TailwindCSS + shadcn/ui
-- **Backend**: Express.js + TypeScript
-- **Banco de Dados**: PostgreSQL com Drizzle ORM
-- **Autenticação**: passport-local + express-session
-- **IA**: OpenAI GPT-4o via Replit AI Integrations
-- **Busca Semântica**: pgvector + OpenAI text-embedding-3-small (1536 dims)
-
-### Estrutura de Diretórios
-```
-├── client/src/
-│   ├── components/     # Componentes reutilizáveis (sidebar, header, etc.)
-│   ├── pages/          # Páginas da aplicação
-│   ├── lib/            # Utilitários (queryClient, auth-context)
-│   └── hooks/          # Custom hooks
-├── server/
-│   ├── routes.ts       # Todas as rotas da API
-│   ├── storage.ts      # Camada de persistência (DatabaseStorage)
-│   └── index.ts        # Configuração do Express
-└── shared/
-    └── schema.ts       # Modelos de dados Drizzle + tipos TypeScript
-```
-
-### Modelos de Dados
-- **users**: Usuários do sistema (id, username, password hash, role, etc.)
-- **parties**: Partidos políticos (id, name, abbreviation, number, color)
-- **candidates**: Candidatos (id, name, nickname, number, partyId)
-- **scenarios**: Cenários eleitorais (id, name, description, validVotes, availableSeats)
-- **simulations**: Resultados de simulações (id, scenarioId, name, results JSON)
-- **auditLogs**: Trilha de auditoria (id, userId, action, entity, details, timestamp)
-- **scenarioVotes**: Votos por cenário (scenarioId, partyId, candidateId, votes)
-
-### Funções de Usuário (RBAC)
-- **admin**: Acesso completo (gerenciar usuários, partidos, candidatos, cenários, simulações, IA, auditoria)
-- **analyst**: Pode executar simulações, usar previsões IA, visualizar dados
-- **viewer**: Apenas visualização de dados e simulações
-
-### Endpoints da API
-- `POST /api/auth/login` - Login
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Usuário atual
-- `GET/POST/PUT/DELETE /api/parties` - CRUD de partidos
-- `GET/POST/PUT/DELETE /api/candidates` - CRUD de candidatos
-- `GET/POST/PUT/DELETE /api/scenarios` - CRUD de cenários
-- `GET/POST /api/simulations` - Simulações
-- `POST /api/electoral/calculate` - Cálculo eleitoral (backend)
-- `POST /api/predictions` - Previsões com IA (admin/analyst)
-- `GET /api/audit` - Logs de auditoria (admin)
-- `GET /api/stats` - Estatísticas do dashboard
-- `GET /api/analytics/summary` - Resumo analítico (votos, candidatos, partidos, municípios)
-- `GET /api/analytics/votes-by-party` - Votos agregados por partido
-- `GET /api/analytics/top-candidates` - Candidatos mais votados
-- `GET /api/analytics/votes-by-state` - Votos por estado
-- `GET /api/analytics/votes-by-municipality` - Votos por município
-- `GET /api/analytics/election-years` - Anos eleitorais disponíveis
-- `GET /api/analytics/states` - Estados disponíveis
-- `GET /api/analytics/election-types` - Tipos de eleição disponíveis
-- `GET /api/analytics/positions` - Cargos disponíveis
-- `GET /api/analytics/parties-list` - Lista de partidos disponíveis
-- `GET /api/analytics/advanced` - Análise avançada com múltiplos filtros
-- `POST /api/analytics/compare` - Comparação entre anos/estados
-- `GET /api/analytics/export/csv` - Exportação de relatórios em CSV
-- `GET/POST/PUT/DELETE /api/reports` - CRUD de relatórios salvos
-- `POST /api/ai/assistant` - Assistente IA para perguntas sobre dados
-- `POST /api/ai/predict-historical` - Previsões baseadas em histórico
-- `POST /api/ai/anomalies` - Detecção de anomalias estatísticas
-- `POST /api/ai/turnout` - Previsão de comparecimento eleitoral
-- `POST /api/ai/candidate-success` - Probabilidade de sucesso de candidatos
-- `POST /api/ai/party-performance` - Previsão de desempenho partidário
-- `POST /api/ai/electoral-insights` - Insights estratégicos eleitorais
-- `POST /api/ai/sentiment` - Análise de sentimento de notícias/posts
-- `POST /api/imports/tse/url` - Importação via URL do TSE
-
-### Sistema Eleitoral Brasileiro
-O sistema implementa o cálculo proporcional brasileiro:
-1. **Quociente Eleitoral** = Votos Válidos / Vagas Disponíveis
-2. **Quociente Partidário** = Votos do Partido / Quociente Eleitoral
-3. **Distribuição inicial**: Cada partido recebe floor(Quociente Partidário) vagas
-4. **Distribuição de sobras**: Método D'Hondt para vagas restantes
-
-### Credenciais Padrão
-- **Usuário**: admin
-- **Senha**: admin123
-
-## Preferências de Desenvolvimento
+## User Preferences
 - Usar TypeScript em todo o código
 - Seguir padrões do shadcn/ui para componentes
 - Validação com Zod schemas
 - Design institucional inspirado no TSE (cores: #003366 azul, #FFD700 dourado)
 - Suporte a tema claro/escuro
+
+## System Architecture
+The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend, an Express.js + TypeScript backend, and PostgreSQL with Drizzle ORM for the database. Authentication is handled via `passport-local` and `express-session`, implementing Role-Based Access Control (RBAC) with `admin`, `analyst`, and `viewer` roles.
+
+**Key Features and Implementations:**
+- **Electoral Calculation:** Implements the Brazilian proportional electoral system, including electoral quotient, party quotient, initial seat distribution, and D'Hondt method for remaining seats. Supports Federations (2022+) and Coalitions (pre-2022).
+- **Data Import System:** Robust CSV import (up to 5GB) from TSE URLs with streaming, real-time progress updates, and detailed batch tracking. Includes real-time import monitoring via WebSockets and re-processing of failed batches.
+- **AI-Powered Data Validation:** Integrates GPT-4o for quality scoring, risk assessment, and recommendations on imported data, alongside deterministic checks for data integrity.
+- **Automated Reporting:** A system for creating, scheduling, and generating reports (CSV/PDF) with various frequencies and types (candidates, parties, voting details). Supports email delivery via Resend.
+- **Electoral Predictions & AI Insights:** Utilizes Monte Carlo simulations (10,000 iterations) for robust confidence intervals. Features historical trend analysis, identification of swing regions, and AI-generated narratives. Includes advanced predictive analytics for voter turnout, candidate success, and party performance.
+- **Semantic Search:** Implemented with `pgvector` for natural language queries on electoral data, using OpenAI `text-embedding-3-small` for automatic embeddings.
+- **Dashboard & Analytics:** Interactive dashboard with a map of Brazil, consolidated metrics, and import status. Advanced analytics section with customizable reports, historical comparisons, trend analysis, and anomaly detection.
+- **System Administration:** Admin panel with database statistics, the option to reset the database (preserving admin user), and detailed error reporting with statistical summaries and resolution guidance.
+- **Audit Trail:** Comprehensive logging of all user operations and system changes.
+- **UI/UX:** Adherence to shadcn/ui patterns, institutional design inspired by TSE colors, and support for light/dark themes.
+
+**Data Models:**
+- `users`: User authentication and roles.
+- `parties`: Political party information.
+- `candidates`: Candidate details.
+- `scenarios`: Electoral simulation scenarios.
+- `simulations`: Simulation results.
+- `auditLogs`: Audit trail records.
+- `scenarioVotes`: Votes per scenario.
+- `tseImportBatches`, `tseImportBatchRows`: Granular tracking of import batches.
+- `import_validation_runs`, `import_validation_issues`: AI validation results.
+- `report_templates`, `report_schedules`, `report_runs`, `report_recipients`: Report automation configurations.
+- `forecast_runs`, `forecast_results`, `forecast_swing_regions`: Predictive forecast data.
+- `customDashboards`: User-customizable dashboards with layout, filters, and widgets configuration.
+- `aiSuggestions`: AI-generated chart and report suggestions with relevance scores.
+- `sentimentDataSources`: External data sources for sentiment analysis (news, blogs, forums).
+- `sentimentArticles`: Collected articles from various sources for sentiment analysis.
+- `sentimentAnalysisResults`: Historical sentiment scores and analysis per entity (party, candidate).
+- `sentimentKeywords`: Aggregated keywords for word cloud visualization with frequency and sentiment tracking.
+
+## Recent Changes (January 2026)
+- **Enhanced Visualizations & PDF Export:** Interactive Brazil map on dashboard with state click for electoral data summary. Dynamic charts (bar charts with error margins, composed charts for before/after comparisons) in predictions. PDF export functionality for all AI prediction types with professional TSE-styled documents.
+- **Advanced Predictive Models:** New sophisticated prediction types including Candidate Comparison (compare 2+ candidates with AI analysis), Event Impact Predictions (before/after projections for political events), and What-If Scenario Simulations (e.g., "What if candidate X changes party?"). All features include full CRUD UI with GPT-4o powered analysis and detailed insights.
+- **External Data Integration:** Real-time integration with external news sources (Google News RSS, NewsAPI) and social media trends (Twitter/X). Features article enrichment with GPT-4o AI, automatic party identification, deduplication, and persistence to sentiment_articles table. New "Dados Externos" tab in sentiment analysis displays recent articles, trending topics, and active data sources.
+- **Advanced Sentiment Analysis:** Comprehensive sentiment analysis system with multi-source data aggregation (news, blogs, forums) from Brazil, Spain, and UK. Features GPT-4o powered analysis, entity-level sentiment tracking, interactive word cloud visualization, and temporal evolution charts.
+- **AI Suggestions System:** Added GPT-4o powered suggestions for charts, reports, and insights based on electoral data analysis.
+- **Multi-Year Comparison:** API endpoint for comparing electoral data across different election years with party vote analysis.
+- **Advanced Data Segmentation:** Municipality-level filtering with detailed vote aggregation by position and party.
+- **Custom Dashboards:** Full CRUD for user-customizable dashboards with public/private visibility and saved filter configurations.
+
+## External Dependencies
+- **OpenAI:** Used for AI integrations (GPT-4o for validation and insights, `text-embedding-3-small` for semantic search).
+- **Resend:** For sending automated reports via email.
+- **PostgreSQL:** Primary database.
+- **Drizzle ORM:** Object-Relational Mapper for database interactions.
+- **Passport.js (passport-local):** Authentication strategy.
+- **Bcrypt:** Password hashing.
+- **Express.js:** Web application framework.
+- **React, Vite, TailwindCSS, shadcn/ui:** Frontend development stack.
+- **csv-parse:** Robust CSV parsing for data imports.
+- **pgvector:** PostgreSQL extension for vector similarity search.

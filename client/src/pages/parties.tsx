@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Building2, Download } from "lucide-react";
+import { Plus, Edit, Trash2, Building2, Download, Upload, FileSpreadsheet, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -23,11 +23,21 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Party, InsertParty } from "@shared/schema";
 
 export default function Parties() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingParty, setEditingParty] = useState<Party | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success: boolean;
+    message: string;
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: string[];
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -84,6 +94,51 @@ export default function Parties() {
       toast({ title: "Erro", description: "Falha ao excluir partido", variant: "destructive" });
     },
   });
+
+  const importCsvMutation = useMutation({
+    mutationFn: async (csvContent: string) => {
+      const res = await apiRequest("POST", "/api/parties/import-csv", { csvContent });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parties"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      setImportResult(data);
+      if (data.success) {
+        toast({ 
+          title: "Importação concluída", 
+          description: `${data.created} criados, ${data.updated} atualizados` 
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Erro na importação", 
+        description: error.message || "Falha ao importar CSV", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setImportResult(null);
+        importCsvMutation.mutate(content);
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
 
   function resetForm() {
     setFormData({ name: "", abbreviation: "", number: "", color: "#003366", coalition: "" });
@@ -215,7 +270,28 @@ export default function Parties() {
         }
       />
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {user?.role === "admin" && (
+          <>
+            <input
+              type="file"
+              accept=".csv"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              className="hidden"
+              data-testid="input-import-csv-file"
+            />
+            <Button
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(true)}
+              disabled={importCsvMutation.isPending}
+              data-testid="button-import-parties-csv"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {importCsvMutation.isPending ? "Importando..." : "Importar CSV"}
+            </Button>
+          </>
+        )}
         <Button
           variant="outline"
           onClick={async () => {
@@ -381,6 +457,108 @@ export default function Parties() {
             >
               Excluir
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isImportDialogOpen} onOpenChange={(open) => {
+        setIsImportDialogOpen(open);
+        if (!open) setImportResult(null);
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5" />
+              Importar Partidos via CSV
+            </DialogTitle>
+            <DialogDescription>
+              Importe partidos a partir de um arquivo CSV. Partidos existentes serão atualizados.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!importResult ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border-2 border-dashed p-6 text-center">
+                <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-sm text-muted-foreground mb-4">
+                  O arquivo CSV deve conter as colunas:<br />
+                  <span className="font-mono text-xs">Numero;Sigla;Nome;Cor;Coligacao;Ativo</span>
+                </p>
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importCsvMutation.isPending}
+                  data-testid="button-select-csv-file"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {importCsvMutation.isPending ? "Processando..." : "Selecionar Arquivo CSV"}
+                </Button>
+              </div>
+
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p><strong>Formato aceito:</strong> CSV com separador ponto e vírgula (;) ou vírgula (,)</p>
+                <p><strong>Partidos existentes:</strong> Serão atualizados com base no número ou sigla</p>
+                <p><strong>Novos partidos:</strong> Serão criados automaticamente</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className={`rounded-lg p-4 ${importResult.success ? "bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800"}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {importResult.success ? (
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  )}
+                  <span className="font-medium">{importResult.message}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="rounded-lg bg-green-100 dark:bg-green-900 p-3">
+                  <div className="text-2xl font-bold text-green-700 dark:text-green-300">{importResult.created}</div>
+                  <div className="text-xs text-green-600 dark:text-green-400">Criados</div>
+                </div>
+                <div className="rounded-lg bg-blue-100 dark:bg-blue-900 p-3">
+                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{importResult.updated}</div>
+                  <div className="text-xs text-blue-600 dark:text-blue-400">Atualizados</div>
+                </div>
+                <div className="rounded-lg bg-amber-100 dark:bg-amber-900 p-3">
+                  <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">{importResult.skipped}</div>
+                  <div className="text-xs text-amber-600 dark:text-amber-400">Ignorados</div>
+                </div>
+              </div>
+
+              {importResult.errors && importResult.errors.length > 0 && (
+                <div className="rounded-lg border p-3 max-h-32 overflow-y-auto">
+                  <p className="text-sm font-medium text-destructive mb-2">Erros encontrados:</p>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    {importResult.errors.map((err, idx) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            {importResult ? (
+              <>
+                <Button variant="outline" onClick={() => setImportResult(null)}>
+                  Importar Outro
+                </Button>
+                <Button onClick={() => {
+                  setIsImportDialogOpen(false);
+                  setImportResult(null);
+                }}>
+                  Concluir
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                Cancelar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

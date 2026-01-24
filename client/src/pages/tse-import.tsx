@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database, Link, Download, ShieldCheck, AlertTriangle, Info, StopCircle, RotateCcw, Trash2, FolderOpen, HardDrive } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, Clock, Loader2, RefreshCw, Database, Link, Download, ShieldCheck, AlertTriangle, Info, StopCircle, RotateCcw, Trash2, FolderOpen, HardDrive, Layers, Wifi, WifiOff, Play, ChevronRight, RotateCw, FileSearch } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useImportWebSocket } from "@/hooks/use-import-websocket";
 import {
   Select,
   SelectContent,
@@ -168,6 +169,18 @@ export default function TseImport() {
   });
 
   const [verifyingIntegrityJobId, setVerifyingIntegrityJobId] = useState<number | null>(null);
+  const [batchesDialogJob, setBatchesDialogJob] = useState<TseImportJob | null>(null);
+  const [reprocessingBatchId, setReprocessingBatchId] = useState<number | null>(null);
+  
+  // WebSocket for real-time updates
+  const { connected: wsConnected, lastEvent } = useImportWebSocket(true);
+  
+  // Show real-time connection status indicator
+  useEffect(() => {
+    if (lastEvent) {
+      console.log("WebSocket event:", lastEvent);
+    }
+  }, [lastEvent]);
 
   const runValidationMutation = useMutation({
     mutationFn: async (jobId: number) => {
@@ -291,6 +304,138 @@ export default function TseImport() {
     },
   });
 
+  // Mutations for historical electoral data imports
+  const [historicalImportType, setHistoricalImportType] = useState<"detalhe" | "partido">("detalhe");
+  const [historicalUrl, setHistoricalUrl] = useState("");
+  const [historicalYear, setHistoricalYear] = useState("");
+  const [historicalCargo, setHistoricalCargo] = useState("");
+
+  const detalheImportMutation = useMutation({
+    mutationFn: async (data: { url: string; electionYear?: string; cargoFilter?: string; selectedFile?: string }) => {
+      const response = await fetch("/api/imports/tse/detalhe-votacao/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Import failed");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Importação iniciada", description: "Estatísticas eleitorais estão sendo importadas." });
+      setHistoricalUrl("");
+      queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro na importação", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const partidoImportMutation = useMutation({
+    mutationFn: async (data: { url: string; electionYear?: string; cargoFilter?: string; selectedFile?: string }) => {
+      const response = await fetch("/api/imports/tse/partido/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Import failed");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Importação iniciada", description: "Votos por partido estão sendo importados." });
+      setHistoricalUrl("");
+      queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro na importação", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // File preview for selecting specific CSV file from ZIP
+  const [showFileSelector, setShowFileSelector] = useState(false);
+  const [availableFiles, setAvailableFiles] = useState<Array<{ path: string; name: string; size: number; isBrasil: boolean }>>([]);
+  const [selectedCsvFile, setSelectedCsvFile] = useState<string>("");
+  const [pendingImportData, setPendingImportData] = useState<{ url: string; electionYear?: string; cargoFilter?: string } | null>(null);
+
+  const previewFilesMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const response = await fetch("/api/imports/tse/preview-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to preview files");
+      return response.json();
+    },
+    onSuccess: (result, url) => {
+      if (result.hasBrasilFile) {
+        // Has _BRASIL file, proceed directly with import
+        const data = {
+          url,
+          electionYear: historicalYear || undefined,
+          cargoFilter: historicalCargo && historicalCargo !== "all" ? historicalCargo : undefined,
+        };
+        if (historicalImportType === "detalhe") {
+          detalheImportMutation.mutate(data);
+        } else {
+          partidoImportMutation.mutate(data);
+        }
+      } else {
+        // No _BRASIL file, show file selector
+        setAvailableFiles(result.files);
+        setPendingImportData({
+          url,
+          electionYear: historicalYear || undefined,
+          cargoFilter: historicalCargo && historicalCargo !== "all" ? historicalCargo : undefined,
+        });
+        setShowFileSelector(true);
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao verificar arquivos", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleHistoricalImport = () => {
+    if (!historicalUrl) {
+      toast({ title: "Digite uma URL", variant: "destructive" });
+      return;
+    }
+    // First preview files to check for _BRASIL
+    previewFilesMutation.mutate(historicalUrl);
+  };
+
+  const handleFileSelection = () => {
+    if (!selectedCsvFile || !pendingImportData) {
+      toast({ title: "Selecione um arquivo", variant: "destructive" });
+      return;
+    }
+    const data = { ...pendingImportData, selectedFile: selectedCsvFile };
+    if (historicalImportType === "detalhe") {
+      detalheImportMutation.mutate(data);
+    } else {
+      partidoImportMutation.mutate(data);
+    }
+    setShowFileSelector(false);
+    setSelectedCsvFile("");
+    setPendingImportData(null);
+  };
+
+  const generateHistoricalUrl = (year: string, type: "detalhe" | "partido") => {
+    if (type === "detalhe") {
+      return `https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_${year}.zip`;
+    }
+    return `https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_${year}.zip`;
+  };
+
   const [activeTab, setActiveTab] = useState<"imports" | "files">("imports");
   const [cancellingJobId, setCancellingJobId] = useState<number | null>(null);
   const [restartingJobId, setRestartingJobId] = useState<number | null>(null);
@@ -375,6 +520,75 @@ export default function TseImport() {
     onError: (error: Error) => {
       toast({ title: "Erro ao excluir arquivos", description: error.message, variant: "destructive" });
       setDeletingFilesJobId(null);
+    },
+  });
+
+  // Query for batches when viewing batch dialog
+  interface BatchData {
+    batches: Array<{
+      id: number;
+      importJobId: number;
+      batchIndex: number;
+      status: string;
+      rowStart: number;
+      rowEnd: number;
+      totalRows: number;
+      processedRows: number | null;
+      insertedRows: number | null;
+      skippedRows: number | null;
+      errorCount: number | null;
+      errorSummary: string | null;
+      startedAt: string | null;
+      completedAt: string | null;
+    }>;
+    stats: {
+      total: number;
+      completed: number;
+      failed: number;
+      pending: number;
+      processing: number;
+      totalRows: number;
+      processedRows: number;
+      errorCount: number;
+    };
+  }
+
+  const { data: batchesData, refetch: refetchBatches, isLoading: batchesLoading } = useQuery<BatchData>({
+    queryKey: ["/api/imports/tse", batchesDialogJob?.id, "batches"],
+    enabled: !!batchesDialogJob,
+  });
+
+  const reprocessBatchMutation = useMutation({
+    mutationFn: async ({ jobId, batchId }: { jobId: number; batchId: number }) => {
+      setReprocessingBatchId(batchId);
+      const response = await apiRequest("POST", `/api/imports/tse/${jobId}/batches/${batchId}/reprocess`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Reprocessamento iniciado", description: "O lote está sendo reprocessado." });
+      refetchBatches();
+      setReprocessingBatchId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro no reprocessamento", description: error.message, variant: "destructive" });
+      setReprocessingBatchId(null);
+    },
+  });
+
+  const reprocessAllFailedMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      const response = await apiRequest("POST", `/api/imports/tse/${jobId}/batches/reprocess-all-failed`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Reprocessamento em lote iniciado", 
+        description: `${data.batchCount} lotes estão sendo reprocessados.` 
+      });
+      refetchBatches();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro no reprocessamento", description: error.message, variant: "destructive" });
     },
   });
 
@@ -562,10 +776,25 @@ export default function TseImport() {
 
   return (
     <div className="p-6 space-y-6">
-      <PageHeader
-        title="Importação de Dados TSE"
-        description="Importe dados de candidatos de eleições passadas a partir dos arquivos CSV do TSE"
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Importação de Dados TSE"
+          description="Importe dados de candidatos de eleições passadas a partir dos arquivos CSV do TSE"
+        />
+        <div className="flex items-center gap-2">
+          {wsConnected ? (
+            <Badge variant="outline" className="text-green-600 border-green-600">
+              <Wifi className="h-3 w-3 mr-1" />
+              Tempo Real
+            </Badge>
+          ) : (
+            <Badge variant="secondary">
+              <WifiOff className="h-3 w-3 mr-1" />
+              Offline
+            </Badge>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -748,7 +977,184 @@ export default function TseImport() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Importar Dados Eleitorais Históricos
+            </CardTitle>
+            <CardDescription>
+              Importe estatísticas de votação e votos por partido para cálculo preciso de distribuição de vagas
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tipo de Arquivo</Label>
+              <Select value={historicalImportType} onValueChange={(v) => setHistoricalImportType(v as "detalhe" | "partido")}>
+                <SelectTrigger data-testid="select-historical-type">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="detalhe">Detalhe Votação (Totais: aptos, votos válidos, brancos, nulos)</SelectItem>
+                  <SelectItem value="partido">Votação Partido (Votos por partido/legenda)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Importação Rápida</Label>
+              <div className="flex flex-wrap gap-2">
+                {[2024, 2022, 2020, 2018, 2016].map((year) => (
+                  <Button
+                    key={year}
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setHistoricalUrl(generateHistoricalUrl(String(year), historicalImportType));
+                      setHistoricalYear(String(year));
+                    }}
+                    data-testid={`button-historical-quick-${year}`}
+                  >
+                    {year}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {historicalImportType === "detalhe" 
+                  ? "Dados de totais: eleitores aptos, comparecimento, votos válidos, brancos, nulos"
+                  : "Dados de votos: votos nominais e de legenda por partido, federações e coligações"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>URL do Arquivo</Label>
+              <Input
+                placeholder="https://cdn.tse.jus.br/estatistica/sead/odsele/..."
+                value={historicalUrl}
+                onChange={(e) => setHistoricalUrl(e.target.value)}
+                data-testid="input-historical-url"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Ano da Eleição</Label>
+                <Input
+                  placeholder="Ex: 2022"
+                  value={historicalYear}
+                  onChange={(e) => setHistoricalYear(e.target.value)}
+                  data-testid="input-historical-year"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Filtrar por Cargo</Label>
+                <Select value={historicalCargo} onValueChange={setHistoricalCargo}>
+                  <SelectTrigger data-testid="select-historical-cargo">
+                    <SelectValue placeholder="Todos os cargos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os cargos</SelectItem>
+                    <SelectItem value="13">Vereador (13)</SelectItem>
+                    <SelectItem value="11">Prefeito (11)</SelectItem>
+                    <SelectItem value="7">Deputado Federal (7)</SelectItem>
+                    <SelectItem value="8">Deputado Estadual (8)</SelectItem>
+                    <SelectItem value="5">Senador (5)</SelectItem>
+                    <SelectItem value="3">Governador (3)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleHistoricalImport}
+              disabled={!historicalUrl || detalheImportMutation.isPending || partidoImportMutation.isPending || previewFilesMutation.isPending}
+              className="w-full"
+              data-testid="button-import-historical"
+            >
+              {previewFilesMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verificando arquivos...</>
+              ) : (detalheImportMutation.isPending || partidoImportMutation.isPending) ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Iniciando...</>
+              ) : (
+                <><Download className="h-4 w-4 mr-2" />Importar Dados Históricos</>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* File Selection Dialog */}
+      {showFileSelector && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" data-testid="dialog-file-selector">
+          <Card className="w-full max-w-lg mx-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileSearch className="h-5 w-5" />
+                Selecionar Arquivo CSV
+              </CardTitle>
+              <CardDescription>
+                O arquivo consolidado _BRASIL não foi encontrado. Selecione um dos arquivos disponíveis:
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {availableFiles.map((file) => (
+                  <label 
+                    key={file.path} 
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedCsvFile === file.path ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                    }`}
+                    data-testid={`file-option-${file.name}`}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedCsvFile"
+                      value={file.path}
+                      checked={selectedCsvFile === file.path}
+                      onChange={(e) => setSelectedCsvFile(e.target.value)}
+                      className="sr-only"
+                    />
+                    <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                    {selectedCsvFile === file.path && (
+                      <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
+                    )}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowFileSelector(false);
+                    setSelectedCsvFile("");
+                    setPendingImportData(null);
+                  }}
+                  className="flex-1"
+                  data-testid="button-cancel-file-selection"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleFileSelection}
+                  disabled={!selectedCsvFile}
+                  className="flex-1"
+                  data-testid="button-confirm-file-selection"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Importar Arquivo
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-1">
         <Card>
@@ -961,6 +1367,15 @@ export default function TseImport() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setBatchesDialogJob(job)}
+                          title="Ver lotes de importação"
+                          data-testid={`button-view-batches-${job.id}`}
+                        >
+                          <Layers className="h-4 w-4 text-blue-500" />
+                        </Button>
                         {isJobInProgress(job.status) && (
                           <Button
                             variant="ghost"
@@ -1662,6 +2077,217 @@ export default function TseImport() {
                   <><ShieldCheck className="h-4 w-4 mr-2" />Executar Validação com IA</>
                 )}
               </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Batches Dialog */}
+      <Dialog open={!!batchesDialogJob} onOpenChange={(open) => !open && setBatchesDialogJob(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Lotes de Importação
+            </DialogTitle>
+            <DialogDescription>
+              {batchesDialogJob?.filename} - Histórico detalhado de processamento por lotes
+            </DialogDescription>
+          </DialogHeader>
+          
+          {batchesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : batchesData ? (
+            <div className="space-y-4">
+              {/* Stats Summary */}
+              <div className="grid grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold">{batchesData.stats.total}</div>
+                    <div className="text-sm text-muted-foreground">Total de Lotes</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-green-600">{batchesData.stats.completed}</div>
+                    <div className="text-sm text-muted-foreground">Concluídos</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-red-600">{batchesData.stats.failed}</div>
+                    <div className="text-sm text-muted-foreground">Falharam</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold">{batchesData.stats.processedRows.toLocaleString("pt-BR")}</div>
+                    <div className="text-sm text-muted-foreground">Linhas Processadas</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Reprocess All Failed Button */}
+              {batchesData.stats.failed > 0 && (
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => batchesDialogJob && reprocessAllFailedMutation.mutate(batchesDialogJob.id)}
+                    disabled={reprocessAllFailedMutation.isPending}
+                    variant="outline"
+                    data-testid="button-reprocess-all-failed"
+                  >
+                    {reprocessAllFailedMutation.isPending ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Reprocessando...</>
+                    ) : (
+                      <><RotateCw className="h-4 w-4 mr-2" />Reprocessar Todos os Lotes Falhos</>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Batches Table */}
+              {batchesData.batches.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lote</TableHead>
+                      <TableHead>Linhas</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Processadas</TableHead>
+                      <TableHead>Inseridas</TableHead>
+                      <TableHead>Erros</TableHead>
+                      <TableHead>Duração</TableHead>
+                      <TableHead>Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {batchesData.batches.map((batch) => (
+                      <TableRow key={batch.id} data-testid={`row-batch-${batch.id}`}>
+                        <TableCell className="font-medium">
+                          #{batch.batchIndex + 1}
+                        </TableCell>
+                        <TableCell>
+                          {batch.rowStart.toLocaleString("pt-BR")} - {batch.rowEnd.toLocaleString("pt-BR")}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({batch.totalRows.toLocaleString("pt-BR")})
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {batch.status === "completed" && (
+                            <Badge variant="outline" className="text-green-600 border-green-600">
+                              <CheckCircle className="h-3 w-3 mr-1" />Concluído
+                            </Badge>
+                          )}
+                          {batch.status === "failed" && (
+                            <Badge variant="destructive">
+                              <XCircle className="h-3 w-3 mr-1" />Falhou
+                            </Badge>
+                          )}
+                          {batch.status === "processing" && (
+                            <Badge variant="default">
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />Processando
+                            </Badge>
+                          )}
+                          {batch.status === "pending" && (
+                            <Badge variant="secondary">
+                              <Clock className="h-3 w-3 mr-1" />Pendente
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {(batch.processedRows ?? 0).toLocaleString("pt-BR")}
+                        </TableCell>
+                        <TableCell>
+                          {(batch.insertedRows ?? 0).toLocaleString("pt-BR")}
+                        </TableCell>
+                        <TableCell>
+                          {(batch.errorCount ?? 0) > 0 ? (
+                            <span className="text-red-600 font-medium">{batch.errorCount}</span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {batch.startedAt && batch.completedAt ? (
+                            (() => {
+                              const duration = Math.floor(
+                                (new Date(batch.completedAt).getTime() - new Date(batch.startedAt).getTime()) / 1000
+                              );
+                              return duration < 60 ? `${duration}s` : `${Math.floor(duration / 60)}m ${duration % 60}s`;
+                            })()
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {batch.status === "failed" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => batchesDialogJob && reprocessBatchMutation.mutate({ 
+                                jobId: batchesDialogJob.id, 
+                                batchId: batch.id 
+                              })}
+                              disabled={reprocessingBatchId === batch.id}
+                              title="Reprocessar lote"
+                              data-testid={`button-reprocess-batch-${batch.id}`}
+                            >
+                              {reprocessingBatchId === batch.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <><RotateCw className="h-4 w-4 mr-1" />Reprocessar</>
+                              )}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Layers className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>Nenhum lote registrado para esta importação.</p>
+                  <p className="text-sm mt-2">
+                    Os lotes são criados durante o processamento de novas importações.
+                  </p>
+                </div>
+              )}
+
+              {/* Error Summary for Failed Batches */}
+              {batchesData.batches.filter(b => b.status === "failed" && b.errorSummary).length > 0 && (
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="error-details">
+                    <AccordionTrigger className="text-sm">
+                      <span className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                        Detalhes dos Erros
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2">
+                        {batchesData.batches
+                          .filter(b => b.status === "failed" && b.errorSummary)
+                          .map((batch) => (
+                            <div key={batch.id} className="p-3 bg-muted rounded-md">
+                              <div className="font-medium mb-1">Lote #{batch.batchIndex + 1}</div>
+                              <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                {batch.errorSummary}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <AlertTriangle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>Erro ao carregar dados dos lotes.</p>
             </div>
           )}
         </DialogContent>
