@@ -37,6 +37,28 @@ df -h
 
 ## Métodos de Atualização
 
+### Atualização Rápida (Apenas Código)
+
+Use este método quando não há mudanças no banco de dados, apenas correções de código:
+
+```bash
+# 1. Acesse o servidor via SSH
+cd /opt/simulavoto
+
+# 2. Baixe as atualizações
+git fetch origin && git pull origin main
+
+# 3. Rebuild e restart
+docker compose up -d --build
+
+# 4. Verificar status
+docker compose logs -f --tail=30 simulavoto
+```
+
+O processo leva aproximadamente 2-3 minutos. A aplicação ficará offline durante o rebuild.
+
+---
+
 ### Método 1: Via SSH (Recomendado)
 
 #### 1.1 Parar Aplicação
@@ -183,23 +205,27 @@ docker exec simulavoto npm run db:push
 3. Cole e execute o conteúdo de `scripts/migration-2026-01.sql`
 4. **Se houver erros de colunas**, execute também `scripts/fix-columns-2026-01.sql`
 
-**Opção 3: Correção de colunas faltantes (IMPORTANTE!)**
+**Opção 3: Correção COMPLETA de colunas faltantes (IMPORTANTE!)**
+
 Se o banco já tem tabelas mas com estrutura diferente, você verá erros como:
 - `column "uf_nome" does not exist`
-- `column "severity" does not exist`
-- `column "type" does not exist`
+- `column "taxa_escolarizacao_6_14" does not exist`
+- `column "time_of_day" does not exist`
+- `operator does not exist: character varying = integer`
 
-Para corrigir:
-1. Execute `scripts/fix-columns-2026-01.sql` no SQL Editor do Supabase
-2. Reinicie o container: `docker compose restart simulavoto`
+**Use o script completo atualizado:**
+
+1. Acesse **SQL Editor** no Supabase Dashboard
+2. Cole e execute o conteúdo de `scripts/fix-all-columns-production.sql`
+3. Reinicie o container: `docker compose restart simulavoto`
 
 **Este script corrige:**
+- `parties`: Adiciona `notes`, `tags`, `updated_at`
+- `scenarios`: Adiciona `historical_year`, `historical_uf`, `historical_municipio`
+- `report_schedules`: Adiciona `time_of_day`, `timezone`, `is_active`, `run_count`, etc.
 - `ibge_municipios`: Adiciona `uf_nome`, `regiao_nome`, converte `codigo_ibge` para VARCHAR(7)
-- `ibge_import_jobs`: Renomeia `job_type` → `type`, `total_items` → `total_records`
-- `ibge_populacao`: Renomeia `populacao_total` → `populacao`, converte `codigo_ibge` para VARCHAR(7)
-- `in_app_notifications`: Adiciona `severity`, `type`, `metadata`, renomeia `read` → `is_read`
-- `sentiment_analysis_results`: Adiciona `analysis_date`, `sentiment_score`, `sentiment_label`
-- `sentiment_crisis_alerts`: Adiciona `alert_type`, `severity`, `title`, `description`
+- `ibge_populacao`: Adiciona `tabela_sidra`, converte `codigo_ibge` para VARCHAR(7)
+- `ibge_indicadores`: Recria tabela com estrutura completa (educação, economia, IDH, infraestrutura)
 
 **Novas tabelas incluídas:**
 - `in_app_notifications` - Notificações in-app

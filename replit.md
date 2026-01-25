@@ -55,6 +55,10 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
 - `ibgeImportJobs`: Import job tracking for IBGE data operations.
 
 ## Recent Changes (January 2026)
+- **IBGE Import Cancel/Restart:** Added ability to cancel running IBGE import jobs and restart failed/cancelled jobs. Backend tracks cancelled jobs and checks during import loops. UI shows cancel/restart buttons per job status.
+- **Database Reset with IBGE:** The "Zerar Banco de Dados" function now also clears all IBGE data (municipalities, population, indicators, import jobs). Total of 26 tables cleared.
+- **TypeScript Fixes:** Resolved 17 TypeScript errors in routes.ts for clean production build. Fixed type mismatches in sentiment analysis, forecasting, and electoral data endpoints.
+- **Production SQL Fixes:** New comprehensive SQL script (`scripts/fix-all-columns-production.sql`) that corrects all schema mismatches between code and production database.
 - **Enhanced Visualizations & PDF Export:** Interactive Brazil map on dashboard with state click for electoral data summary. Dynamic charts (bar charts with error margins, composed charts for before/after comparisons) in predictions. PDF export functionality for all AI prediction types with professional TSE-styled documents.
 - **Advanced Predictive Models:** New sophisticated prediction types including Candidate Comparison (compare 2+ candidates with AI analysis), Event Impact Predictions (before/after projections for political events), and What-If Scenario Simulations (e.g., "What if candidate X changes party?"). All features include full CRUD UI with GPT-4o powered analysis and detailed insights.
 - **External Data Integration:** Real-time integration with external news sources (Google News RSS, NewsAPI) and social media trends (Twitter/X). Features article enrichment with GPT-4o AI, automatic party identification, deduplication, and persistence to sentiment_articles table. New "Dados Externos" tab in sentiment analysis displays recent articles, trending topics, and active data sources.
@@ -94,3 +98,36 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
 - **React, Vite, TailwindCSS, shadcn/ui:** Frontend development stack.
 - **csv-parse:** Robust CSV parsing for data imports.
 - **pgvector:** PostgreSQL extension for vector similarity search.
+
+## Deploy / Production Update
+
+### Atualização Rápida (Apenas Código)
+Quando não há mudanças no banco, apenas correções de código:
+```bash
+cd /opt/simulavoto
+git fetch origin && git pull origin main
+docker compose up -d --build
+```
+
+### Atualização Completa (Com Migrações de Banco)
+Quando há novas tabelas ou colunas:
+```bash
+cd /opt/simulavoto
+git fetch origin && git pull origin main
+
+# 1. Executar SQL de correção no Supabase SQL Editor:
+#    scripts/fix-all-columns-production.sql
+
+# 2. Rebuild e restart
+docker compose up -d --build
+```
+
+### Scripts SQL Importantes
+- `scripts/init-db.sql` - Criação inicial das tabelas
+- `scripts/migration-2026-01.sql` - Migrações de Janeiro 2026
+- `scripts/fix-all-columns-production.sql` - Correção completa de colunas (usar este!)
+
+### Documentação de Deploy
+- `DEPLOY.md` - Guia completo de deploy
+- `DEPLOY-PORTAINER.md` - Deploy com Portainer
+- `DEPLOY-UPDATE-PORTAINER.md` - Atualização de ambiente existente

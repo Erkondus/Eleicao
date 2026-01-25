@@ -1,0 +1,44 @@
+| table_name      | column_name           | data_type                   |
+| --------------- | --------------------- | --------------------------- |
+| ibge_municipios | id                    | integer                     |
+| ibge_municipios | codigo_ibge           | character varying           |
+| ibge_municipios | nome                  | text                        |
+| ibge_municipios | uf                    | text                        |
+| ibge_municipios | mesorregiao           | text                        |
+| ibge_municipios | microrregiao          | text                        |
+| ibge_municipios | area_km2              | numeric                     |
+| ibge_municipios | created_at            | timestamp without time zone |
+| ibge_municipios | updated_at            | timestamp without time zone |
+| ibge_municipios | uf_nome               | text                        |
+| ibge_municipios | regiao_nome           | text                        |
+| ibge_populacao  | id                    | integer                     |
+| ibge_populacao  | municipio_id          | integer                     |
+| ibge_populacao  | codigo_ibge           | character varying           |
+| ibge_populacao  | ano                   | integer                     |
+| ibge_populacao  | populacao             | integer                     |
+| ibge_populacao  | populacao_masculina   | integer                     |
+| ibge_populacao  | populacao_feminina    | integer                     |
+| ibge_populacao  | densidade_demografica | numeric                     |
+| ibge_populacao  | fonte                 | text                        |
+| ibge_populacao  | created_at            | timestamp without time zone |
+| ibge_populacao  | tabela_sidra          | character varying           |
+| parties         | id                    | integer                     |
+| parties         | name                  | text                        |
+| parties         | abbreviation          | text                        |
+| parties         | number                | integer                     |
+| parties         | color                 | text                        |
+| parties         | coalition             | text                        |
+| parties         | active                | boolean                     |
+| parties         | created_at            | timestamp without time zone |
+| parties         | created_by            | character varying           |
+| scenarios       | id                    | integer                     |
+| scenarios       | name                  | text                        |
+| scenarios       | description           | text                        |
+| scenarios       | total_voters          | integer                     |
+| scenarios       | valid_votes           | integer                     |
+| scenarios       | available_seats       | integer                     |
+| scenarios       | position              | text                        |
+| scenarios       | status                | text                        |
+| scenarios       | created_at            | timestamp without time zone |
+| scenarios       | updated_at            | timestamp without time zone |
+| scenarios       | created_by            | character varying           |
