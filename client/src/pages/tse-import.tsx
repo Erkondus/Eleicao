@@ -670,27 +670,75 @@ export default function TseImport() {
     return `${Math.floor(elapsed / 3600)}h ${Math.floor((elapsed % 3600) / 60)}m`;
   };
 
+  const calculateProcessingSpeed = (job: TseImportJob) => {
+    if (!job.startedAt || !job.processedRows) return null;
+    const startTime = new Date(job.startedAt).getTime();
+    const now = Date.now();
+    const elapsedSeconds = (now - startTime) / 1000;
+    if (elapsedSeconds < 1) return null;
+    return Math.round(job.processedRows / elapsedSeconds);
+  };
+
+  const calculateETA = (job: TseImportJob, speed: number | null) => {
+    if (!speed || speed === 0) return null;
+    const totalRows = job.totalFileRows || job.totalRows || 0;
+    const processed = job.processedRows || 0;
+    const skipped = job.skippedRows || 0;
+    const remaining = Math.max(0, totalRows - processed - skipped);
+    if (remaining === 0) return null;
+    const seconds = Math.round(remaining / speed);
+    if (seconds < 60) return `~${seconds}s`;
+    if (seconds < 3600) return `~${Math.round(seconds / 60)}min`;
+    return `~${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}min`;
+  };
+
+  const getStageDescription = (job: TseImportJob) => {
+    const stage = job.stage || job.status;
+    switch (stage) {
+      case "pending": return "Aguardando início";
+      case "downloading": return "Baixando arquivo...";
+      case "extracting": return "Extraindo ZIP...";
+      case "counting": return "Contando registros...";
+      case "processing": return "Processando dados...";
+      case "inserting": return "Inserindo no banco...";
+      case "validating": return "Validando dados...";
+      case "running": return "Processando...";
+      default: return stage;
+    }
+  };
+
   const getProgressDisplay = (job: TseImportJob) => {
     const downloadedBytes = Number(job.downloadedBytes) || 0;
+    const speed = calculateProcessingSpeed(job);
+    const eta = calculateETA(job, speed);
     
     if (job.status === "downloading") {
       if (job.fileSize > 0) {
         const percent = Math.min(100, (downloadedBytes / job.fileSize) * 100);
+        const downloadSpeed = job.startedAt 
+          ? Math.round(downloadedBytes / ((Date.now() - new Date(job.startedAt).getTime()) / 1000))
+          : 0;
         return (
-          <div className="w-32 space-y-1">
+          <div className="w-44 space-y-1">
             <Progress value={percent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{percent.toFixed(0)}%</span>
+              <span className="font-medium">{percent.toFixed(0)}%</span>
               <span>{formatFileSize(downloadedBytes)} / {formatFileSize(job.fileSize)}</span>
             </div>
-            {job.startedAt && (
-              <p className="text-xs text-muted-foreground">{formatElapsedTime(job.startedAt)}</p>
-            )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {downloadSpeed > 0 && (
+                <span className="flex items-center gap-1">
+                  <Download className="h-3 w-3" />
+                  {formatFileSize(downloadSpeed)}/s
+                </span>
+              )}
+              {job.startedAt && <span>{formatElapsedTime(job.startedAt)}</span>}
+            </div>
           </div>
         );
       }
       return (
-        <div className="w-32 space-y-1">
+        <div className="w-44 space-y-1">
           <Progress value={0} className="h-2 animate-pulse" />
           <p className="text-xs text-muted-foreground">Iniciando download...</p>
         </div>
@@ -699,9 +747,9 @@ export default function TseImport() {
 
     if (job.status === "extracting") {
       return (
-        <div className="w-32 space-y-1">
+        <div className="w-44 space-y-1">
           <Progress value={100} className="h-2 animate-pulse" />
-          <p className="text-xs text-muted-foreground">Extraindo ZIP...</p>
+          <p className="text-xs text-muted-foreground font-medium">Extraindo ZIP...</p>
           {job.startedAt && (
             <p className="text-xs text-muted-foreground">{formatElapsedTime(job.startedAt)}</p>
           )}
@@ -711,16 +759,57 @@ export default function TseImport() {
 
     if (job.status === "running" || job.status === "processing") {
       const processed = job.processedRows || 0;
+      const skipped = job.skippedRows || 0;
+      const totalRows = job.totalFileRows || job.totalRows || 0;
+      const totalProcessed = processed + skipped;
+      const percent = totalRows > 0 ? Math.min(100, (totalProcessed / totalRows) * 100) : 0;
+      
       return (
-        <div className="w-32 space-y-1">
-          <div className="flex items-center gap-1">
-            <Loader2 className="h-3 w-3 animate-spin text-primary" />
-            <span className="text-sm font-medium">{processed.toLocaleString("pt-BR")}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">linhas processadas</p>
-          {job.startedAt && (
-            <p className="text-xs text-muted-foreground">{formatElapsedTime(job.startedAt)}</p>
+        <div className="w-44 space-y-1">
+          {totalRows > 0 ? (
+            <>
+              <Progress value={percent} className="h-2" />
+              <div className="flex justify-between text-xs">
+                <span className="font-medium text-primary">{percent.toFixed(1)}%</span>
+                <span className="text-muted-foreground">
+                  {totalProcessed.toLocaleString("pt-BR")} / {totalRows.toLocaleString("pt-BR")}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin text-primary" />
+              <span className="text-sm font-medium">{processed.toLocaleString("pt-BR")}</span>
+            </div>
           )}
+          
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            {speed && speed > 0 && (
+              <span className="flex items-center gap-0.5">
+                <Play className="h-3 w-3" />
+                {speed.toLocaleString("pt-BR")}/s
+              </span>
+            )}
+            {eta && (
+              <span className="flex items-center gap-0.5">
+                <Clock className="h-3 w-3" />
+                {eta}
+              </span>
+            )}
+          </div>
+          
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs">
+            {processed > 0 && (
+              <span className="text-green-600">{processed.toLocaleString("pt-BR")} inseridas</span>
+            )}
+            {skipped > 0 && (
+              <span className="text-amber-600">{skipped.toLocaleString("pt-BR")} ignoradas</span>
+            )}
+          </div>
+          
+          <p className="text-xs text-muted-foreground italic truncate">
+            {getStageDescription(job)}
+          </p>
         </div>
       );
     }
@@ -729,14 +818,45 @@ export default function TseImport() {
       const duration = job.startedAt && job.completedAt 
         ? Math.floor((new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime()) / 1000)
         : null;
+      const processed = job.processedRows || 0;
+      const skipped = job.skippedRows || 0;
+      const avgSpeed = duration && duration > 0 ? Math.round((processed + skipped) / duration) : null;
+      const allDuplicates = processed === 0 && skipped > 0;
+      
       return (
-        <div className="space-y-1">
-          <span className="text-sm font-medium text-green-600">
-            {(job.processedRows || 0).toLocaleString("pt-BR")} linhas
-          </span>
-          {duration !== null && (
+        <div className="w-44 space-y-1">
+          <div className="flex items-center gap-1">
+            {allDuplicates ? (
+              <>
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <span className="text-sm font-medium text-amber-600">Já importado</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-green-600">Concluído</span>
+              </>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-x-2 text-xs">
+            {processed > 0 && (
+              <span className="text-green-600">{processed.toLocaleString("pt-BR")} inseridas</span>
+            )}
+            {skipped > 0 && (
+              <span className={allDuplicates ? "text-amber-600" : "text-muted-foreground"}>
+                {skipped.toLocaleString("pt-BR")} {allDuplicates ? "duplicadas" : "ignoradas"}
+              </span>
+            )}
+          </div>
+          {job.validationMessage && (
+            <p className="text-xs text-muted-foreground italic truncate" title={job.validationMessage}>
+              {job.validationMessage.substring(0, 50)}...
+            </p>
+          )}
+          {!job.validationMessage && duration !== null && (
             <p className="text-xs text-muted-foreground">
-              em {duration < 60 ? `${duration}s` : `${Math.floor(duration / 60)}m ${duration % 60}s`}
+              {duration < 60 ? `${duration}s` : `${Math.floor(duration / 60)}m ${duration % 60}s`}
+              {avgSpeed && ` • ${avgSpeed.toLocaleString("pt-BR")}/s`}
             </p>
           )}
         </div>
@@ -744,7 +864,30 @@ export default function TseImport() {
     }
 
     if (job.status === "failed") {
-      return <span className="text-sm text-destructive">Erro</span>;
+      return (
+        <div className="w-44 space-y-1">
+          <div className="flex items-center gap-1">
+            <XCircle className="h-4 w-4 text-destructive" />
+            <span className="text-sm font-medium text-destructive">Erro</span>
+          </div>
+          {(job.processedRows || 0) > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {(job.processedRows || 0).toLocaleString("pt-BR")} processadas
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (job.status === "pending") {
+      return (
+        <div className="w-44 space-y-1">
+          <div className="flex items-center gap-1">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Aguardando</span>
+          </div>
+        </div>
+      );
     }
 
     return <span className="text-sm text-muted-foreground">-</span>;

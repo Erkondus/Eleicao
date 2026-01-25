@@ -93,8 +93,10 @@ interface IBGEImportJob {
       duration?: string;
       totalProcessed?: number;
       successRate?: string;
+      ano?: number;
     };
   } | null;
+  parameters?: { ano?: number } | null;
   startedAt: string | null;
   completedAt: string | null;
   source: string;
@@ -164,8 +166,8 @@ export default function IBGEDataPage() {
         title: "Importação iniciada",
         description: "Importando dados de municípios do IBGE...",
       });
-      refetchJobs();
-      refetchStats();
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/import-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/stats"] });
     },
     onError: (error) => {
       toast({
@@ -185,8 +187,8 @@ export default function IBGEDataPage() {
         title: "Importação iniciada",
         description: `Importando dados de população (${selectedYear})...`,
       });
-      refetchJobs();
-      refetchStats();
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/import-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/stats"] });
     },
     onError: (error) => {
       toast({
@@ -206,8 +208,8 @@ export default function IBGEDataPage() {
         title: "Importação iniciada",
         description: "Importando indicadores socioeconômicos...",
       });
-      refetchJobs();
-      refetchStats();
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/import-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/stats"] });
     },
     onError: (error) => {
       toast({
@@ -227,8 +229,8 @@ export default function IBGEDataPage() {
         title: "Importação completa iniciada",
         description: "Importando todos os dados demográficos do IBGE...",
       });
-      refetchJobs();
-      refetchStats();
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/import-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/stats"] });
     },
     onError: (error) => {
       toast({
@@ -248,8 +250,8 @@ export default function IBGEDataPage() {
         title: "Importação cancelada",
         description: "O job de importação foi cancelado com sucesso.",
       });
-      refetchJobs();
-      refetchStats();
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/import-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/stats"] });
     },
     onError: (error) => {
       toast({
@@ -269,8 +271,8 @@ export default function IBGEDataPage() {
         title: "Importação reiniciada",
         description: "O job de importação foi reiniciado com sucesso.",
       });
-      refetchJobs();
-      refetchStats();
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/import-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibge/stats"] });
     },
     onError: (error) => {
       toast({
@@ -322,54 +324,107 @@ export default function IBGEDataPage() {
   const renderProgressDetails = (job: IBGEImportJob) => {
     const progress = job.errorDetails?.progress;
     const percentage = job.totalRecords > 0 ? (job.processedRecords / job.totalRecords) * 100 : 0;
+    const successRecords = job.processedRecords - (job.failedRecords || 0);
+
+    if (job.status === "completed") {
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-600">Concluído</span>
+          </div>
+          <div className="flex flex-wrap gap-x-2 text-xs">
+            <span className="text-green-600">{formatNumber(successRecords)} importados</span>
+            {job.failedRecords > 0 && (
+              <span className="text-destructive">{formatNumber(job.failedRecords)} erros</span>
+            )}
+          </div>
+          {job.errorDetails?.summary?.duration && (
+            <p className="text-xs text-muted-foreground">
+              {job.errorDetails.summary.duration}
+              {job.errorDetails.summary.successRate && ` • ${job.errorDetails.summary.successRate}`}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (job.status === "failed") {
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <XCircle className="h-4 w-4 text-destructive" />
+            <span className="text-sm font-medium text-destructive">Erro</span>
+          </div>
+          {job.processedRecords > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {formatNumber(job.processedRecords)} processados
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (job.status === "pending") {
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Aguardando</span>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Progress value={percentage} className="flex-1" />
-          <span className="text-xs font-medium min-w-[50px] text-right">
-            {percentage.toFixed(1)}%
-          </span>
-        </div>
+        {job.totalRecords > 0 ? (
+          <>
+            <div className="flex items-center gap-2">
+              <Progress value={percentage} className="flex-1 h-2" />
+              <span className="text-xs font-medium min-w-[50px] text-right text-primary">
+                {percentage.toFixed(1)}%
+              </span>
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{formatNumber(job.processedRecords)} / {formatNumber(job.totalRecords)}</span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+            <span className="text-sm">{formatNumber(job.processedRecords)}</span>
+          </div>
+        )}
         
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <FileText className="h-3 w-3" />
-            {formatNumber(job.processedRecords)} / {formatNumber(job.totalRecords)}
-          </span>
-          
-          {job.failedRecords > 0 && (
-            <span className="flex items-center gap-1 text-destructive">
-              <AlertTriangle className="h-3 w-3" />
-              {job.failedRecords} erros
-            </span>
-          )}
-          
-          {progress?.recordsPerSecond && job.status === "running" && (
-            <span className="flex items-center gap-1">
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+          {progress?.recordsPerSecond && (
+            <span className="flex items-center gap-0.5">
               <Gauge className="h-3 w-3" />
               {progress.recordsPerSecond}/s
             </span>
           )}
           
-          {progress?.estimatedTimeRemaining && job.status === "running" && (
-            <span className="flex items-center gap-1">
+          {progress?.estimatedTimeRemaining && (
+            <span className="flex items-center gap-0.5">
               <Timer className="h-3 w-3" />
               ~{progress.estimatedTimeRemaining}
             </span>
           )}
         </div>
 
-        {progress?.phaseDescription && job.status === "running" && (
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs">
+          {successRecords > 0 && (
+            <span className="text-green-600">{formatNumber(successRecords)} importados</span>
+          )}
+          {job.failedRecords > 0 && (
+            <span className="text-destructive">{formatNumber(job.failedRecords)} erros</span>
+          )}
+        </div>
+
+        {progress?.phaseDescription && (
           <p className="text-xs text-muted-foreground italic truncate">
             {progress.phaseDescription}
-          </p>
-        )}
-
-        {job.errorDetails?.summary?.duration && job.status === "completed" && (
-          <p className="text-xs text-muted-foreground">
-            Concluído em {job.errorDetails.summary.duration}
-            {job.errorDetails.summary.successRate && ` • ${job.errorDetails.summary.successRate} sucesso`}
           </p>
         )}
       </div>
@@ -686,12 +741,15 @@ export default function IBGEDataPage() {
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-3">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-wrap">
                               <Badge variant="outline" className="font-mono">
                                 #{job.id}
                               </Badge>
                               <Badge variant="secondary">
                                 {getJobTypeName(job.type)}
+                                {(job.type === "populacao" || job.type === "all") && job.parameters?.ano && (
+                                  <span className="ml-1">({job.parameters.ano})</span>
+                                )}
                               </Badge>
                               {getStatusBadge(job.status)}
                             </div>

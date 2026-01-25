@@ -4203,7 +4203,9 @@ Analise o impacto dessa mudança hipotética e forneça:
       
       const records: any[] = [];
       let rowCount = 0;
-      let filteredCount = 0;
+      let cargoFilteredCount = 0;  // Rows filtered by cargo
+      let duplicateCount = 0;       // Rows that already exist in DB
+      let insertedCount = 0;        // Actually inserted rows
       let errorCount = 0;
       const BATCH_SIZE = 1000;
 
@@ -4250,6 +4252,13 @@ Analise o impacto dessa mudança hipotética e forneça:
 
       console.log(`[DETALHE] Parsed ${allRows.length} rows, processing in batches...`);
       
+      // Set totalFileRows for progress calculation
+      await storage.updateTseImportJob(jobId, { 
+        totalFileRows: allRows.length,
+        stage: "processing",
+        updatedAt: new Date()
+      });
+      
       // Process rows in batches
       for (let i = 0; i < allRows.length; i++) {
         const row = allRows[i];
@@ -4257,7 +4266,7 @@ Analise o impacto dessa mudança hipotética e forneça:
         
         const cdCargo = parseValue(row[16], true);
         if (cargoFilter && cdCargo !== cargoFilter) {
-          filteredCount++;
+          cargoFilteredCount++;
           continue;
         }
 
@@ -4274,14 +4283,22 @@ Analise o impacto dessa mudança hipotética e forneça:
         if (records.length >= BATCH_SIZE) {
           try {
             const batch = records.splice(0, BATCH_SIZE);
-            const inserted = await storage.insertTseElectoralStatisticsBatch(batch);
-            const duplicates = batch.length - inserted;
-            filteredCount += duplicates;
+            const batchInserted = await storage.insertTseElectoralStatisticsBatch(batch);
+            const batchDuplicates = batch.length - batchInserted;
+            insertedCount += batchInserted;
+            duplicateCount += batchDuplicates;
+            
+            const totalSkipped = cargoFilteredCount + duplicateCount;
             await storage.updateTseImportJob(jobId, { 
-              processedRows: rowCount - filteredCount,
-              skippedRows: filteredCount,
+              processedRows: insertedCount,
+              skippedRows: totalSkipped,
               updatedAt: new Date()
             });
+            
+            // Log progress every 10 batches
+            if (rowCount % 10000 === 0) {
+              console.log(`[DETALHE] Progress: ${rowCount}/${allRows.length} rows, ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} cargo-filtered`);
+            }
           } catch (err) {
             console.error(`[DETALHE] Batch insert error:`, err);
             errorCount++;
@@ -4292,25 +4309,36 @@ Analise o impacto dessa mudança hipotética e forneça:
       // Insert remaining records
       if (records.length > 0) {
         try {
-          const inserted = await storage.insertTseElectoralStatisticsBatch(records);
-          const duplicates = records.length - inserted;
-          filteredCount += duplicates;
-          console.log(`[DETALHE] Final batch: ${inserted} inserted, ${duplicates} skipped`);
+          const batchInserted = await storage.insertTseElectoralStatisticsBatch(records);
+          const batchDuplicates = records.length - batchInserted;
+          insertedCount += batchInserted;
+          duplicateCount += batchDuplicates;
+          console.log(`[DETALHE] Final batch: ${batchInserted} inserted, ${batchDuplicates} duplicates`);
         } catch (err) {
           console.error(`[DETALHE] Final batch insert error:`, err);
           errorCount++;
         }
       }
 
+      const totalSkipped = cargoFilteredCount + duplicateCount;
+      const validationMessage = insertedCount === 0 && duplicateCount > 0
+        ? `Dados já importados: ${duplicateCount.toLocaleString("pt-BR")} registros duplicados encontrados`
+        : insertedCount > 0
+          ? `Importação concluída: ${insertedCount.toLocaleString("pt-BR")} inseridos, ${duplicateCount.toLocaleString("pt-BR")} duplicados`
+          : null;
+
+      console.log(`[DETALHE] Completed: ${rowCount} total, ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} cargo-filtered, ${errorCount} errors`);
+
       await storage.updateTseImportJob(jobId, {
         status: "completed",
         stage: "completed",
         totalRows: rowCount,
-        processedRows: rowCount - filteredCount,
-        skippedRows: filteredCount,
+        processedRows: insertedCount,
+        skippedRows: totalSkipped,
         errorCount,
         completedAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        validationMessage: validationMessage,
       });
 
       await unlink(zipPath).catch(() => {});
@@ -4404,7 +4432,9 @@ Analise o impacto dessa mudança hipotética e forneça:
       
       const records: any[] = [];
       let rowCount = 0;
-      let filteredCount = 0;
+      let cargoFilteredCount = 0;  // Rows filtered by cargo
+      let duplicateCount = 0;       // Rows that already exist in DB
+      let insertedCount = 0;        // Actually inserted rows
       let errorCount = 0;
       const BATCH_SIZE = 1000;
 
@@ -4447,6 +4477,13 @@ Analise o impacto dessa mudança hipotética e forneça:
 
       console.log(`[PARTIDO] Parsed ${allRows.length} rows, processing in batches...`);
       
+      // Set totalFileRows for progress calculation
+      await storage.updateTseImportJob(jobId, { 
+        totalFileRows: allRows.length,
+        stage: "processing",
+        updatedAt: new Date()
+      });
+      
       // Process rows in batches
       for (let i = 0; i < allRows.length; i++) {
         const row = allRows[i];
@@ -4454,7 +4491,7 @@ Analise o impacto dessa mudança hipotética e forneça:
         
         const cdCargo = parseValue(row[16], true);
         if (cargoFilter && cdCargo !== cargoFilter) {
-          filteredCount++;
+          cargoFilteredCount++;
           continue;
         }
 
@@ -4471,14 +4508,22 @@ Analise o impacto dessa mudança hipotética e forneça:
         if (records.length >= BATCH_SIZE) {
           try {
             const batch = records.splice(0, BATCH_SIZE);
-            const inserted = await storage.insertTsePartyVotesBatch(batch);
-            const duplicates = batch.length - inserted;
-            filteredCount += duplicates;
+            const batchInserted = await storage.insertTsePartyVotesBatch(batch);
+            const batchDuplicates = batch.length - batchInserted;
+            insertedCount += batchInserted;
+            duplicateCount += batchDuplicates;
+            
+            const totalSkipped = cargoFilteredCount + duplicateCount;
             await storage.updateTseImportJob(jobId, { 
-              processedRows: rowCount - filteredCount,
-              skippedRows: filteredCount,
+              processedRows: insertedCount,
+              skippedRows: totalSkipped,
               updatedAt: new Date()
             });
+            
+            // Log progress every 10 batches
+            if (rowCount % 10000 === 0) {
+              console.log(`[PARTIDO] Progress: ${rowCount}/${allRows.length} rows, ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} cargo-filtered`);
+            }
           } catch (err) {
             console.error(`[PARTIDO] Batch insert error:`, err);
             errorCount++;
@@ -4489,10 +4534,11 @@ Analise o impacto dessa mudança hipotética e forneça:
       // Insert remaining records
       if (records.length > 0) {
         try {
-          const inserted = await storage.insertTsePartyVotesBatch(records);
-          const duplicates = records.length - inserted;
-          filteredCount += duplicates;
-          console.log(`[PARTIDO] Final batch: ${inserted} inserted, ${duplicates} skipped`);
+          const batchInserted = await storage.insertTsePartyVotesBatch(records);
+          const batchDuplicates = records.length - batchInserted;
+          insertedCount += batchInserted;
+          duplicateCount += batchDuplicates;
+          console.log(`[PARTIDO] Final batch: ${batchInserted} inserted, ${batchDuplicates} duplicates`);
         } catch (err) {
           console.error(`[PARTIDO] Final batch insert error:`, err);
           errorCount++;
@@ -4503,10 +4549,20 @@ Analise o impacto dessa mudança hipotética e forneça:
       const partiesResult = await storage.syncPartiesFromTseImport(jobId);
       console.log(`TSE Import ${jobId} [PARTIDO]: Synced parties - ${partiesResult.created} created, ${partiesResult.updated} updated, ${partiesResult.existing} existing`);
 
+      const totalSkipped = cargoFilteredCount + duplicateCount;
+      const validationMessage = insertedCount === 0 && duplicateCount > 0
+        ? `Dados já importados: ${duplicateCount.toLocaleString("pt-BR")} registros duplicados encontrados`
+        : insertedCount > 0
+          ? `Importação concluída: ${insertedCount.toLocaleString("pt-BR")} inseridos, ${duplicateCount.toLocaleString("pt-BR")} duplicados`
+          : null;
+
+      console.log(`[PARTIDO] Completed: ${rowCount} total, ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} cargo-filtered, ${errorCount} errors`);
+
       await storage.updateTseImportJob(jobId, {
         status: "completed", stage: "completed", totalRows: rowCount,
-        processedRows: rowCount - filteredCount, skippedRows: filteredCount,
-        errorCount, completedAt: new Date(), updatedAt: new Date()
+        processedRows: insertedCount, skippedRows: totalSkipped,
+        errorCount, completedAt: new Date(), updatedAt: new Date(),
+        validationMessage: validationMessage,
       });
 
       await unlink(zipPath).catch(() => {});
