@@ -63,6 +63,10 @@ import {
   articleEntityMentions,
   alertConfigurations,
   inAppNotifications,
+  ibgeMunicipios,
+  ibgePopulacao,
+  ibgeIndicadores,
+  ibgeImportJobs,
 } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import OpenAI from "openai";
@@ -5839,6 +5843,12 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
       await db.delete(candidates);
       await db.delete(parties);
 
+      // Delete IBGE data tables
+      await db.delete(ibgeImportJobs);
+      await db.delete(ibgePopulacao);
+      await db.delete(ibgeIndicadores);
+      await db.delete(ibgeMunicipios);
+
       // Delete users except the current admin if preserveAdmin is true
       if (preserveAdmin && currentAdminId) {
         await db.delete(users).where(sql`${users.id} != ${currentAdminId}`);
@@ -5850,7 +5860,7 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
       await logAudit(req, "reset_database_completed", "system", "all", { 
         preserveAdmin,
         adminPreserved: preserveAdmin && !!currentAdminId,
-        tablesCleared: 22,
+        tablesCleared: 26,
         completedAt: new Date().toISOString()
       });
 
@@ -5858,7 +5868,7 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
         success: true, 
         message: "Banco de dados zerado com sucesso",
         details: {
-          tablesCleared: 22,
+          tablesCleared: 26,
           adminPreserved: preserveAdmin && !!currentAdminId,
           completedAt: new Date().toISOString()
         }
@@ -7185,6 +7195,64 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
     } catch (error) {
       console.error("Error fetching demographic data:", error);
       res.status(500).json({ error: "Failed to fetch demographic data" });
+    }
+  });
+
+  // Cancel IBGE import job
+  app.post("/api/ibge/import/:jobId/cancel", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      await ibgeService.cancelJob(jobId);
+      await logAudit(req, "IBGE_IMPORT_CANCEL", "ibge_import_jobs", jobId.toString(), {});
+      res.json({ success: true, message: "Job cancelado com sucesso" });
+    } catch (error) {
+      console.error("Error cancelling IBGE import job:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to cancel job" });
+    }
+  });
+
+  // Restart IBGE import job
+  app.post("/api/ibge/import/:jobId/restart", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const oldJobId = parseInt(req.params.jobId);
+      const userId = req.user?.id;
+      
+      const originalJob = await ibgeService.getJob(oldJobId);
+      if (!originalJob) {
+        return res.status(404).json({ error: "Job não encontrado" });
+      }
+
+      const newJobId = await ibgeService.restartJob(oldJobId, userId);
+      await logAudit(req, "IBGE_IMPORT_RESTART", "ibge_import_jobs", newJobId.toString(), { originalJobId: oldJobId });
+
+      // Start the import in the background
+      (async () => {
+        try {
+          const type = originalJob.type;
+          const params = originalJob.parameters || {};
+
+          if (type === "municipios") {
+            await ibgeService.importMunicipios(newJobId, userId);
+          } else if (type === "populacao") {
+            await ibgeService.importPopulacao(newJobId, params.ano);
+          } else if (type === "indicadores") {
+            await ibgeService.importIndicadores(newJobId);
+          } else if (type === "all") {
+            await ibgeService.importMunicipios(newJobId, userId);
+            const popJobId = await ibgeService.createImportJob("populacao", userId, { ano: params.ano || 2024 });
+            await ibgeService.importPopulacao(popJobId, params.ano || 2024);
+            const indJobId = await ibgeService.createImportJob("indicadores", userId, {});
+            await ibgeService.importIndicadores(indJobId);
+          }
+        } catch (err) {
+          console.error("Error restarting IBGE import:", err);
+        }
+      })();
+
+      res.json({ success: true, newJobId, message: "Importação reiniciada" });
+    } catch (error) {
+      console.error("Error restarting IBGE import job:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to restart job" });
     }
   });
 

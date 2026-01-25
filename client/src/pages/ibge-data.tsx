@@ -33,6 +33,9 @@ import {
   BarChart3,
   Calendar,
   Search,
+  StopCircle,
+  RotateCcw,
+  Ban,
 } from "lucide-react";
 
 interface IBGEStats {
@@ -169,6 +172,48 @@ export default function IBGEDataPage() {
     },
   });
 
+  const cancelJobMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      return apiRequest("POST", `/api/ibge/import/${jobId}/cancel`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Importação cancelada",
+        description: "O job de importação foi cancelado com sucesso.",
+      });
+      refetchJobs();
+      refetchStats();
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Falha ao cancelar importação",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const restartJobMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      return apiRequest("POST", `/api/ibge/import/${jobId}/restart`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Importação reiniciada",
+        description: "O job de importação foi reiniciado com sucesso.",
+      });
+      refetchJobs();
+      refetchStats();
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Falha ao reiniciar importação",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat("pt-BR").format(num);
   };
@@ -188,6 +233,8 @@ export default function IBGEDataPage() {
         return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Falhou</Badge>;
       case "pending":
         return <Badge variant="outline"><Clock className="h-3 w-3 mr-1" /> Pendente</Badge>;
+      case "cancelled":
+        return <Badge variant="outline" className="border-orange-500 text-orange-500"><Ban className="h-3 w-3 mr-1" /> Cancelado</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -507,6 +554,7 @@ export default function IBGEDataPage() {
                       <TableHead>Progresso</TableHead>
                       <TableHead>Iniciado</TableHead>
                       <TableHead>Concluído</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -538,6 +586,46 @@ export default function IBGEDataPage() {
                         </TableCell>
                         <TableCell className="text-sm">{formatDate(job.startedAt)}</TableCell>
                         <TableCell className="text-sm">{formatDate(job.completedAt)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            {(job.status === "running" || job.status === "pending") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => cancelJobMutation.mutate(job.id)}
+                                disabled={cancelJobMutation.isPending}
+                                data-testid={`button-cancel-job-${job.id}`}
+                                className="text-orange-600 hover:text-orange-700 border-orange-300"
+                              >
+                                {cancelJobMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <StopCircle className="h-4 w-4" />
+                                )}
+                                <span className="ml-1 hidden sm:inline">Cancelar</span>
+                              </Button>
+                            )}
+                            {(job.status === "failed" || job.status === "cancelled") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => restartJobMutation.mutate(job.id)}
+                                disabled={restartJobMutation.isPending || hasActiveImport}
+                                data-testid={`button-restart-job-${job.id}`}
+                              >
+                                {restartJobMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="h-4 w-4" />
+                                )}
+                                <span className="ml-1 hidden sm:inline">Reiniciar</span>
+                              </Button>
+                            )}
+                            {job.status === "completed" && (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -44,6 +44,7 @@ interface LocalidadeMunicipio {
 
 export class IBGEService {
   private static instance: IBGEService;
+  private cancelledJobs: Set<number> = new Set();
 
   private constructor() {}
 
@@ -52,6 +53,59 @@ export class IBGEService {
       IBGEService.instance = new IBGEService();
     }
     return IBGEService.instance;
+  }
+
+  isJobCancelled(jobId: number): boolean {
+    return this.cancelledJobs.has(jobId);
+  }
+
+  async cancelJob(jobId: number): Promise<boolean> {
+    const [job] = await db.select().from(ibgeImportJobs).where(eq(ibgeImportJobs.id, jobId)).limit(1);
+    
+    if (!job) {
+      throw new Error("Job não encontrado");
+    }
+
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      throw new Error("Job já finalizado, não pode ser cancelado");
+    }
+
+    this.cancelledJobs.add(jobId);
+
+    await db.update(ibgeImportJobs)
+      .set({ 
+        status: "cancelled", 
+        completedAt: new Date(),
+        errorMessage: "Cancelado pelo usuário"
+      })
+      .where(eq(ibgeImportJobs.id, jobId));
+
+    return true;
+  }
+
+  async restartJob(jobId: number, userId?: string): Promise<number> {
+    const [originalJob] = await db.select().from(ibgeImportJobs).where(eq(ibgeImportJobs.id, jobId)).limit(1);
+    
+    if (!originalJob) {
+      throw new Error("Job não encontrado");
+    }
+
+    // Remove from cancelled set if it was there
+    this.cancelledJobs.delete(jobId);
+
+    // Create a new job with the same type and parameters
+    const newJobId = await this.createImportJob(
+      originalJob.type,
+      userId,
+      originalJob.parameters
+    );
+
+    return newJobId;
+  }
+
+  async getJob(jobId: number): Promise<any> {
+    const [job] = await db.select().from(ibgeImportJobs).where(eq(ibgeImportJobs.id, jobId)).limit(1);
+    return job || null;
   }
 
   async fetchMunicipios(): Promise<LocalidadeMunicipio[]> {
@@ -105,6 +159,21 @@ export class IBGEService {
         const batch = municipios.slice(i, i + batchSize);
         
         for (const mun of batch) {
+          // Check if job was cancelled
+          if (this.isJobCancelled(jobId)) {
+            await db.update(ibgeImportJobs)
+              .set({ 
+                status: "cancelled", 
+                completedAt: new Date(),
+                processedRecords: imported,
+                failedRecords: errors,
+                errorMessage: "Cancelado pelo usuário"
+              })
+              .where(eq(ibgeImportJobs.id, jobId));
+            this.cancelledJobs.delete(jobId);
+            return { imported, errors };
+          }
+
           try {
             const codigoIbge = mun.id.toString().padStart(7, '0');
             
@@ -199,6 +268,21 @@ export class IBGEService {
         const batch = populationData.slice(i, i + batchSize);
         
         for (const record of batch) {
+          // Check if job was cancelled
+          if (this.isJobCancelled(jobId)) {
+            await db.update(ibgeImportJobs)
+              .set({ 
+                status: "cancelled", 
+                completedAt: new Date(),
+                processedRecords: imported,
+                failedRecords: errors,
+                errorMessage: "Cancelado pelo usuário"
+              })
+              .where(eq(ibgeImportJobs.id, jobId));
+            this.cancelledJobs.delete(jobId);
+            return { imported, errors };
+          }
+
           try {
             const codigoIbge = record.D1C?.padStart(7, '0');
             if (!codigoIbge) continue;
@@ -333,6 +417,21 @@ export class IBGEService {
         const batch = municipios.slice(i, i + batchSize);
         
         for (const mun of batch) {
+          // Check if job was cancelled
+          if (this.isJobCancelled(jobId)) {
+            await db.update(ibgeImportJobs)
+              .set({ 
+                status: "cancelled", 
+                completedAt: new Date(),
+                processedRecords: imported,
+                failedRecords: errors,
+                errorMessage: "Cancelado pelo usuário"
+              })
+              .where(eq(ibgeImportJobs.id, jobId));
+            this.cancelledJobs.delete(jobId);
+            return { imported, errors };
+          }
+
           try {
             const existing = await db.select()
               .from(ibgeIndicadores)
@@ -353,21 +452,20 @@ export class IBGEService {
 
             if (existing.length === 0) {
               await db.insert(ibgeIndicadores).values({
-                municipioId: mun.id,
                 codigoIbge: mun.codigoIbge,
                 ano,
-                idhm,
-                rendaMediaDomiciliar,
-                taxaAlfabetizacao,
+                idhm: idhm.toString(),
+                rendaMediaDomiciliar: rendaMediaDomiciliar.toString(),
+                taxaAlfabetizacao: taxaAlfabetizacao.toString(),
                 fonte: "IBGE/SIDRA",
               });
             } else {
               // Update existing with values
               await db.update(ibgeIndicadores)
                 .set({
-                  idhm,
-                  rendaMediaDomiciliar,
-                  taxaAlfabetizacao,
+                  idhm: idhm.toString(),
+                  rendaMediaDomiciliar: rendaMediaDomiciliar.toString(),
+                  taxaAlfabetizacao: taxaAlfabetizacao.toString(),
                   fonte: "IBGE/SIDRA",
                 })
                 .where(eq(ibgeIndicadores.id, existing[0].id));
