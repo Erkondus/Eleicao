@@ -3,7 +3,7 @@ import {
   ibgeMunicipios, ibgePopulacao, ibgeIndicadores, ibgeImportJobs,
   InsertIbgeMunicipio, InsertIbgePopulacao, InsertIbgeIndicador, InsertIbgeImportJob
 } from "@shared/schema";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, or } from "drizzle-orm";
 
 const IBGE_LOCALIDADES_API = "https://servicodados.ibge.gov.br/api/v1/localidades";
 const IBGE_SIDRA_API = "https://apisidra.ibge.gov.br/values";
@@ -911,7 +911,7 @@ export class IBGEService {
     };
   }
 
-  async getDemographicDataForPrediction(codigoIbge?: string, uf?: string): Promise<{
+  async getDemographicDataForPrediction(codigoIbge?: string, uf?: string, search?: string): Promise<{
     municipios: any[];
     aggregatedData: {
       totalPopulacao: number;
@@ -933,13 +933,30 @@ export class IBGEService {
       eq(ibgePopulacao.ano, sql`(SELECT MAX(ano) FROM ibge_populacao WHERE codigo_ibge = ${ibgeMunicipios.codigoIbge})`)
     ));
 
+    // Apply filters
+    const conditions: any[] = [];
+    
     if (codigoIbge) {
-      municipiosQuery = municipiosQuery.where(eq(ibgeMunicipios.codigoIbge, codigoIbge)) as any;
-    } else if (uf) {
-      municipiosQuery = municipiosQuery.where(eq(ibgeMunicipios.uf, uf)) as any;
+      conditions.push(eq(ibgeMunicipios.codigoIbge, codigoIbge));
+    }
+    if (uf) {
+      conditions.push(eq(ibgeMunicipios.uf, uf));
+    }
+    if (search && search.trim()) {
+      const searchLower = search.trim().toLowerCase();
+      conditions.push(
+        or(
+          sql`LOWER(${ibgeMunicipios.nome}) LIKE ${`%${searchLower}%`}`,
+          sql`${ibgeMunicipios.codigoIbge} LIKE ${`%${search.trim()}%`}`
+        )
+      );
+    }
+    
+    if (conditions.length > 0) {
+      municipiosQuery = municipiosQuery.where(and(...conditions)) as any;
     }
 
-    const municipios = await municipiosQuery.limit(100);
+    const municipios = await municipiosQuery.orderBy(ibgeMunicipios.nome).limit(100);
 
     const [aggregated] = await db.select({
       totalPopulacao: sql<number>`COALESCE(SUM(${ibgePopulacao.populacao}), 0)::bigint`,
@@ -981,6 +998,84 @@ export class IBGEService {
       .returning({ id: ibgeImportJobs.id });
     
     return job.id;
+  }
+
+  async updateJobProgress(jobId: number, progress: { status?: string; phase?: string; phaseDescription?: string; totalRecords?: number; processedRecords?: number }): Promise<void> {
+    const [job] = await db.select().from(ibgeImportJobs).where(eq(ibgeImportJobs.id, jobId)).limit(1);
+    if (!job) return;
+    
+    const currentDetails = (job.errorDetails as any) || {};
+    const updates: any = {
+      errorDetails: {
+        ...currentDetails,
+        progress: {
+          ...(currentDetails.progress || {}),
+          phase: progress.phase || currentDetails.progress?.phase,
+          phaseDescription: progress.phaseDescription || currentDetails.progress?.phaseDescription,
+        }
+      }
+    };
+    
+    if (progress.status) {
+      updates.status = progress.status;
+      if (progress.status === "running" && !job.startedAt) {
+        updates.startedAt = new Date();
+      }
+    }
+    if (progress.totalRecords !== undefined) {
+      updates.totalRecords = progress.totalRecords;
+    }
+    if (progress.processedRecords !== undefined) {
+      updates.processedRecords = progress.processedRecords;
+    }
+    
+    await db.update(ibgeImportJobs).set(updates).where(eq(ibgeImportJobs.id, jobId));
+  }
+
+  async completeJob(jobId: number, totalImported: number, totalErrors: number, extraDetails?: any): Promise<void> {
+    const [job] = await db.select().from(ibgeImportJobs).where(eq(ibgeImportJobs.id, jobId)).limit(1);
+    if (!job) return;
+    
+    const currentDetails = (job.errorDetails as any) || {};
+    
+    await db.update(ibgeImportJobs)
+      .set({
+        status: "completed",
+        completedAt: new Date(),
+        processedRecords: totalImported,
+        failedRecords: totalErrors,
+        errorDetails: {
+          ...currentDetails,
+          ...extraDetails,
+          progress: {
+            phase: "completed",
+            phaseDescription: `Importação concluída em ${extraDetails?.summary?.duration || "?"}`,
+          }
+        }
+      })
+      .where(eq(ibgeImportJobs.id, jobId));
+  }
+
+  async failJob(jobId: number, errorMessage: string): Promise<void> {
+    const [job] = await db.select().from(ibgeImportJobs).where(eq(ibgeImportJobs.id, jobId)).limit(1);
+    if (!job) return;
+    
+    const currentDetails = (job.errorDetails as any) || {};
+    
+    await db.update(ibgeImportJobs)
+      .set({
+        status: "failed",
+        completedAt: new Date(),
+        errorMessage,
+        errorDetails: {
+          ...currentDetails,
+          progress: {
+            phase: "failed",
+            phaseDescription: errorMessage,
+          }
+        }
+      })
+      .where(eq(ibgeImportJobs.id, jobId));
   }
 }
 

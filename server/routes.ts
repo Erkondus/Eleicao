@@ -7149,20 +7149,62 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
 
       // Run imports sequentially in background
       (async () => {
+        let totalImported = 0;
+        let totalErrors = 0;
+        const startTime = Date.now();
+        
         try {
+          // Update parent job as running
+          await ibgeService.updateJobProgress(jobId, {
+            status: "running",
+            phase: "import",
+            phaseDescription: "Importando municípios..."
+          });
+          
           // First import municipios
           const munJobId = await ibgeService.createImportJob("municipios", userId, {});
-          await ibgeService.importMunicipios(munJobId, userId);
+          const munResult = await ibgeService.importMunicipios(munJobId, userId);
+          totalImported += munResult.imported;
+          totalErrors += munResult.errors;
+          
+          // Update parent progress
+          await ibgeService.updateJobProgress(jobId, {
+            phase: "import",
+            phaseDescription: "Importando população..."
+          });
           
           // Then import population
           const popJobId = await ibgeService.createImportJob("populacao", userId, { ano });
-          await ibgeService.importPopulacao(popJobId, ano);
+          const popResult = await ibgeService.importPopulacao(popJobId, ano);
+          totalImported += popResult.imported;
+          totalErrors += popResult.errors;
+
+          // Update parent progress
+          await ibgeService.updateJobProgress(jobId, {
+            phase: "import",
+            phaseDescription: "Gerando indicadores..."
+          });
 
           // Finally import indicators
           const indJobId = await ibgeService.createImportJob("indicadores", userId, {});
-          await ibgeService.importIndicadores(indJobId);
+          const indResult = await ibgeService.importIndicadores(indJobId);
+          totalImported += indResult.imported;
+          totalErrors += indResult.errors;
+          
+          // Mark parent job as completed
+          const duration = Math.round((Date.now() - startTime) / 1000);
+          await ibgeService.completeJob(jobId, totalImported, totalErrors, {
+            summary: {
+              totalProcessed: totalImported,
+              totalErrors,
+              duration: `${duration}s`,
+              successRate: totalImported > 0 ? `${((totalImported / (totalImported + totalErrors)) * 100).toFixed(1)}%` : "0%"
+            }
+          });
+          
         } catch (err) {
           console.error("Error in full IBGE import:", err);
+          await ibgeService.failJob(jobId, err instanceof Error ? err.message : "Erro na importação completa");
         }
       })();
     } catch (error) {
@@ -7191,10 +7233,11 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
   // Get demographic data for AI predictions
   app.get("/api/ibge/demographic-data", requireAuth, async (req, res) => {
     try {
-      const { codigoIbge, uf } = req.query;
+      const { codigoIbge, uf, search } = req.query;
       const data = await ibgeService.getDemographicDataForPrediction(
         codigoIbge as string,
-        uf as string
+        uf as string,
+        search as string
       );
       res.json(data);
     } catch (error) {

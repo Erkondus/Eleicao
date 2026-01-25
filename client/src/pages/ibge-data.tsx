@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,7 +128,17 @@ export default function IBGEDataPage() {
     refetchInterval: 3000,
   });
 
-  const { data: demographicData } = useQuery<{
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  
+  // Debounce search to avoid too many API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const { data: demographicData, isLoading: demographicLoading } = useQuery<{
     municipios: any[];
     aggregatedData: {
       totalPopulacao: number;
@@ -137,7 +147,7 @@ export default function IBGEDataPage() {
       avgTaxaAlfabetizacao: number | null;
     };
   }>({
-    queryKey: ["/api/ibge/demographic-data"],
+    queryKey: ["/api/ibge/demographic-data", { search: debouncedSearch }],
   });
 
   const { data: errorReport, isLoading: errorReportLoading } = useQuery<ErrorReport>({
@@ -785,7 +795,12 @@ export default function IBGEDataPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {demographicData?.municipios && demographicData.municipios.length > 0 ? (
+              {demographicLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-muted-foreground">Buscando...</span>
+                </div>
+              ) : demographicData?.municipios && demographicData.municipios.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -797,24 +812,17 @@ export default function IBGEDataPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {demographicData.municipios
-                      .filter(m => 
-                        !searchTerm || 
-                        m.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        m.codigoIbge?.includes(searchTerm)
-                      )
-                      .slice(0, 20)
-                      .map((mun) => (
-                        <TableRow key={mun.codigoIbge}>
-                          <TableCell className="font-mono">{mun.codigoIbge}</TableCell>
-                          <TableCell className="font-medium">{mun.nome}</TableCell>
-                          <TableCell>{mun.uf}</TableCell>
-                          <TableCell>
-                            {mun.populacao ? formatNumber(mun.populacao) : "—"}
-                          </TableCell>
-                          <TableCell>{mun.ano || "—"}</TableCell>
-                        </TableRow>
-                      ))}
+                    {demographicData.municipios.map((mun) => (
+                      <TableRow key={mun.codigoIbge}>
+                        <TableCell className="font-mono">{mun.codigoIbge}</TableCell>
+                        <TableCell className="font-medium">{mun.nome}</TableCell>
+                        <TableCell>{mun.uf}</TableCell>
+                        <TableCell>
+                          {mun.populacao ? formatNumber(mun.populacao) : "—"}
+                        </TableCell>
+                        <TableCell>{mun.ano || "—"}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               ) : (
