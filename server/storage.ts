@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, or, ilike, asc } from "drizzle-orm";
 import { SQL } from "drizzle-orm";
 import {
   type User, type InsertUser, users,
@@ -38,9 +38,50 @@ import {
   type SentimentArticle, type InsertSentimentArticle, sentimentArticles,
   type SentimentAnalysisResult, type InsertSentimentAnalysisResult, sentimentAnalysisResults,
   type SentimentKeyword, type InsertSentimentKeyword, sentimentKeywords,
+  type Campaign, type InsertCampaign, campaigns,
+  type CampaignBudget, type InsertCampaignBudget, campaignBudgets,
+  type CampaignResource, type InsertCampaignResource, campaignResources,
+  type CampaignMetric, type InsertCampaignMetric, campaignMetrics,
+  type CampaignActivity, type InsertCampaignActivity, campaignActivities,
+  type CampaignTeamMember, type InsertCampaignTeamMember, campaignTeamMembers,
+  type ActivityAssignee, type InsertActivityAssignee, activityAssignees,
+  type AiKpiGoal, type InsertAiKpiGoal, aiKpiGoals,
+  type CampaignNotification, type InsertCampaignNotification, campaignNotifications,
+  campaignInsightSessions,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
+
+// Pagination types
+export interface PaginationOptions {
+  page: number;
+  limit: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PartyWithDetails extends Party {
+  candidateCount: number;
+  totalVotes: number;
+  recentScenarios: { id: number; name: string; votes: number }[];
+  historicalPerformance: { year: number; votes: number; seats: number }[];
+}
+
+export interface CandidateWithDetails extends Candidate {
+  party?: Party;
+  totalVotes: number;
+  scenarioParticipations: { scenarioId: number; scenarioName: string; votes: number; elected: boolean }[];
+  historicalPerformance: { year: number; votes: number; position: string; result: string }[];
+}
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -56,13 +97,17 @@ export interface IStorage {
   createParty(party: InsertParty): Promise<Party>;
   updateParty(id: number, data: Partial<InsertParty>): Promise<Party | undefined>;
   deleteParty(id: number): Promise<boolean>;
-  syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number }>;
+  syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number; updated: number }>;
+  getPartiesPaginated(options: PaginationOptions & { active?: boolean; tags?: string[] }): Promise<PaginatedResult<Party>>;
+  getPartyWithDetails(id: number): Promise<PartyWithDetails | undefined>;
 
   getCandidates(): Promise<Candidate[]>;
   getCandidate(id: number): Promise<Candidate | undefined>;
   createCandidate(candidate: InsertCandidate): Promise<Candidate>;
   updateCandidate(id: number, data: Partial<InsertCandidate>): Promise<Candidate | undefined>;
   deleteCandidate(id: number): Promise<boolean>;
+  getCandidatesPaginated(options: PaginationOptions & { partyId?: number; position?: string; active?: boolean; tags?: string[] }): Promise<PaginatedResult<Candidate & { party?: Party }>>;
+  getCandidateWithDetails(id: number): Promise<CandidateWithDetails | undefined>;
 
   getScenarios(): Promise<Scenario[]>;
   getScenario(id: number): Promise<Scenario | undefined>;
@@ -255,6 +300,91 @@ export interface IStorage {
     partyCount: number;
   }[]>;
   getPositions(filters?: { year?: number; uf?: string }): Promise<{ code: number; name: string; votes: number }[]>;
+
+  // Campaign Management methods
+  getCampaigns(filters?: { status?: string; partyId?: number }): Promise<Campaign[]>;
+  getCampaign(id: number): Promise<Campaign | undefined>;
+  getCampaignWithDetails(id: number): Promise<{
+    campaign: Campaign;
+    party?: Party;
+    candidate?: Candidate;
+    aiSession?: any;
+    budgets: CampaignBudget[];
+    resources: CampaignResource[];
+    metrics: CampaignMetric[];
+    activities: CampaignActivity[];
+  } | undefined>;
+  createCampaign(data: InsertCampaign): Promise<Campaign>;
+  updateCampaign(id: number, data: Partial<InsertCampaign>): Promise<Campaign | undefined>;
+  deleteCampaign(id: number): Promise<boolean>;
+  
+  // Campaign Budget methods
+  getCampaignBudgets(campaignId: number): Promise<CampaignBudget[]>;
+  getCampaignBudget(id: number): Promise<CampaignBudget | undefined>;
+  createCampaignBudget(data: InsertCampaignBudget): Promise<CampaignBudget>;
+  updateCampaignBudget(id: number, data: Partial<InsertCampaignBudget>): Promise<CampaignBudget | undefined>;
+  deleteCampaignBudget(id: number): Promise<boolean>;
+  
+  // Campaign Resource methods
+  getCampaignResources(campaignId: number): Promise<CampaignResource[]>;
+  getCampaignResource(id: number): Promise<CampaignResource | undefined>;
+  createCampaignResource(data: InsertCampaignResource): Promise<CampaignResource>;
+  updateCampaignResource(id: number, data: Partial<InsertCampaignResource>): Promise<CampaignResource | undefined>;
+  deleteCampaignResource(id: number): Promise<boolean>;
+  
+  // Campaign Metric methods
+  getCampaignMetrics(campaignId: number, filters?: { kpiName?: string; startDate?: Date; endDate?: Date }): Promise<CampaignMetric[]>;
+  getCampaignMetric(id: number): Promise<CampaignMetric | undefined>;
+  createCampaignMetric(data: InsertCampaignMetric): Promise<CampaignMetric>;
+  updateCampaignMetric(id: number, data: Partial<InsertCampaignMetric>): Promise<CampaignMetric | undefined>;
+  deleteCampaignMetric(id: number): Promise<boolean>;
+  
+  // Campaign Activity methods
+  getCampaignActivities(campaignId: number, filters?: { status?: string; type?: string }): Promise<CampaignActivity[]>;
+  getCampaignActivity(id: number): Promise<CampaignActivity | undefined>;
+  createCampaignActivity(data: InsertCampaignActivity): Promise<CampaignActivity>;
+  updateCampaignActivity(id: number, data: Partial<InsertCampaignActivity>): Promise<CampaignActivity | undefined>;
+  deleteCampaignActivity(id: number): Promise<boolean>;
+  
+  // Campaign performance summary
+  getCampaignPerformanceSummary(campaignId: number): Promise<{
+    budgetUtilization: number;
+    activitiesCompleted: number;
+    activitiesTotal: number;
+    resourcesAllocated: number;
+    latestMetrics: { name: string; value: number; target: number | null }[];
+    daysRemaining: number;
+    progressPercentage: number;
+  }>;
+  
+  // Campaign Team Member methods
+  getCampaignTeamMembers(campaignId: number): Promise<CampaignTeamMember[]>;
+  getCampaignTeamMember(id: number): Promise<CampaignTeamMember | undefined>;
+  getCampaignTeamMemberByUser(campaignId: number, userId: string): Promise<CampaignTeamMember | undefined>;
+  createCampaignTeamMember(data: InsertCampaignTeamMember): Promise<CampaignTeamMember>;
+  updateCampaignTeamMember(id: number, data: Partial<InsertCampaignTeamMember>): Promise<CampaignTeamMember | undefined>;
+  deleteCampaignTeamMember(id: number): Promise<boolean>;
+  
+  // Activity Assignee methods
+  getActivityAssignees(activityId: number): Promise<ActivityAssignee[]>;
+  createActivityAssignee(data: InsertActivityAssignee): Promise<ActivityAssignee>;
+  deleteActivityAssignee(id: number): Promise<boolean>;
+  
+  // AI KPI Goals methods
+  getAiKpiGoals(campaignId: number): Promise<AiKpiGoal[]>;
+  getAiKpiGoal(id: number): Promise<AiKpiGoal | undefined>;
+  createAiKpiGoal(data: InsertAiKpiGoal): Promise<AiKpiGoal>;
+  updateAiKpiGoal(id: number, data: Partial<InsertAiKpiGoal>): Promise<AiKpiGoal | undefined>;
+  deleteAiKpiGoal(id: number): Promise<boolean>;
+  
+  // Campaign Notification methods
+  getCampaignNotifications(campaignId: number): Promise<CampaignNotification[]>;
+  getUserCampaignNotifications(userId: string): Promise<CampaignNotification[]>;
+  createCampaignNotification(data: InsertCampaignNotification): Promise<CampaignNotification>;
+  markCampaignNotificationSent(id: number, inAppNotificationId?: number): Promise<CampaignNotification | undefined>;
+  
+  // Calendar activities for date range
+  getCalendarActivities(campaignId: number, startDate: Date, endDate: Date): Promise<CampaignActivity[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -313,8 +443,9 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number }> {
-    const uniqueParties = await db.selectDistinct({
+  async syncPartiesFromTseImport(jobId: number): Promise<{ created: number; existing: number; updated: number }> {
+    // Get unique parties from candidate votes (if any)
+    const candidateParties = await db.selectDistinct({
       nrPartido: tseCandidateVotes.nrPartido,
       sgPartido: tseCandidateVotes.sgPartido,
       nmPartido: tseCandidateVotes.nmPartido,
@@ -322,39 +453,85 @@ export class DatabaseStorage implements IStorage {
     .from(tseCandidateVotes)
     .where(eq(tseCandidateVotes.importJobId, jobId));
 
+    // Get unique parties from party votes (if any)
+    const partyVotesParties = await db.selectDistinct({
+      nrPartido: tsePartyVotes.nrPartido,
+      sgPartido: tsePartyVotes.sgPartido,
+      nmPartido: tsePartyVotes.nmPartido,
+    })
+    .from(tsePartyVotes)
+    .where(eq(tsePartyVotes.importJobId, jobId));
+
+    // Combine both sources, using Map to deduplicate by party number
+    const partyMap = new Map<number, { nrPartido: number; sgPartido: string; nmPartido: string | null }>();
+    
+    for (const p of candidateParties) {
+      if (p.nrPartido && p.sgPartido) {
+        partyMap.set(p.nrPartido, { nrPartido: p.nrPartido, sgPartido: p.sgPartido, nmPartido: p.nmPartido });
+      }
+    }
+    
+    for (const p of partyVotesParties) {
+      if (p.nrPartido && p.sgPartido && !partyMap.has(p.nrPartido)) {
+        partyMap.set(p.nrPartido, { nrPartido: p.nrPartido, sgPartido: p.sgPartido, nmPartido: p.nmPartido });
+      }
+    }
+
     let created = 0;
     let existing = 0;
+    let updated = 0;
 
-    for (const partyData of uniqueParties) {
-      if (!partyData.nrPartido || !partyData.sgPartido) continue;
+    // Get all existing parties for comparison
+    const existingParties = await db.select().from(parties);
+    const existingByNumber = new Map(existingParties.map(p => [p.number, p]));
 
+    for (const partyData of Array.from(partyMap.values())) {
       try {
-        // Use ON CONFLICT DO NOTHING to handle race conditions
-        const result = await db.insert(parties).values({
-          name: partyData.nmPartido || partyData.sgPartido,
-          abbreviation: partyData.sgPartido,
-          number: partyData.nrPartido,
-          color: this.generatePartyColor(partyData.nrPartido),
-          active: true,
-        }).onConflictDoNothing({ target: parties.number }).returning();
-
-        if (result.length > 0) {
-          created++;
-          console.log(`Created party: ${partyData.sgPartido} (${partyData.nrPartido})`);
+        const existingParty = existingByNumber.get(partyData.nrPartido);
+        
+        if (existingParty) {
+          // Check if update is needed (abbreviation or name mismatch)
+          if (existingParty.abbreviation !== partyData.sgPartido || 
+              (partyData.nmPartido && existingParty.name !== partyData.nmPartido)) {
+            await db.update(parties)
+              .set({
+                abbreviation: partyData.sgPartido,
+                name: partyData.nmPartido || partyData.sgPartido,
+              })
+              .where(eq(parties.number, partyData.nrPartido));
+            updated++;
+            console.log(`Updated party: ${partyData.sgPartido} (${partyData.nrPartido})`);
+          } else {
+            existing++;
+          }
         } else {
-          existing++;
+          // Insert new party
+          const result = await db.insert(parties).values({
+            name: partyData.nmPartido || partyData.sgPartido,
+            abbreviation: partyData.sgPartido,
+            number: partyData.nrPartido,
+            color: this.generatePartyColor(partyData.nrPartido),
+            active: true,
+          }).onConflictDoNothing({ target: parties.number }).returning();
+
+          if (result.length > 0) {
+            created++;
+            console.log(`Created party: ${partyData.sgPartido} (${partyData.nrPartido})`);
+          } else {
+            existing++;
+          }
         }
       } catch (error: any) {
         // Handle abbreviation uniqueness conflict (different party with same abbreviation)
         if (error.code === '23505') {
           existing++;
         } else {
-          console.error(`Failed to create party ${partyData.sgPartido}:`, error.message);
+          console.error(`Failed to sync party ${partyData.sgPartido}:`, error.message);
         }
       }
     }
 
-    return { created, existing };
+    return { created, existing, updated };
   }
 
   private generatePartyColor(partyNumber: number): string {
@@ -409,6 +586,111 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
+  async getPartiesPaginated(options: PaginationOptions & { active?: boolean; tags?: string[] }): Promise<PaginatedResult<Party>> {
+    const { page, limit, search, sortBy = "name", sortOrder = "asc", active, tags } = options;
+    const offset = (page - 1) * limit;
+
+    // Build conditions array
+    const conditions: SQL[] = [];
+    
+    if (search) {
+      conditions.push(
+        or(
+          ilike(parties.name, `%${search}%`),
+          ilike(parties.abbreviation, `%${search}%`)
+        )!
+      );
+    }
+    
+    if (active !== undefined) {
+      conditions.push(eq(parties.active, active));
+    }
+
+    // Get total count
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const countResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(parties)
+      .where(whereClause);
+    const total = countResult[0]?.count || 0;
+
+    // Get paginated data
+    const orderColumn = sortBy === "abbreviation" ? parties.abbreviation : 
+                       sortBy === "number" ? parties.number :
+                       sortBy === "createdAt" ? parties.createdAt : parties.name;
+    const orderDir = sortOrder === "desc" ? desc(orderColumn) : asc(orderColumn);
+
+    const data = await db.select()
+      .from(parties)
+      .where(whereClause)
+      .orderBy(orderDir)
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getPartyWithDetails(id: number): Promise<PartyWithDetails | undefined> {
+    const party = await this.getParty(id);
+    if (!party) return undefined;
+
+    // Get candidate count
+    const candidateCountResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(candidates)
+      .where(eq(candidates.partyId, id));
+    const candidateCount = candidateCountResult[0]?.count || 0;
+
+    // Get total votes from TSE data
+    const votesResult = await db.select({ total: sql<number>`coalesce(sum(qt_votos_nominais), 0)::int` })
+      .from(tseCandidateVotes)
+      .where(eq(tseCandidateVotes.nrPartido, party.number));
+    const totalVotes = votesResult[0]?.total || 0;
+
+    // Get recent scenarios
+    const recentScenariosResult = await db.select({
+      id: scenarios.id,
+      name: scenarios.name,
+      votes: sql<number>`coalesce(sum(${scenarioVotes.votes}), 0)::int`,
+    })
+    .from(scenarios)
+    .leftJoin(scenarioVotes, and(
+      eq(scenarioVotes.scenarioId, scenarios.id),
+      eq(scenarioVotes.partyId, id)
+    ))
+    .groupBy(scenarios.id, scenarios.name)
+    .orderBy(desc(scenarios.createdAt))
+    .limit(5);
+
+    // Get historical performance from TSE
+    const historicalResult = await db.select({
+      year: tseCandidateVotes.anoEleicao,
+      votes: sql<number>`coalesce(sum(qt_votos_nominais), 0)::int`,
+      seats: sql<number>`count(case when ${tseCandidateVotes.dsResultado} = 'ELEITO' then 1 end)::int`,
+    })
+    .from(tseCandidateVotes)
+    .where(eq(tseCandidateVotes.nrPartido, party.number))
+    .groupBy(tseCandidateVotes.anoEleicao)
+    .orderBy(desc(tseCandidateVotes.anoEleicao))
+    .limit(5);
+
+    return {
+      ...party,
+      candidateCount,
+      totalVotes,
+      recentScenarios: recentScenariosResult.map(s => ({ id: s.id, name: s.name, votes: s.votes })),
+      historicalPerformance: historicalResult.map(h => ({ 
+        year: h.year || 0, 
+        votes: h.votes, 
+        seats: h.seats 
+      })),
+    };
+  }
+
   async getCandidates(): Promise<Candidate[]> {
     return db.select().from(candidates).orderBy(candidates.number);
   }
@@ -431,6 +713,139 @@ export class DatabaseStorage implements IStorage {
   async deleteCandidate(id: number): Promise<boolean> {
     await db.delete(candidates).where(eq(candidates.id, id));
     return true;
+  }
+
+  async getCandidatesPaginated(options: PaginationOptions & { partyId?: number; position?: string; active?: boolean; tags?: string[] }): Promise<PaginatedResult<Candidate & { party?: Party }>> {
+    const { page, limit, search, sortBy = "name", sortOrder = "asc", partyId, position, active, tags } = options;
+    const offset = (page - 1) * limit;
+
+    // Build conditions array
+    const conditions: SQL[] = [];
+    
+    if (search) {
+      conditions.push(
+        or(
+          ilike(candidates.name, `%${search}%`),
+          ilike(candidates.nickname, `%${search}%`)
+        )!
+      );
+    }
+    
+    if (partyId !== undefined) {
+      conditions.push(eq(candidates.partyId, partyId));
+    }
+    
+    if (position) {
+      conditions.push(eq(candidates.position, position));
+    }
+    
+    if (active !== undefined) {
+      conditions.push(eq(candidates.active, active));
+    }
+
+    // Get total count
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const countResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(candidates)
+      .where(whereClause);
+    const total = countResult[0]?.count || 0;
+
+    // Get paginated data with party join
+    const orderColumn = sortBy === "number" ? candidates.number :
+                       sortBy === "position" ? candidates.position :
+                       sortBy === "createdAt" ? candidates.createdAt : candidates.name;
+    const orderDir = sortOrder === "desc" ? desc(orderColumn) : asc(orderColumn);
+
+    const data = await db.select({
+      id: candidates.id,
+      name: candidates.name,
+      nickname: candidates.nickname,
+      number: candidates.number,
+      partyId: candidates.partyId,
+      position: candidates.position,
+      biography: candidates.biography,
+      notes: candidates.notes,
+      tags: candidates.tags,
+      active: candidates.active,
+      createdAt: candidates.createdAt,
+      updatedAt: candidates.updatedAt,
+      createdBy: candidates.createdBy,
+      party: parties,
+    })
+    .from(candidates)
+    .leftJoin(parties, eq(candidates.partyId, parties.id))
+    .where(whereClause)
+    .orderBy(orderDir)
+    .limit(limit)
+    .offset(offset);
+
+    return {
+      data: data.map(d => ({
+        ...d,
+        party: d.party || undefined,
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getCandidateWithDetails(id: number): Promise<CandidateWithDetails | undefined> {
+    const candidate = await this.getCandidate(id);
+    if (!candidate) return undefined;
+
+    // Get party
+    const party = await this.getParty(candidate.partyId);
+
+    // Get total votes from TSE data
+    const votesResult = await db.select({ total: sql<number>`coalesce(sum(qt_votos_nominais), 0)::int` })
+      .from(tseCandidateVotes)
+      .where(eq(tseCandidateVotes.nrCandidato, candidate.number));
+    const totalVotes = votesResult[0]?.total || 0;
+
+    // Get scenario participations
+    const scenarioParticipations = await db.select({
+      scenarioId: scenarios.id,
+      scenarioName: scenarios.name,
+      votes: scenarioCandidates.votes,
+      elected: sql<boolean>`${scenarioCandidates.status} = 'elected'`,
+    })
+    .from(scenarioCandidates)
+    .innerJoin(scenarios, eq(scenarioCandidates.scenarioId, scenarios.id))
+    .where(eq(scenarioCandidates.candidateId, id))
+    .orderBy(desc(scenarios.createdAt))
+    .limit(10);
+
+    // Get historical performance from TSE
+    const historicalResult = await db.select({
+      year: tseCandidateVotes.anoEleicao,
+      votes: sql<number>`qt_votos_nominais`,
+      position: tseCandidateVotes.dsCargo,
+      result: tseCandidateVotes.dsResultado,
+    })
+    .from(tseCandidateVotes)
+    .where(eq(tseCandidateVotes.nrCandidato, candidate.number))
+    .orderBy(desc(tseCandidateVotes.anoEleicao))
+    .limit(10);
+
+    return {
+      ...candidate,
+      party,
+      totalVotes,
+      scenarioParticipations: scenarioParticipations.map(s => ({
+        scenarioId: s.scenarioId,
+        scenarioName: s.scenarioName,
+        votes: s.votes,
+        elected: s.elected,
+      })),
+      historicalPerformance: historicalResult.map(h => ({
+        year: h.year || 0,
+        votes: h.votes || 0,
+        position: h.position || "",
+        result: h.result || "",
+      })),
+    };
   }
 
   async getScenarios(): Promise<Scenario[]> {
@@ -732,18 +1147,23 @@ export class DatabaseStorage implements IStorage {
     sgUf?: string;
     cdCargo?: number;
     cdMunicipio?: number;
+    nrTurno?: number;
   }): Promise<any> {
     const conditions: SQL[] = [];
     if (filters.anoEleicao) conditions.push(eq(tseElectoralStatistics.anoEleicao, filters.anoEleicao));
     if (filters.sgUf) conditions.push(eq(tseElectoralStatistics.sgUf, filters.sgUf));
     if (filters.cdCargo) conditions.push(eq(tseElectoralStatistics.cdCargo, filters.cdCargo));
     if (filters.cdMunicipio) conditions.push(eq(tseElectoralStatistics.cdMunicipio, filters.cdMunicipio));
+    // Default to turno 1 if not specified to avoid double-counting voters
+    const turno = filters.nrTurno ?? 1;
+    conditions.push(eq(tseElectoralStatistics.nrTurno, turno));
 
     const result = await db.select({
       anoEleicao: tseElectoralStatistics.anoEleicao,
       sgUf: tseElectoralStatistics.sgUf,
       cdCargo: tseElectoralStatistics.cdCargo,
       dsCargo: tseElectoralStatistics.dsCargo,
+      nrTurno: tseElectoralStatistics.nrTurno,
       totalAptos: sql<number>`SUM(${tseElectoralStatistics.qtAptos})::int`,
       totalComparecimento: sql<number>`SUM(${tseElectoralStatistics.qtComparecimento})::int`,
       totalAbstencoes: sql<number>`SUM(${tseElectoralStatistics.qtAbstencoes})::int`,
@@ -755,7 +1175,13 @@ export class DatabaseStorage implements IStorage {
     })
     .from(tseElectoralStatistics)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .groupBy(tseElectoralStatistics.anoEleicao, tseElectoralStatistics.sgUf, tseElectoralStatistics.cdCargo, tseElectoralStatistics.dsCargo);
+    .groupBy(
+      tseElectoralStatistics.anoEleicao, 
+      tseElectoralStatistics.sgUf, 
+      tseElectoralStatistics.cdCargo, 
+      tseElectoralStatistics.dsCargo,
+      tseElectoralStatistics.nrTurno
+    );
 
     return result;
   }
@@ -2611,6 +3037,438 @@ export class DatabaseStorage implements IStorage {
       value: k.frequency,
       sentiment: parseFloat(String(k.averageSentiment || 0)),
     }));
+  }
+
+  // Campaign Management methods
+  async getCampaigns(filters?: { status?: string; partyId?: number }): Promise<Campaign[]> {
+    const conditions: SQL[] = [];
+    if (filters?.status) conditions.push(eq(campaigns.status, filters.status));
+    if (filters?.partyId) conditions.push(eq(campaigns.targetPartyId, filters.partyId));
+    
+    return db.select().from(campaigns)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(campaigns.createdAt));
+  }
+
+  async getCampaign(id: number): Promise<Campaign | undefined> {
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+    return campaign;
+  }
+
+  async getCampaignWithDetails(id: number): Promise<{
+    campaign: Campaign;
+    party?: Party;
+    candidate?: Candidate;
+    aiSession?: any;
+    budgets: CampaignBudget[];
+    resources: CampaignResource[];
+    metrics: CampaignMetric[];
+    activities: CampaignActivity[];
+  } | undefined> {
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+    if (!campaign) return undefined;
+
+    const party = campaign.targetPartyId 
+      ? (await db.select().from(parties).where(eq(parties.id, campaign.targetPartyId)))[0]
+      : undefined;
+    
+    const candidate = campaign.targetCandidateId
+      ? (await db.select().from(candidates).where(eq(candidates.id, campaign.targetCandidateId)))[0]
+      : undefined;
+
+    const aiSession = campaign.aiSessionId
+      ? (await db.select().from(campaignInsightSessions).where(eq(campaignInsightSessions.id, campaign.aiSessionId)))[0]
+      : undefined;
+
+    const budgetsList = await db.select().from(campaignBudgets)
+      .where(eq(campaignBudgets.campaignId, id))
+      .orderBy(campaignBudgets.category);
+
+    const resourcesList = await db.select().from(campaignResources)
+      .where(eq(campaignResources.campaignId, id))
+      .orderBy(campaignResources.type);
+
+    const metricsList = await db.select().from(campaignMetrics)
+      .where(eq(campaignMetrics.campaignId, id))
+      .orderBy(desc(campaignMetrics.metricDate));
+
+    const activitiesList = await db.select().from(campaignActivities)
+      .where(eq(campaignActivities.campaignId, id))
+      .orderBy(desc(campaignActivities.scheduledDate));
+
+    return {
+      campaign,
+      party,
+      candidate,
+      aiSession,
+      budgets: budgetsList,
+      resources: resourcesList,
+      metrics: metricsList,
+      activities: activitiesList,
+    };
+  }
+
+  async createCampaign(data: InsertCampaign): Promise<Campaign> {
+    const [campaign] = await db.insert(campaigns).values(data).returning();
+    return campaign;
+  }
+
+  async updateCampaign(id: number, data: Partial<InsertCampaign>): Promise<Campaign | undefined> {
+    const [updated] = await db.update(campaigns)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(campaigns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCampaign(id: number): Promise<boolean> {
+    const result = await db.delete(campaigns).where(eq(campaigns.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Campaign Budget methods
+  async getCampaignBudgets(campaignId: number): Promise<CampaignBudget[]> {
+    return db.select().from(campaignBudgets)
+      .where(eq(campaignBudgets.campaignId, campaignId))
+      .orderBy(campaignBudgets.category);
+  }
+
+  async getCampaignBudget(id: number): Promise<CampaignBudget | undefined> {
+    const [budget] = await db.select().from(campaignBudgets).where(eq(campaignBudgets.id, id));
+    return budget;
+  }
+
+  async createCampaignBudget(data: InsertCampaignBudget): Promise<CampaignBudget> {
+    const [budget] = await db.insert(campaignBudgets).values(data).returning();
+    return budget;
+  }
+
+  async updateCampaignBudget(id: number, data: Partial<InsertCampaignBudget>): Promise<CampaignBudget | undefined> {
+    const [updated] = await db.update(campaignBudgets)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(campaignBudgets.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCampaignBudget(id: number): Promise<boolean> {
+    const result = await db.delete(campaignBudgets).where(eq(campaignBudgets.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Campaign Resource methods
+  async getCampaignResources(campaignId: number): Promise<CampaignResource[]> {
+    return db.select().from(campaignResources)
+      .where(eq(campaignResources.campaignId, campaignId))
+      .orderBy(campaignResources.type);
+  }
+
+  async getCampaignResource(id: number): Promise<CampaignResource | undefined> {
+    const [resource] = await db.select().from(campaignResources).where(eq(campaignResources.id, id));
+    return resource;
+  }
+
+  async createCampaignResource(data: InsertCampaignResource): Promise<CampaignResource> {
+    const [resource] = await db.insert(campaignResources).values(data).returning();
+    return resource;
+  }
+
+  async updateCampaignResource(id: number, data: Partial<InsertCampaignResource>): Promise<CampaignResource | undefined> {
+    const [updated] = await db.update(campaignResources)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(campaignResources.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCampaignResource(id: number): Promise<boolean> {
+    const result = await db.delete(campaignResources).where(eq(campaignResources.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Campaign Metric methods
+  async getCampaignMetrics(campaignId: number, filters?: { kpiName?: string; startDate?: Date; endDate?: Date }): Promise<CampaignMetric[]> {
+    const conditions: SQL[] = [eq(campaignMetrics.campaignId, campaignId)];
+    if (filters?.kpiName) conditions.push(eq(campaignMetrics.kpiName, filters.kpiName));
+    if (filters?.startDate) conditions.push(sql`${campaignMetrics.metricDate} >= ${filters.startDate}`);
+    if (filters?.endDate) conditions.push(sql`${campaignMetrics.metricDate} <= ${filters.endDate}`);
+    
+    return db.select().from(campaignMetrics)
+      .where(and(...conditions))
+      .orderBy(desc(campaignMetrics.metricDate));
+  }
+
+  async getCampaignMetric(id: number): Promise<CampaignMetric | undefined> {
+    const [metric] = await db.select().from(campaignMetrics).where(eq(campaignMetrics.id, id));
+    return metric;
+  }
+
+  async createCampaignMetric(data: InsertCampaignMetric): Promise<CampaignMetric> {
+    const [metric] = await db.insert(campaignMetrics).values(data).returning();
+    return metric;
+  }
+
+  async updateCampaignMetric(id: number, data: Partial<InsertCampaignMetric>): Promise<CampaignMetric | undefined> {
+    const [updated] = await db.update(campaignMetrics)
+      .set(data)
+      .where(eq(campaignMetrics.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCampaignMetric(id: number): Promise<boolean> {
+    const result = await db.delete(campaignMetrics).where(eq(campaignMetrics.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Campaign Activity methods
+  async getCampaignActivities(campaignId: number, filters?: { status?: string; type?: string }): Promise<CampaignActivity[]> {
+    const conditions: SQL[] = [eq(campaignActivities.campaignId, campaignId)];
+    if (filters?.status) conditions.push(eq(campaignActivities.status, filters.status));
+    if (filters?.type) conditions.push(eq(campaignActivities.type, filters.type));
+    
+    return db.select().from(campaignActivities)
+      .where(and(...conditions))
+      .orderBy(desc(campaignActivities.scheduledDate));
+  }
+
+  async getCampaignActivity(id: number): Promise<CampaignActivity | undefined> {
+    const [activity] = await db.select().from(campaignActivities).where(eq(campaignActivities.id, id));
+    return activity;
+  }
+
+  async createCampaignActivity(data: InsertCampaignActivity): Promise<CampaignActivity> {
+    const [activity] = await db.insert(campaignActivities).values(data).returning();
+    return activity;
+  }
+
+  async updateCampaignActivity(id: number, data: Partial<InsertCampaignActivity>): Promise<CampaignActivity | undefined> {
+    const [updated] = await db.update(campaignActivities)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(campaignActivities.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCampaignActivity(id: number): Promise<boolean> {
+    const result = await db.delete(campaignActivities).where(eq(campaignActivities.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Campaign performance summary
+  async getCampaignPerformanceSummary(campaignId: number): Promise<{
+    budgetUtilization: number;
+    activitiesCompleted: number;
+    activitiesTotal: number;
+    resourcesAllocated: number;
+    latestMetrics: { name: string; value: number; target: number | null }[];
+    daysRemaining: number;
+    progressPercentage: number;
+  }> {
+    const campaign = await this.getCampaign(campaignId);
+    if (!campaign) {
+      return {
+        budgetUtilization: 0,
+        activitiesCompleted: 0,
+        activitiesTotal: 0,
+        resourcesAllocated: 0,
+        latestMetrics: [],
+        daysRemaining: 0,
+        progressPercentage: 0,
+      };
+    }
+
+    // Budget utilization
+    const budgets = await this.getCampaignBudgets(campaignId);
+    const totalAllocated = budgets.reduce((sum, b) => sum + parseFloat(String(b.allocatedAmount || 0)), 0);
+    const totalSpent = budgets.reduce((sum, b) => sum + parseFloat(String(b.spentAmount || 0)), 0);
+    const budgetUtilization = totalAllocated > 0 ? (totalSpent / totalAllocated) * 100 : 0;
+
+    // Activities
+    const activities = await this.getCampaignActivities(campaignId);
+    const activitiesCompleted = activities.filter(a => a.status === 'completed').length;
+    const activitiesTotal = activities.length;
+
+    // Resources
+    const resources = await this.getCampaignResources(campaignId);
+    const resourcesAllocated = resources.filter(r => r.status === 'allocated').length;
+
+    // Latest metrics - get unique KPIs with latest values
+    const allMetrics = await this.getCampaignMetrics(campaignId);
+    const latestByKpi = new Map<string, CampaignMetric>();
+    for (const metric of allMetrics) {
+      if (!latestByKpi.has(metric.kpiName) || 
+          new Date(metric.metricDate) > new Date(latestByKpi.get(metric.kpiName)!.metricDate)) {
+        latestByKpi.set(metric.kpiName, metric);
+      }
+    }
+    const latestMetrics = Array.from(latestByKpi.values()).slice(0, 5).map(m => ({
+      name: m.kpiName,
+      value: parseFloat(String(m.kpiValue)),
+      target: m.targetValue ? parseFloat(String(m.targetValue)) : null,
+    }));
+
+    // Days remaining
+    const now = new Date();
+    const endDate = new Date(campaign.endDate);
+    const startDate = new Date(campaign.startDate);
+    const daysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    
+    // Progress percentage (time-based)
+    const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysPassed = Math.max(0, Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const progressPercentage = Math.min(100, (daysPassed / totalDays) * 100);
+
+    return {
+      budgetUtilization,
+      activitiesCompleted,
+      activitiesTotal,
+      resourcesAllocated,
+      latestMetrics,
+      daysRemaining,
+      progressPercentage,
+    };
+  }
+
+  // ============ CAMPAIGN TEAM MEMBERS ============
+  
+  async getCampaignTeamMembers(campaignId: number): Promise<CampaignTeamMember[]> {
+    return db.select().from(campaignTeamMembers)
+      .where(and(
+        eq(campaignTeamMembers.campaignId, campaignId),
+        eq(campaignTeamMembers.isActive, true)
+      ))
+      .orderBy(desc(campaignTeamMembers.joinedAt));
+  }
+
+  async getCampaignTeamMember(id: number): Promise<CampaignTeamMember | undefined> {
+    const [member] = await db.select().from(campaignTeamMembers)
+      .where(eq(campaignTeamMembers.id, id));
+    return member;
+  }
+
+  async getCampaignTeamMemberByUser(campaignId: number, userId: string): Promise<CampaignTeamMember | undefined> {
+    const [member] = await db.select().from(campaignTeamMembers)
+      .where(and(
+        eq(campaignTeamMembers.campaignId, campaignId),
+        eq(campaignTeamMembers.userId, userId),
+        eq(campaignTeamMembers.isActive, true)
+      ));
+    return member;
+  }
+
+  async createCampaignTeamMember(data: InsertCampaignTeamMember): Promise<CampaignTeamMember> {
+    const [member] = await db.insert(campaignTeamMembers).values(data).returning();
+    return member;
+  }
+
+  async updateCampaignTeamMember(id: number, data: Partial<InsertCampaignTeamMember>): Promise<CampaignTeamMember | undefined> {
+    const [member] = await db.update(campaignTeamMembers)
+      .set(data)
+      .where(eq(campaignTeamMembers.id, id))
+      .returning();
+    return member;
+  }
+
+  async deleteCampaignTeamMember(id: number): Promise<boolean> {
+    // Soft delete by setting isActive to false
+    const [member] = await db.update(campaignTeamMembers)
+      .set({ isActive: false, leftAt: new Date() })
+      .where(eq(campaignTeamMembers.id, id))
+      .returning();
+    return !!member;
+  }
+
+  // ============ ACTIVITY ASSIGNEES ============
+  
+  async getActivityAssignees(activityId: number): Promise<ActivityAssignee[]> {
+    return db.select().from(activityAssignees)
+      .where(eq(activityAssignees.activityId, activityId))
+      .orderBy(desc(activityAssignees.assignedAt));
+  }
+
+  async createActivityAssignee(data: InsertActivityAssignee): Promise<ActivityAssignee> {
+    const [assignee] = await db.insert(activityAssignees).values(data).returning();
+    return assignee;
+  }
+
+  async deleteActivityAssignee(id: number): Promise<boolean> {
+    await db.delete(activityAssignees).where(eq(activityAssignees.id, id));
+    return true;
+  }
+
+  // ============ AI KPI GOALS ============
+  
+  async getAiKpiGoals(campaignId: number): Promise<AiKpiGoal[]> {
+    return db.select().from(aiKpiGoals)
+      .where(eq(aiKpiGoals.campaignId, campaignId))
+      .orderBy(desc(aiKpiGoals.createdAt));
+  }
+
+  async getAiKpiGoal(id: number): Promise<AiKpiGoal | undefined> {
+    const [goal] = await db.select().from(aiKpiGoals)
+      .where(eq(aiKpiGoals.id, id));
+    return goal;
+  }
+
+  async createAiKpiGoal(data: InsertAiKpiGoal): Promise<AiKpiGoal> {
+    const [goal] = await db.insert(aiKpiGoals).values(data).returning();
+    return goal;
+  }
+
+  async updateAiKpiGoal(id: number, data: Partial<InsertAiKpiGoal>): Promise<AiKpiGoal | undefined> {
+    const [goal] = await db.update(aiKpiGoals)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(aiKpiGoals.id, id))
+      .returning();
+    return goal;
+  }
+
+  async deleteAiKpiGoal(id: number): Promise<boolean> {
+    await db.delete(aiKpiGoals).where(eq(aiKpiGoals.id, id));
+    return true;
+  }
+
+  // ============ CAMPAIGN NOTIFICATIONS ============
+  
+  async getCampaignNotifications(campaignId: number): Promise<CampaignNotification[]> {
+    return db.select().from(campaignNotifications)
+      .where(eq(campaignNotifications.campaignId, campaignId))
+      .orderBy(desc(campaignNotifications.createdAt));
+  }
+
+  async getUserCampaignNotifications(userId: string): Promise<CampaignNotification[]> {
+    return db.select().from(campaignNotifications)
+      .where(eq(campaignNotifications.recipientUserId, userId))
+      .orderBy(desc(campaignNotifications.createdAt));
+  }
+
+  async createCampaignNotification(data: InsertCampaignNotification): Promise<CampaignNotification> {
+    const [notification] = await db.insert(campaignNotifications).values(data).returning();
+    return notification;
+  }
+
+  async markCampaignNotificationSent(id: number, inAppNotificationId?: number): Promise<CampaignNotification | undefined> {
+    const [notification] = await db.update(campaignNotifications)
+      .set({ 
+        sentAt: new Date(),
+        inAppNotificationId: inAppNotificationId || null 
+      })
+      .where(eq(campaignNotifications.id, id))
+      .returning();
+    return notification;
+  }
+
+  // ============ CALENDAR ACTIVITIES ============
+  
+  async getCalendarActivities(campaignId: number, startDate: Date, endDate: Date): Promise<CampaignActivity[]> {
+    return db.select().from(campaignActivities)
+      .where(and(
+        eq(campaignActivities.campaignId, campaignId),
+        sql`${campaignActivities.scheduledDate} >= ${startDate}`,
+        sql`${campaignActivities.scheduledDate} <= ${endDate}`
+      ))
+      .orderBy(asc(campaignActivities.scheduledDate));
   }
 }
 

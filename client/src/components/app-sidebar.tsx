@@ -23,6 +23,8 @@ import {
   Target,
   Clock,
   MessageSquare,
+  MapPin,
+  Megaphone,
 } from "lucide-react";
 import type { TseImportJob } from "@shared/schema";
 import {
@@ -60,10 +62,13 @@ const simulationNavItems = [
   { title: "Automação de Relatórios", url: "/report-automation", icon: Clock, permission: "ai_predictions" },
   { title: "Análise de Sentimento", url: "/sentiment-analysis", icon: MessageSquare, permission: "ai_predictions" },
   { title: "Busca Semântica", url: "/semantic-search", icon: Search, permission: "ai_predictions" },
+  { title: "Gestão de Campanhas", url: "/campaigns", icon: Megaphone, permission: "ai_predictions" },
+  { title: "Estrategista IA", url: "/campaign-insights", icon: Brain, permission: "ai_predictions" },
 ];
 
 const adminNavItems = [
   { title: "Importação TSE", url: "/tse-import", icon: Upload, permission: "manage_users" },
+  { title: "Dados IBGE", url: "/ibge-data", icon: MapPin, permission: "manage_users" },
   { title: "Auditoria", url: "/audit", icon: ClipboardList, permission: "view_audit" },
   { title: "Usuários", url: "/users", icon: Shield, permission: "manage_users" },
   { title: "Admin Sistema", url: "/admin-settings", icon: Database, permission: "manage_users" },

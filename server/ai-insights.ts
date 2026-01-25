@@ -686,6 +686,244 @@ Responda em JSON com a estrutura:
   return result as SentimentAnalysis;
 }
 
+// Advanced GPT-4o sentiment classification for individual articles
+export async function classifyArticleSentiment(article: {
+  title: string;
+  content: string;
+  source: string;
+}): Promise<{
+  sentimentScore: number;
+  sentimentLabel: "positive" | "negative" | "neutral" | "mixed";
+  confidence: number;
+  entities: { type: "party" | "candidate"; name: string; sentiment: number }[];
+  keywords: { word: string; sentiment: number }[];
+  summary: string;
+}> {
+  const prompt = `Você é um especialista em análise de sentimento político brasileiro.
+Analise o seguinte artigo e classifique o sentimento geral e por entidade.
+
+ARTIGO:
+Título: ${article.title}
+Fonte: ${article.source}
+Conteúdo: ${article.content.substring(0, 1500)}
+
+Responda em JSON:
+{
+  "sentimentScore": número_de_-1_a_1,
+  "sentimentLabel": "positive" | "negative" | "neutral" | "mixed",
+  "confidence": número_de_0_a_1,
+  "entities": [
+    { "type": "party" ou "candidate", "name": "nome", "sentiment": número_-1_a_1 }
+  ],
+  "keywords": [
+    { "word": "palavra-chave", "sentiment": número_-1_a_1 }
+  ],
+  "summary": "resumo de 1-2 frases do sentimento do artigo"
+}
+
+Considere:
+- Sentimento positivo > 0.3, negativo < -0.3, neutro entre -0.3 e 0.3
+- Identifique partidos (PT, PL, MDB, PSDB, etc.) e candidatos mencionados
+- Extraia 3-5 palavras-chave relevantes com seus sentimentos`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+      max_tokens: 800,
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("No response from AI");
+    }
+
+    return JSON.parse(content);
+  } catch (error) {
+    console.error("Error classifying article sentiment:", error);
+    return {
+      sentimentScore: 0,
+      sentimentLabel: "neutral",
+      confidence: 0.3,
+      entities: [],
+      keywords: [],
+      summary: "Não foi possível analisar o sentimento."
+    };
+  }
+}
+
+// Batch sentiment classification for multiple articles
+export async function batchClassifySentiment(articles: {
+  id?: number;
+  title: string;
+  content: string;
+  source: string;
+}[]): Promise<{
+  results: {
+    articleId?: number;
+    title: string;
+    sentimentScore: number;
+    sentimentLabel: string;
+    confidence: number;
+    entities: { type: string; name: string; sentiment: number }[];
+  }[];
+  summary: {
+    positive: number;
+    negative: number;
+    neutral: number;
+    mixed: number;
+    avgSentiment: number;
+  };
+}> {
+  const results = [];
+  let positiveCount = 0;
+  let negativeCount = 0;
+  let neutralCount = 0;
+  let mixedCount = 0;
+  let totalScore = 0;
+
+  for (const article of articles.slice(0, 20)) { // Limit to 20 articles per batch
+    const classification = await classifyArticleSentiment(article);
+    
+    results.push({
+      articleId: article.id,
+      title: article.title,
+      sentimentScore: classification.sentimentScore,
+      sentimentLabel: classification.sentimentLabel,
+      confidence: classification.confidence,
+      entities: classification.entities
+    });
+
+    totalScore += classification.sentimentScore;
+    switch (classification.sentimentLabel) {
+      case "positive": positiveCount++; break;
+      case "negative": negativeCount++; break;
+      case "neutral": neutralCount++; break;
+      case "mixed": mixedCount++; break;
+    }
+  }
+
+  return {
+    results,
+    summary: {
+      positive: positiveCount,
+      negative: negativeCount,
+      neutral: neutralCount,
+      mixed: mixedCount,
+      avgSentiment: results.length > 0 ? totalScore / results.length : 0
+    }
+  };
+}
+
+// Generate crisis alert if sentiment drops significantly
+export async function detectCrisisFromSentiment(params: {
+  entityType: string;
+  entityId: string;
+  entityName: string;
+  currentSentiment: number;
+  previousSentiment: number;
+  mentionCount: number;
+  avgMentionCount: number;
+}): Promise<{
+  shouldAlert: boolean;
+  alertType: "negative_spike" | "crisis" | "trending_negative" | "high_volume" | null;
+  severity: "low" | "medium" | "high" | "critical";
+  title: string;
+  description: string;
+} | null> {
+  const sentimentDrop = params.previousSentiment - params.currentSentiment;
+  const mentionSpike = params.avgMentionCount > 0 
+    ? params.mentionCount / params.avgMentionCount 
+    : 1;
+
+  // Crisis detection rules
+  if (params.currentSentiment < -0.5 && sentimentDrop > 0.3) {
+    return {
+      shouldAlert: true,
+      alertType: "crisis",
+      severity: "critical",
+      title: `Crise de sentimento detectada para ${params.entityName}`,
+      description: `Sentimento caiu ${(sentimentDrop * 100).toFixed(0)}% em período recente, atingindo nível crítico de ${(params.currentSentiment * 100).toFixed(0)}%.`
+    };
+  }
+
+  if (sentimentDrop > 0.4) {
+    return {
+      shouldAlert: true,
+      alertType: "negative_spike",
+      severity: "high",
+      title: `Pico negativo para ${params.entityName}`,
+      description: `Queda abrupta de ${(sentimentDrop * 100).toFixed(0)}% no sentimento detectada.`
+    };
+  }
+
+  if (params.currentSentiment < -0.3 && mentionSpike > 2) {
+    return {
+      shouldAlert: true,
+      alertType: "high_volume",
+      severity: "high",
+      title: `Alto volume de menções negativas para ${params.entityName}`,
+      description: `${params.mentionCount} menções (${mentionSpike.toFixed(1)}x acima da média) com sentimento negativo.`
+    };
+  }
+
+  if (params.currentSentiment < -0.2 && sentimentDrop > 0.2) {
+    return {
+      shouldAlert: true,
+      alertType: "trending_negative",
+      severity: "medium",
+      title: `Tendência negativa para ${params.entityName}`,
+      description: `Sentimento em declínio, atualmente em ${(params.currentSentiment * 100).toFixed(0)}%.`
+    };
+  }
+
+  return null;
+}
+
+// Generate AI narrative for multi-entity comparison
+export async function generateComparisonNarrative(entities: {
+  name: string;
+  type: string;
+  avgSentiment: number;
+  totalMentions: number;
+  trend: string;
+}[]): Promise<string> {
+  if (entities.length < 2) {
+    return "Necessário ao menos duas entidades para gerar análise comparativa.";
+  }
+
+  const entitiesSummary = entities.map(e => 
+    `${e.name} (${e.type}): sentimento ${(e.avgSentiment * 100).toFixed(0)}%, ${e.totalMentions} menções, tendência ${e.trend}`
+  ).join("\n");
+
+  const prompt = `Você é um analista político especializado em eleições brasileiras.
+Compare o sentimento público entre estas entidades políticas:
+
+${entitiesSummary}
+
+Gere uma análise comparativa concisa (3-4 frases) destacando:
+1. Qual entidade tem melhor percepção pública
+2. Diferenças significativas entre elas
+3. Tendências observadas
+4. Implicações para o cenário eleitoral
+
+Responda apenas com o texto da análise, sem formatação JSON.`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 300,
+    });
+
+    return completion.choices[0]?.message?.content || "Análise não disponível.";
+  } catch (error) {
+    console.error("Error generating comparison narrative:", error);
+    return "Não foi possível gerar análise comparativa.";
+  }
+}
+
 export async function generateElectoralInsights(filters: {
   year?: number;
   uf?: string;

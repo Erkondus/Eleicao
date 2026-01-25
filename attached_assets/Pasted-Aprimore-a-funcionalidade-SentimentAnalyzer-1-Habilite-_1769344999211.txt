@@ -1,0 +1,62 @@
+Aprimore a funcionalidade `SentimentAnalyzer`:
+1.  Habilite o monitoramento simultâneo de múltiplos candidatos/partidos, permitindo a comparação de seus sentimentos.
+2.  Adicione capacidade de filtrar análises por fonte (notícias vs. redes sociais) ou por período de tempo.
+3.  Integre um sistema de "alerta de crise" para notificar o usuário sobre picos de sentimento negativo ou notícias impactantes em tempo real.
+
+**Objetivo Principal:** Aumentar a precisão das previsões de resultados eleitorais no `ElectoralDashboard`, integrando modelos de IA mais avançados.
+
+**Público-Alvo:** Gerente de projeto ou engenheiro de software responsável pela implementação técnica.
+
+**Instruções Detalhadas para a Equipe de IA/ML:**
+
+1.  **Modelos Sugeridos e Justificativa:**
+    *   **Para análise de dados históricos e demográficos:**
+        *   Modelos: Gradient Boosting Machines (XGBoost, LightGBM), Random Forests.
+        *   Justificativa: Robustez comprovada, capacidade de lidar com dados tabulares complexos, forte desempenho preditivo em dados estruturados.
+    *   **Para análise de sentimento de notícias em tempo real (para `SentimentAnalyzer`):**
+        *   Modelos: Modelos de Processamento de Linguagem Natural (PNL) como BERT, RoBERTa, LSTMs ou Transformers.
+        *   Justificativa: Capacidade de capturar nuances contextuais, semântica e sentimento em dados textuais não estruturados.
+    *   **Métodos de Ensemble:**
+        *   Técnicas: Stacking, Voting, Bagging ou Boosting combinando as previsões dos modelos individuais.
+        *   Justificativa: Aumentar a robustez geral, reduzir a variância e melhorar a precisão preditiva final.
+
+2.  **Fontes de Dados e Pré-processamento:**
+    *   **Dados Eleitorais Históricos:**
+        *   Fontes: Bancos de dados eleitorais oficiais, arquivos de resultados de eleições passadas.
+        *   Formato: Estruturado (CSV, bancos de dados SQL).
+        *   Atributos Chave: Resultados eleitorais passados (por região/nível), dados de participação, informações sobre candidatos/partidos.
+        *   Pré-processamento: Limpeza de dados, tratamento de valores ausentes, normalização/escalonamento.
+    *   **Informações Demográficas:**
+        *   Fontes: Dados do censo, registros de eleitores (anonimizados e agregados), dados socioeconômicos.
+        *   Formato: Estruturado.
+        *   Atributos Chave: Faixa etária, etnia, nível de escolaridade, renda, localização geográfica (nível granular).
+        *   Pré-processamento: Agregação para o nível geográfico apropriado, codificação de variáveis categóricas.
+    *   **Sentimento de Notícias em Tempo Real (para `SentimentAnalyzer`):**
+        *   Fontes: APIs de notícias, feeds RSS de fontes de mídia confiáveis, agregadores de notícias.
+        *   Pré-processamento: Coleta de dados, limpeza de texto (remoção de HTML, caracteres especiais), tokenização, lematização/stemming.
+        *   Geração de Pontuação de Sentimento: Aplicação de modelos de PNL pré-treinados ou treinados especificamente para classificar o sentimento (positivo, negativo, neutro) e a intensidade do sentimento em artigos de notícias relevantes.
+
+3.  **Arquitetura de Integração e MLOps:**
+    *   **Implantação:** Desenvolver os modelos como microsserviços independentes ou expô-los através de APIs RESTful para fácil integração.
+    *   **Pipeline de Dados:** Estabelecer pipelines de dados automatizados para ingestão, pré-processamento e alimentação contínua dos modelos com dados novos e históricos. Implementar práticas de MLOps para versionamento de dados e modelos.
+    *   **Interação com o `ElectoralDashboard`:** Definir o formato das chamadas de API para o `ElectoralDashboard` e o formato das respostas (previsões, probabilidades, intervalos de confiança).
+
+4.  **Métricas de Sucesso e Validação:**
+    *   **Métricas Quantitativas:**
+        *   Aumento mínimo de 10% na precisão geral da previsão (Acurácia, F1-Score) em comparação com o modelo atual.
+        *   Redução de 15% no Erro Quadrático Médio (RMSE) ou Erro Absoluto Médio (MAE) para projeções numéricas.
+        *   AUC-ROC acima de 0.85.
+    *   **Métricas de Desempenho (para `SentimentAnalyzer` e previsão):**
+        *   Tempo de resposta da API para previsões < 500 milissegundos.
+        *   Garantir que o sistema possa processar X eventos de notícias por minuto.
+    *   **Plano de Validação:**
+        *   Validação Cruzada K-fold (k=10) em dados históricos para otimização de hiperparâmetros.
+        *   Teste em um conjunto de dados de validação separado, representando as últimas 1-2 eleições que não foram usadas no treinamento.
+        *   Monitoramento contínuo em produção para detecção de drift de dados e de modelo.
+
+5.  **Considerações Adicionais:**
+    *   **Interpretabilidade do Modelo (XAI):** Implementar técnicas como SHAP (SHapley Additive exPlanations) ou LIME (Local Interpretable Model-agnostic Explanations) para fornecer insights sobre quais fatores mais influenciaram previsões específicas, especialmente para usuários não técnicos.
+    *   **Estratégia de Atualização e Retreinamento:** Definir uma cadência clara para retreinamento dos modelos (por exemplo, semanalmente para modelos de PNL, mensalmente para modelos tabulares) e gatilhos para retreinamento imediato (por exemplo, eventos eleitorais significativos, mudanças drásticas no sentimento da mídia).
+    *   **Requisitos de Infraestrutura:** Avaliar e documentar as necessidades de computação (CPU/GPU), armazenamento e largura de banda para treinamento, implantação e inferência em escala.
+
+**Garantia de Qualidade:** A solicitação otimizada é projetada para ser Clara, Acionável, Mensurável, Relevante e com Prazo Definido (SMART), com foco na entrega de previsões eleitorais robustas e confiáveis para o `ElectoralDashboard` e na melhoria da funcionalidade `SentimentAnalyzer`.

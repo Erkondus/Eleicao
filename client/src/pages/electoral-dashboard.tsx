@@ -10,7 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip, LineChart, Line
+  PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip, LineChart, Line,
+  AreaChart, Area
 } from "recharts";
 import { 
   Vote, Users, Building2, MapPin, TrendingUp, TrendingDown, Download, 
@@ -205,6 +206,32 @@ export default function ElectoralDashboard() {
   const { data: importJobs, isLoading: importsLoading, refetch: refetchImports } = useQuery<TseImportJob[]>({
     queryKey: ["/api/imports/tse"],
     refetchInterval: 5000,
+  });
+
+  const { data: sentimentTrends, isLoading: sentimentLoading } = useQuery<{
+    entities: {
+      type: string;
+      id: string;
+      name: string;
+      avgSentiment: number;
+      totalMentions: number;
+      trend: string;
+    }[];
+  }>({
+    queryKey: ["/api/sentiment/entities-overview"],
+  });
+
+  const { data: crisisAlerts } = useQuery<{
+    id: number;
+    entityType: string;
+    entityName: string;
+    severity: string;
+    title: string;
+    detectedAt: string;
+    isAcknowledged: boolean;
+  }[]>({
+    queryKey: ["/api/sentiment/crisis-alerts/unacknowledged"],
+    refetchInterval: 30000,
   });
 
   const partyChartData = useMemo(() => {
@@ -1028,6 +1055,82 @@ export default function ElectoralDashboard() {
           </CardContent>
         </Card>
       </div>
+
+          {sentimentTrends && sentimentTrends.entities && sentimentTrends.entities.length > 0 && (
+            <Card data-testid="card-sentiment-trends">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Tendências de Sentimento
+                </CardTitle>
+                <CardDescription>Análise de sentimento público sobre entidades políticas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {crisisAlerts && crisisAlerts.length > 0 && (
+                    <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="h-4 w-4 text-destructive" />
+                        <span className="font-medium text-sm">Alertas de Crise Ativos</span>
+                        <Badge variant="destructive">{crisisAlerts.length}</Badge>
+                      </div>
+                      <div className="space-y-1">
+                        {crisisAlerts.slice(0, 3).map((alert) => (
+                          <div key={alert.id} className="text-sm flex items-center gap-2">
+                            <span className="text-muted-foreground">{alert.entityName}:</span>
+                            <span>{alert.title}</span>
+                          </div>
+                        ))}
+                        {crisisAlerts.length > 3 && (
+                          <Link href="/sentiment-analysis?tab=alertas">
+                            <Button variant="ghost" size="sm" className="p-0 h-auto text-primary underline-offset-4 hover:underline">
+                              Ver todos os {crisisAlerts.length} alertas
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={sentimentTrends.entities.slice(0, 8)}
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" domain={[-1, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                        <YAxis type="category" dataKey="name" width={75} tick={{ fontSize: 12 }} />
+                        <RechartsTooltip 
+                          formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Sentimento"]}
+                        />
+                        <Bar 
+                          dataKey="avgSentiment" 
+                          name="Sentimento"
+                        >
+                          {sentimentTrends.entities.slice(0, 8).map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={entry.avgSentiment >= 0 ? "#22c55e" : "#ef4444"} 
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <Link href="/sentiment-analysis">
+                      <Button variant="outline" size="sm" data-testid="button-view-sentiment-analysis">
+                        Ver Análise Completa
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {!hasData && !summaryLoading && (
             <Card className="border-dashed" data-testid="card-empty-state">

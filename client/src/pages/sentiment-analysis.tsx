@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +8,62 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, Minus, Globe, Newspaper, MessageSquare, Users } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend, AreaChart, Area } from "recharts";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, Minus, Globe, Newspaper, MessageSquare, Users, AlertTriangle, Bell, X, Plus, Scale, Activity, Check } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend, AreaChart, Area, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import { useToast } from "@/hooks/use-toast";
+
+interface ComparisonEntity {
+  type: "party" | "candidate";
+  id: string;
+  name: string;
+}
+
+interface ComparisonResult {
+  entityType: string;
+  entityId: string;
+  entityName: string;
+  latestSentiment: number | null;
+  avgSentiment: number;
+  sentimentLabel: string;
+  totalMentions: number;
+  trend: string;
+  timeline: { date: Date; score: number; mentions: number }[];
+}
+
+interface CrisisAlert {
+  id: number;
+  entityType: string;
+  entityId: string;
+  entityName: string | null;
+  alertType: string;
+  severity: string;
+  title: string;
+  description: string | null;
+  sentimentBefore: string | null;
+  sentimentAfter: string | null;
+  sentimentChange: string | null;
+  mentionCount: number | null;
+  detectedAt: Date;
+  isAcknowledged: boolean;
+  acknowledgedBy: string | null;
+  acknowledgedAt: Date | null;
+}
+
+interface MonitoringSession {
+  id: number;
+  userId: string;
+  name: string;
+  description: string | null;
+  entities: ComparisonEntity[];
+  sourceFilters: Record<string, any>;
+  dateRange: { start: string; end: string } | null;
+  alertThreshold: string;
+  isActive: boolean;
+  createdAt: Date;
+  lastAnalyzedAt: Date | null;
+}
 
 interface WordCloudWord {
   text: string;
@@ -170,6 +223,9 @@ export default function SentimentAnalysisPage() {
   const { toast } = useToast();
   const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [comparisonEntities, setComparisonEntities] = useState<ComparisonEntity[]>([]);
+  const [newEntityName, setNewEntityName] = useState("");
+  const [newEntityType, setNewEntityType] = useState<"party" | "candidate">("party");
 
   const { data: sources, isLoading: sourcesLoading, isError: sourcesError } = useQuery<SentimentSource[]>({
     queryKey: ["/api/sentiment/sources"],
@@ -293,6 +349,104 @@ export default function SentimentAnalysisPage() {
     },
   });
 
+  // Crisis alerts queries
+  const { data: crisisAlerts, isLoading: alertsLoading } = useQuery<CrisisAlert[]>({
+    queryKey: ["/api/sentiment/crisis-alerts"],
+    queryFn: async () => {
+      const response = await fetch("/api/sentiment/crisis-alerts?acknowledged=false&limit=20", { credentials: "include" });
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  const { data: alertStats } = useQuery<{
+    total: number;
+    unacknowledged: number;
+    last24h: number;
+    bySeverity: Record<string, number>;
+  }>({
+    queryKey: ["/api/sentiment/crisis-alerts/stats"],
+    queryFn: async () => {
+      const response = await fetch("/api/sentiment/crisis-alerts/stats", { credentials: "include" });
+      if (!response.ok) return { total: 0, unacknowledged: 0, last24h: 0, bySeverity: {} };
+      return response.json();
+    },
+  });
+
+  const { data: monitoringSessions } = useQuery<MonitoringSession[]>({
+    queryKey: ["/api/sentiment/monitoring-sessions"],
+    queryFn: async () => {
+      const response = await fetch("/api/sentiment/monitoring-sessions", { credentials: "include" });
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Comparison mutation
+  const comparisonMutation = useMutation({
+    mutationFn: async (entities: ComparisonEntity[]) => {
+      const response = await fetch("/api/sentiment/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entities }),
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to compare entities");
+      return response.json() as Promise<{
+        entities: ComparisonResult[];
+        comparisonAnalysis: string;
+        analyzedAt: string;
+      }>;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Comparação realizada",
+        description: "Análise comparativa de sentimento concluída.",
+      });
+    },
+    onError: () => {
+      toast({
+        variant: "destructive",
+        title: "Erro na comparação",
+        description: "Não foi possível realizar a análise comparativa.",
+      });
+    },
+  });
+
+  // Acknowledge alert mutation
+  const acknowledgeAlertMutation = useMutation({
+    mutationFn: async (alertId: number) => {
+      const response = await fetch(`/api/sentiment/crisis-alerts/${alertId}/acknowledge`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to acknowledge alert");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Alerta reconhecido",
+        description: "O alerta foi marcado como reconhecido.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/sentiment/crisis-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sentiment/crisis-alerts/stats"] });
+    },
+  });
+
+  const addComparisonEntity = () => {
+    if (newEntityName.trim() && comparisonEntities.length < 10) {
+      const id = newEntityName.trim().toUpperCase().replace(/\s+/g, "_");
+      if (!comparisonEntities.find(e => e.id === id)) {
+        setComparisonEntities([...comparisonEntities, { type: newEntityType, id, name: newEntityName.trim() }]);
+        setNewEntityName("");
+      }
+    }
+  };
+
+  const removeComparisonEntity = (id: string) => {
+    setComparisonEntities(comparisonEntities.filter(e => e.id !== id));
+  };
+
   const totalArticles = sources?.reduce((acc, s) => acc + s.articles.length, 0) || 0;
   const uniqueCountries = Array.from(new Set(sources?.map(s => s.country) || []));
 
@@ -387,6 +541,19 @@ export default function SentimentAnalysisPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview" data-testid="tab-overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="comparison" data-testid="tab-comparison" className="relative">
+            <Scale className="w-4 h-4 mr-1" />
+            Comparação
+          </TabsTrigger>
+          <TabsTrigger value="alerts" data-testid="tab-alerts" className="relative">
+            <Bell className="w-4 h-4 mr-1" />
+            Alertas
+            {(alertStats?.unacknowledged || 0) > 0 && (
+              <Badge variant="destructive" className="ml-2 h-5 min-w-5 px-1">
+                {alertStats?.unacknowledged}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="external" data-testid="tab-external">Dados Externos</TabsTrigger>
           <TabsTrigger value="wordcloud" data-testid="tab-wordcloud">Nuvem de Palavras</TabsTrigger>
           <TabsTrigger value="timeline" data-testid="tab-timeline">Evolução Temporal</TabsTrigger>
@@ -483,6 +650,335 @@ export default function SentimentAnalysisPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Comparison Tab */}
+        <TabsContent value="comparison" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Entity Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Scale className="w-5 h-5" />
+                  Seleção de Entidades
+                </CardTitle>
+                <CardDescription>
+                  Adicione partidos ou candidatos para comparar (mínimo 2, máximo 10)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Select value={newEntityType} onValueChange={(v) => setNewEntityType(v as "party" | "candidate")}>
+                    <SelectTrigger className="w-32" data-testid="select-entity-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="party">Partido</SelectItem>
+                      <SelectItem value="candidate">Candidato</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="Nome..."
+                    value={newEntityName}
+                    onChange={(e) => setNewEntityName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addComparisonEntity()}
+                    data-testid="input-entity-name"
+                  />
+                  <Button size="icon" onClick={addComparisonEntity} data-testid="button-add-entity">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                {/* Quick add from overview */}
+                {overview?.parties && overview.parties.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Adicão rápida:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {overview.parties.slice(0, 6).map((party) => (
+                        <Button
+                          key={party.entityId}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (!comparisonEntities.find(e => e.id === party.entityId)) {
+                              setComparisonEntities([...comparisonEntities, {
+                                type: "party",
+                                id: party.entityId,
+                                name: party.entityName
+                              }]);
+                            }
+                          }}
+                          disabled={comparisonEntities.some(e => e.id === party.entityId)}
+                          data-testid={`button-quick-add-${party.entityId}`}
+                        >
+                          {party.entityId}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Selecionados ({comparisonEntities.length}/10):</p>
+                  {comparisonEntities.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhuma entidade selecionada</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {comparisonEntities.map((entity) => (
+                        <div key={entity.id} className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-sm">
+                          <span>{entity.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-4 w-4 p-0"
+                            onClick={() => removeComparisonEntity(entity.id)}
+                            data-testid={`button-remove-entity-${entity.id}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={() => comparisonMutation.mutate(comparisonEntities)}
+                  disabled={comparisonEntities.length < 2 || comparisonMutation.isPending}
+                  data-testid="button-run-comparison"
+                >
+                  {comparisonMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Analisando...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="w-4 h-4 mr-2" />
+                      Comparar Sentimentos
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Comparison Results */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Resultado da Comparação</CardTitle>
+                <CardDescription>
+                  {comparisonMutation.data 
+                    ? `Análise realizada em ${new Date(comparisonMutation.data.analyzedAt).toLocaleString("pt-BR")}`
+                    : "Execute uma comparação para ver os resultados"
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {comparisonMutation.isPending ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+                  </div>
+                ) : comparisonMutation.data?.entities && comparisonMutation.data.entities.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Ranking */}
+                    <div className="space-y-3">
+                      {comparisonMutation.data.entities.map((entity, idx) => (
+                        <div key={entity.entityId} className="flex items-center gap-4 p-3 rounded-lg border">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium">{entity.entityName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {entity.totalMentions} menções • Tendência: {entity.trend === "rising" ? "↑ subindo" : entity.trend === "falling" ? "↓ caindo" : "→ estável"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="w-24">
+                                  <Progress value={(entity.avgSentiment + 1) * 50} className="h-2" />
+                                </div>
+                                <SentimentBadge score={entity.avgSentiment} label={entity.sentimentLabel} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Comparison Chart */}
+                    <div className="h-[300px] mt-6">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={comparisonMutation.data.entities} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" domain={[-1, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                          <YAxis type="category" dataKey="entityName" width={100} />
+                          <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, "Sentimento Médio"]} />
+                          <Bar dataKey="avgSentiment" radius={[0, 4, 4, 0]}>
+                            {comparisonMutation.data.entities.map((entry) => (
+                              <Cell
+                                key={entry.entityId}
+                                fill={entry.avgSentiment > 0.1 ? "hsl(142, 76%, 36%)" : entry.avgSentiment < -0.1 ? "hsl(0, 72%, 51%)" : "hsl(45, 93%, 47%)"}
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* AI Analysis */}
+                    {comparisonMutation.data.comparisonAnalysis && (
+                      <Card className="mt-4 bg-muted/50">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">Análise de IA</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm">{comparisonMutation.data.comparisonAnalysis}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                    <Scale className="w-12 h-12 mb-4" />
+                    <p>Selecione ao menos 2 entidades e execute a comparação</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Alerts Tab */}
+        <TabsContent value="alerts" className="space-y-4">
+          {/* Alert Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total de Alertas</CardTitle>
+                <Bell className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-total-alerts">{alertStats?.total || 0}</div>
+                <p className="text-xs text-muted-foreground">{alertStats?.last24h || 0} nas últimas 24h</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Não Reconhecidos</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive" data-testid="text-unack-alerts">
+                  {alertStats?.unacknowledged || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Requerem atenção</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Críticos</CardTitle>
+                <AlertCircle className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-critical-alerts">
+                  {alertStats?.bySeverity?.critical || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Severidade crítica</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Alta Prioridade</CardTitle>
+                <TrendingDown className="h-4 w-4 text-orange-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-high-alerts">
+                  {alertStats?.bySeverity?.high || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Severidade alta</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Alert List */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Alertas de Crise</CardTitle>
+              <CardDescription>
+                Alertas gerados automaticamente quando há picos de sentimento negativo
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {alertsLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+                </div>
+              ) : crisisAlerts && crisisAlerts.length > 0 ? (
+                <div className="space-y-3">
+                  {crisisAlerts.map((alert) => (
+                    <Card
+                      key={alert.id}
+                      className={
+                        alert.severity === "critical" || alert.severity === "high" 
+                          ? "border-destructive" 
+                          : ""
+                      }
+                      data-testid={`card-alert-${alert.id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              {alert.severity === "critical" && <AlertCircle className="w-4 h-4 text-destructive" />}
+                              {alert.severity === "high" && <AlertTriangle className="w-4 h-4 text-destructive" />}
+                              {alert.severity === "medium" && <AlertCircle className="w-4 h-4 text-muted-foreground" />}
+                              {alert.severity === "low" && <AlertCircle className="w-4 h-4 text-muted-foreground" />}
+                              <span className="font-medium">{alert.title}</span>
+                              <Badge variant={
+                                alert.severity === "critical" ? "destructive" :
+                                alert.severity === "high" ? "destructive" : "secondary"
+                              }>
+                                {alert.severity}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              {alert.description || `Alerta para ${alert.entityName || alert.entityId}`}
+                            </p>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                              <span data-testid={`text-alert-type-${alert.id}`}>Tipo: {alert.alertType.replace(/_/g, " ")}</span>
+                              {alert.sentimentChange && (
+                                <span data-testid={`text-alert-change-${alert.id}`}>Queda: {(Math.abs(parseFloat(alert.sentimentChange)) * 100).toFixed(0)}%</span>
+                              )}
+                              <span data-testid={`text-alert-date-${alert.id}`}>Detectado: {new Date(alert.detectedAt).toLocaleString("pt-BR")}</span>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => acknowledgeAlertMutation.mutate(alert.id)}
+                            disabled={acknowledgeAlertMutation.isPending}
+                            data-testid={`button-acknowledge-${alert.id}`}
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Reconhecer
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <Bell className="w-12 h-12 mb-4" />
+                  <p className="font-medium">Nenhum alerta pendente</p>
+                  <p className="text-sm">Todos os alertas foram reconhecidos ou não há alertas ativos</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="external" className="space-y-4">

@@ -7,6 +7,7 @@ Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dad
 | Plataforma | Guia |
 |------------|------|
 | **Portainer** (Recomendado) | [DEPLOY-PORTAINER.md](./DEPLOY-PORTAINER.md) |
+| **Atualização Portainer** | [DEPLOY-UPDATE-PORTAINER.md](./DEPLOY-UPDATE-PORTAINER.md) |
 | **Coolify** | Este documento |
 | **Docker direto** | Seção [Deploy Local com Docker](#deploy-local-com-docker) |
 

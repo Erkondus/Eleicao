@@ -325,3 +325,125 @@ export function emitElectionProjection(
     data,
   });
 }
+
+// Crisis Alert Events
+export interface CrisisAlertEvent {
+  type: 
+    | "crisis.alert.new"
+    | "crisis.alert.acknowledged"
+    | "crisis.alert.escalated";
+  alertId: number;
+  data: Record<string, unknown>;
+}
+
+export function broadcastCrisisAlert(event: CrisisAlertEvent): void {
+  if (!wss || clients.size === 0) return;
+
+  const message = JSON.stringify(event);
+  
+  clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN && client.authenticated) {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error("Error sending crisis alert event:", error);
+      }
+    }
+  });
+}
+
+export function emitNewCrisisAlert(alertData: {
+  id: number;
+  entityType: string;
+  entityId: string;
+  entityName: string;
+  alertType: string;
+  severity: string;
+  title: string;
+  description: string;
+  sentimentBefore: number;
+  sentimentAfter: number;
+  sentimentChange: number;
+  mentionCount: number;
+  detectedAt: Date;
+}): void {
+  broadcastCrisisAlert({
+    type: "crisis.alert.new",
+    alertId: alertData.id,
+    data: {
+      ...alertData,
+      timestamp: new Date().toISOString()
+    }
+  });
+}
+
+export function emitAlertAcknowledged(alertId: number, acknowledgedBy: string): void {
+  broadcastCrisisAlert({
+    type: "crisis.alert.acknowledged",
+    alertId,
+    data: {
+      acknowledgedBy,
+      acknowledgedAt: new Date().toISOString()
+    }
+  });
+}
+
+// In-App Notification Events
+export interface NotificationEvent {
+  type: "notification.new" | "notification.read";
+  userId: string;
+  data: Record<string, unknown>;
+}
+
+export function sendNotificationToUser(userId: string, notification: {
+  id: number;
+  type: string;
+  severity: string;
+  title: string;
+  message: string;
+  actionUrl?: string;
+}): void {
+  if (!wss || clients.size === 0) return;
+
+  const message = JSON.stringify({
+    type: "notification.new",
+    userId,
+    data: notification
+  });
+  
+  clients.forEach((client: ExtendedWebSocket) => {
+    if (client.readyState === WebSocket.OPEN && 
+        client.authenticated && 
+        client.userId?.toString() === userId) {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error("Error sending notification:", error);
+      }
+    }
+  });
+}
+
+export function broadcastToAllUsers(notification: {
+  type: string;
+  severity: string;
+  title: string;
+  message: string;
+}): void {
+  if (!wss || clients.size === 0) return;
+
+  const message = JSON.stringify({
+    type: "notification.broadcast",
+    data: notification
+  });
+  
+  clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN && client.authenticated) {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error("Error broadcasting notification:", error);
+      }
+    }
+  });
+}

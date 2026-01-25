@@ -40,9 +40,19 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
 - `customDashboards`: User-customizable dashboards with layout, filters, and widgets configuration.
 - `aiSuggestions`: AI-generated chart and report suggestions with relevance scores.
 - `sentimentDataSources`: External data sources for sentiment analysis (news, blogs, forums).
-- `sentimentArticles`: Collected articles from various sources for sentiment analysis.
+- `sentimentArticles`: Collected articles from various sources for sentiment analysis with sourceType and sentiment classification fields.
 - `sentimentAnalysisResults`: Historical sentiment scores and analysis per entity (party, candidate).
 - `sentimentKeywords`: Aggregated keywords for word cloud visualization with frequency and sentiment tracking.
+- `sentimentCrisisAlerts`: Automatic crisis alerts with severity levels, sentiment change tracking, and acknowledgment workflow.
+- `sentimentMonitoringSessions`: Multi-entity monitoring sessions with customizable filters and alert thresholds.
+- `sentimentComparisonSnapshots`: Historical snapshots of multi-entity comparison analyses.
+- `articleEntityMentions`: Entity-level mentions extracted from articles for detailed entity tracking.
+- `alertConfigurations`: Configurable thresholds for crisis detection per user/entity.
+- `inAppNotifications`: Real-time in-app notifications with WebSocket delivery.
+- `ibgeMunicipios`: Brazilian municipality data from IBGE with geographic information.
+- `ibgePopulacao`: Population estimates by municipality and year from IBGE/SIDRA.
+- `ibgeIndicadores`: Socioeconomic indicators (IDH, income, education, infrastructure) per municipality.
+- `ibgeImportJobs`: Import job tracking for IBGE data operations.
 
 ## Recent Changes (January 2026)
 - **Enhanced Visualizations & PDF Export:** Interactive Brazil map on dashboard with state click for electoral data summary. Dynamic charts (bar charts with error margins, composed charts for before/after comparisons) in predictions. PDF export functionality for all AI prediction types with professional TSE-styled documents.
@@ -53,6 +63,25 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
 - **Multi-Year Comparison:** API endpoint for comparing electoral data across different election years with party vote analysis.
 - **Advanced Data Segmentation:** Municipality-level filtering with detailed vote aggregation by position and party.
 - **Custom Dashboards:** Full CRUD for user-customizable dashboards with public/private visibility and saved filter configurations.
+- **Multi-Entity Sentiment Comparison:** New "Comparação" tab in sentiment analysis allows comparing sentiment across multiple parties/candidates simultaneously with interactive bar charts and AI-generated comparative narratives.
+- **Crisis Alert System:** Automatic detection of sentiment crises with severity levels (low/medium/high/critical). New "Alertas" tab displays alerts with acknowledgment functionality, statistics on unacknowledged alerts, and detailed alert history.
+- **Sentiment Monitoring Sessions:** Create and manage monitoring sessions for tracking multiple entities over time with customizable alert thresholds and source filters.
+- **GPT-4o Sentiment Classification:** Advanced article-level sentiment classification with entity extraction, keyword identification, and confidence scoring. Batch classification API for processing up to 20 articles at once.
+- **IBGE Demographic Data Integration:** Direct import of Brazilian demographic data from IBGE SIDRA API. Includes municipalities (5,570), population estimates by year, and socioeconomic indicators (IDH, income, education) based on IBGE regional patterns. New "Dados IBGE" page with import buttons, progress tracking, and data visualization. Demographic data enhances AI prediction models with population and socioeconomic context.
+- **Real-time Notification System:** In-app notifications with WebSocket delivery and notification bell in header. Email alerts for critical/high severity crises via Resend. Configurable alert thresholds per user/entity with rate limiting.
+- **Dashboard Sentiment Integration:** Electoral Dashboard now includes sentiment trends widget with bar charts showing entity sentiment scores and crisis alert display with links to full analysis.
+- **Campaign Insights AI Module:** Comprehensive AI-powered module for campaign strategy analysis featuring:
+  - High-Impact Segment Identification: GPT-4o analysis to identify voter demographics and regions with highest campaign potential, with quantitative metrics (impact score, conversion potential, volatility)
+  - Message Strategy Generation: AI-suggested communication strategies per segment with tone recommendations, channel suggestions, topics to emphasize/avoid
+  - Campaign Impact Prediction: Predictive modeling for investment outcomes using Monte Carlo simulation, logistic regression, and elasticity analysis
+  - Executive Report Generation: Automated generation of comprehensive strategy reports with visualizations
+  - Interactive Dashboard: Visual analytics with charts showing segment impact scores, sentiment vs volatility radar charts, and prediction results
+- **Campaign Management Module Enhanced:** Comprehensive campaign management with new features:
+  - Team Management: Add/remove team members with role-based assignments (coordinator, manager, member, volunteer). Track join dates and user enrichment.
+  - Calendar Visualization: Monthly grid view with activities color-coded by type (events, meetings, milestones, actions). Navigation controls and upcoming activities list.
+  - KPI Goal Tracking: AI-powered KPI recommendations via GPT-4o with suggested targets, rationale, priority, and confidence scores. Manual goal creation with baseline/current/target tracking, priority badges, and progress visualization.
+  - Activity Assignees: Many-to-many relationship for assigning team members to campaign activities.
+  - Notification Integration: Automatic notifications for team additions, task assignments, and campaign status changes.
 
 ## External Dependencies
 - **OpenAI:** Used for AI integrations (GPT-4o for validation and insights, `text-embedding-3-small` for semantic search).

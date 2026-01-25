@@ -55,8 +55,16 @@ import {
   candidateComparisons,
   eventImpactPredictions,
   scenarioSimulations,
+  sentimentAnalysisResults,
+  sentimentCrisisAlerts,
+  sentimentMonitoringSessions,
+  sentimentComparisonSnapshots,
+  sentimentArticles,
+  articleEntityMentions,
+  alertConfigurations,
+  inAppNotifications,
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, desc, gte, lte } from "drizzle-orm";
 import OpenAI from "openai";
 import {
   runSentimentAnalysis,
@@ -76,6 +84,8 @@ import {
   getEmbeddingStats, 
   getRecentQueries 
 } from "./semantic-search";
+import { ibgeService } from "./ibge-service";
+import { campaignInsightsService } from "./campaign-insights-service";
 
 const upload = multer({ 
   dest: "/tmp/uploads/",
@@ -355,6 +365,48 @@ export async function registerRoutes(
     }
   });
 
+  // Paginated parties endpoint with search and filtering
+  app.get("/api/parties/paginated", requireAuth, async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const search = (req.query.search as string) || "";
+      const active = req.query.active === "true" ? true : req.query.active === "false" ? false : undefined;
+      const sortBy = (req.query.sortBy as string) || "name";
+      const sortOrder = (req.query.sortOrder as string) === "desc" ? "desc" : "asc";
+      const tags = req.query.tags ? (req.query.tags as string).split(",") : undefined;
+
+      const result = await storage.getPartiesPaginated({
+        page,
+        limit,
+        search,
+        active,
+        sortBy,
+        sortOrder,
+        tags,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching paginated parties:", error);
+      res.status(500).json({ error: "Failed to fetch parties" });
+    }
+  });
+
+  // Get party by ID with details
+  app.get("/api/parties/:id/details", requireAuth, async (req, res) => {
+    try {
+      const partyId = parseInt(req.params.id);
+      const party = await storage.getPartyWithDetails(partyId);
+      if (!party) {
+        return res.status(404).json({ error: "Party not found" });
+      }
+      res.json(party);
+    } catch (error) {
+      console.error("Error fetching party details:", error);
+      res.status(500).json({ error: "Failed to fetch party details" });
+    }
+  });
+
   app.get("/api/parties/export/csv", requireAuth, async (req, res) => {
     try {
       const parties = await storage.getParties();
@@ -595,6 +647,52 @@ export async function registerRoutes(
       res.json(candidates);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch candidates" });
+    }
+  });
+
+  // Paginated candidates endpoint with search and filtering
+  app.get("/api/candidates/paginated", requireAuth, async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const search = (req.query.search as string) || "";
+      const partyId = req.query.partyId ? parseInt(req.query.partyId as string) : undefined;
+      const position = (req.query.position as string) || undefined;
+      const active = req.query.active === "true" ? true : req.query.active === "false" ? false : undefined;
+      const sortBy = (req.query.sortBy as string) || "name";
+      const sortOrder = (req.query.sortOrder as string) === "desc" ? "desc" : "asc";
+      const tags = req.query.tags ? (req.query.tags as string).split(",") : undefined;
+
+      const result = await storage.getCandidatesPaginated({
+        page,
+        limit,
+        search,
+        partyId,
+        position,
+        active,
+        sortBy,
+        sortOrder,
+        tags,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching paginated candidates:", error);
+      res.status(500).json({ error: "Failed to fetch candidates" });
+    }
+  });
+
+  // Get candidate by ID with details
+  app.get("/api/candidates/:id/details", requireAuth, async (req, res) => {
+    try {
+      const candidateId = parseInt(req.params.id);
+      const candidate = await storage.getCandidateWithDetails(candidateId);
+      if (!candidate) {
+        return res.status(404).json({ error: "Candidate not found" });
+      }
+      res.json(candidate);
+    } catch (error) {
+      console.error("Error fetching candidate details:", error);
+      res.status(500).json({ error: "Failed to fetch candidate details" });
     }
   });
 
@@ -3534,7 +3632,7 @@ Analise o impacto dessa mudança hipotética e forneça:
 
       // Clean up
       await unlink(zipPath).catch(() => {});
-      await rmdir(tmpDir).catch(() => {});
+      await rm(tmpDir, { recursive: true }).catch(() => {});
 
       const files = csvFiles.map(f => ({
         path: f.path,
@@ -3649,12 +3747,14 @@ Analise o impacto dessa mudança hipotética e forneça:
   // Get historical electoral data summary for scenario creation
   app.get("/api/historical-elections", requireAuth, async (req, res) => {
     try {
-      const { year, uf, cargo } = req.query;
+      const { year, uf, cargo, turno } = req.query;
       
       const filters: any = {};
       if (year) filters.anoEleicao = parseInt(year as string);
       if (uf) filters.sgUf = uf as string;
       if (cargo) filters.cdCargo = parseInt(cargo as string);
+      // Default to turno 1 to avoid double-counting voters across rounds
+      if (turno) filters.nrTurno = parseInt(turno as string);
 
       const statistics = await storage.getElectoralStatisticsSummary(filters);
       res.json(statistics);
@@ -3973,7 +4073,7 @@ Analise o impacto dessa mudança hipotética e forneça:
 
     // Sync parties from imported data before marking as complete
     const partiesResult = await storage.syncPartiesFromTseImport(jobId);
-    console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.existing} existing`);
+    console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.updated} updated, ${partiesResult.existing} existing`);
 
     // Calculate actual imported rows (total - skipped - errors)
     const actualImported = rowCount - filteredCount - errorCount;
@@ -4130,58 +4230,72 @@ Analise o impacto dessa mudança hipotética e forneça:
 
       const numericFields = [2, 3, 5, 6, 13, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44];
 
+      // Collect all rows first (synchronously), then process in batches
+      const allRows: string[][] = [];
       await new Promise<void>((resolve, reject) => {
         const parser = createReadStream(csvPath, { encoding: "latin1" })
           .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2 }));
 
-        parser.on("data", async (row: string[]) => {
-          rowCount++;
-          
-          const cdCargo = parseValue(row[16], true);
-          if (cargoFilter && cdCargo !== cargoFilter) {
-            filteredCount++;
-            return;
-          }
-
-          const record: any = { importJobId: jobId };
-          for (const [index, field] of Object.entries(fieldMap)) {
-            const idx = parseInt(index);
-            if (idx < row.length) {
-              record[field] = parseValue(row[idx], numericFields.includes(idx));
-            }
-          }
-
-          records.push(record);
-
-          if (records.length >= BATCH_SIZE) {
-            parser.pause();
-            try {
-              const batch = records.splice(0, BATCH_SIZE);
-              const inserted = await storage.insertTseElectoralStatisticsBatch(batch);
-              const duplicates = batch.length - inserted;
-              filteredCount += duplicates;
-              await storage.updateTseImportJob(jobId, { 
-                processedRows: rowCount - filteredCount,
-                skippedRows: filteredCount,
-                updatedAt: new Date()
-              });
-            } catch (err) {
-              errorCount++;
-            }
-            parser.resume();
-          }
+        parser.on("data", (row: string[]) => {
+          allRows.push(row);
         });
-
-        parser.on("end", async () => {
-          if (records.length > 0) {
-            const inserted = await storage.insertTseElectoralStatisticsBatch(records);
-            const duplicates = records.length - inserted;
-            filteredCount += duplicates;
-          }
-          resolve();
-        });
+        parser.on("end", () => resolve());
         parser.on("error", reject);
       });
+
+      console.log(`[DETALHE] Parsed ${allRows.length} rows, processing in batches...`);
+      
+      // Process rows in batches
+      for (let i = 0; i < allRows.length; i++) {
+        const row = allRows[i];
+        rowCount++;
+        
+        const cdCargo = parseValue(row[16], true);
+        if (cargoFilter && cdCargo !== cargoFilter) {
+          filteredCount++;
+          continue;
+        }
+
+        const record: any = { importJobId: jobId };
+        for (const [index, field] of Object.entries(fieldMap)) {
+          const idx = parseInt(index);
+          if (idx < row.length) {
+            record[field] = parseValue(row[idx], numericFields.includes(idx));
+          }
+        }
+
+        records.push(record);
+
+        if (records.length >= BATCH_SIZE) {
+          try {
+            const batch = records.splice(0, BATCH_SIZE);
+            const inserted = await storage.insertTseElectoralStatisticsBatch(batch);
+            const duplicates = batch.length - inserted;
+            filteredCount += duplicates;
+            await storage.updateTseImportJob(jobId, { 
+              processedRows: rowCount - filteredCount,
+              skippedRows: filteredCount,
+              updatedAt: new Date()
+            });
+          } catch (err) {
+            console.error(`[DETALHE] Batch insert error:`, err);
+            errorCount++;
+          }
+        }
+      }
+
+      // Insert remaining records
+      if (records.length > 0) {
+        try {
+          const inserted = await storage.insertTseElectoralStatisticsBatch(records);
+          const duplicates = records.length - inserted;
+          filteredCount += duplicates;
+          console.log(`[DETALHE] Final batch: ${inserted} inserted, ${duplicates} skipped`);
+        } catch (err) {
+          console.error(`[DETALHE] Final batch insert error:`, err);
+          errorCount++;
+        }
+      }
 
       await storage.updateTseImportJob(jobId, {
         status: "completed",
@@ -4313,58 +4427,76 @@ Analise o impacto dessa mudança hipotética e forneça:
 
       const numericFields = [2, 3, 5, 6, 13, 15, 16, 19, 22, 30, 31, 32, 33, 34, 35, 36, 37];
 
+      // Collect all rows first (synchronously), then process in batches
+      const allRows: string[][] = [];
       await new Promise<void>((resolve, reject) => {
         const parser = createReadStream(csvPath, { encoding: "latin1" })
           .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2 }));
 
-        parser.on("data", async (row: string[]) => {
-          rowCount++;
-          
-          const cdCargo = parseValue(row[16], true);
-          if (cargoFilter && cdCargo !== cargoFilter) {
-            filteredCount++;
-            return;
-          }
-
-          const record: any = { importJobId: jobId };
-          for (const [index, field] of Object.entries(fieldMap)) {
-            const idx = parseInt(index);
-            if (idx < row.length) {
-              record[field] = parseValue(row[idx], numericFields.includes(idx));
-            }
-          }
-
-          records.push(record);
-
-          if (records.length >= BATCH_SIZE) {
-            parser.pause();
-            try {
-              const batch = records.splice(0, BATCH_SIZE);
-              const inserted = await storage.insertTsePartyVotesBatch(batch);
-              const duplicates = batch.length - inserted;
-              filteredCount += duplicates;
-              await storage.updateTseImportJob(jobId, { 
-                processedRows: rowCount - filteredCount,
-                skippedRows: filteredCount,
-                updatedAt: new Date()
-              });
-            } catch (err) {
-              errorCount++;
-            }
-            parser.resume();
-          }
+        parser.on("data", (row: string[]) => {
+          allRows.push(row);
         });
-
-        parser.on("end", async () => {
-          if (records.length > 0) {
-            const inserted = await storage.insertTsePartyVotesBatch(records);
-            const duplicates = records.length - inserted;
-            filteredCount += duplicates;
-          }
-          resolve();
-        });
+        parser.on("end", () => resolve());
         parser.on("error", reject);
       });
+
+      console.log(`[PARTIDO] Parsed ${allRows.length} rows, processing in batches...`);
+      
+      // Process rows in batches
+      for (let i = 0; i < allRows.length; i++) {
+        const row = allRows[i];
+        rowCount++;
+        
+        const cdCargo = parseValue(row[16], true);
+        if (cargoFilter && cdCargo !== cargoFilter) {
+          filteredCount++;
+          continue;
+        }
+
+        const record: any = { importJobId: jobId };
+        for (const [index, field] of Object.entries(fieldMap)) {
+          const idx = parseInt(index);
+          if (idx < row.length) {
+            record[field] = parseValue(row[idx], numericFields.includes(idx));
+          }
+        }
+
+        records.push(record);
+
+        if (records.length >= BATCH_SIZE) {
+          try {
+            const batch = records.splice(0, BATCH_SIZE);
+            const inserted = await storage.insertTsePartyVotesBatch(batch);
+            const duplicates = batch.length - inserted;
+            filteredCount += duplicates;
+            await storage.updateTseImportJob(jobId, { 
+              processedRows: rowCount - filteredCount,
+              skippedRows: filteredCount,
+              updatedAt: new Date()
+            });
+          } catch (err) {
+            console.error(`[PARTIDO] Batch insert error:`, err);
+            errorCount++;
+          }
+        }
+      }
+
+      // Insert remaining records
+      if (records.length > 0) {
+        try {
+          const inserted = await storage.insertTsePartyVotesBatch(records);
+          const duplicates = records.length - inserted;
+          filteredCount += duplicates;
+          console.log(`[PARTIDO] Final batch: ${inserted} inserted, ${duplicates} skipped`);
+        } catch (err) {
+          console.error(`[PARTIDO] Final batch insert error:`, err);
+          errorCount++;
+        }
+      }
+
+      // Sync parties from imported party votes data
+      const partiesResult = await storage.syncPartiesFromTseImport(jobId);
+      console.log(`TSE Import ${jobId} [PARTIDO]: Synced parties - ${partiesResult.created} created, ${partiesResult.updated} updated, ${partiesResult.existing} existing`);
 
       await storage.updateTseImportJob(jobId, {
         status: "completed", stage: "completed", totalRows: rowCount,
@@ -4575,7 +4707,7 @@ Analise o impacto dessa mudança hipotética e forneça:
 
       // Sync parties from imported data before marking as complete
       const partiesResult = await storage.syncPartiesFromTseImport(jobId);
-      console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.existing} existing`);
+      console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.updated} updated, ${partiesResult.existing} existing`);
 
       await storage.updateTseImportJob(jobId, {
         status: "completed",
@@ -4970,7 +5102,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       const userId = req.user!.id;
       const { filters } = req.body;
 
-      const summary = await storage.getSummary(filters);
+      const summary = await storage.getAnalyticsSummary(filters);
       const partyData = await storage.getVotesByParty({ ...filters, limit: 10 });
       const stateData = await storage.getAvailableStates(filters?.year);
 
@@ -5113,6 +5245,35 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
     }
   });
 
+  // Dashboard summary of top sentiment entities
+  app.get("/api/sentiment/summary", requireAuth, async (req, res) => {
+    try {
+      const results = await storage.getSentimentResults({ limit: 10 });
+      const entities = results.map(r => ({
+        name: r.entityName || `${r.entityType} ${r.entityId}`,
+        sentiment: r.overallScore || 0,
+        type: r.entityType,
+      }));
+      res.json({ entities });
+    } catch (error) {
+      console.error("Sentiment summary error:", error);
+      res.json({ entities: [] });
+    }
+  });
+
+  // Dashboard count of unacknowledged crisis alerts
+  app.get("/api/sentiment/alerts/count", requireAuth, async (req, res) => {
+    try {
+      const alerts = await db.select()
+        .from(sentimentCrisisAlerts)
+        .where(eq(sentimentCrisisAlerts.isAcknowledged, false));
+      res.json({ unacknowledged: alerts.length });
+    } catch (error) {
+      console.error("Alerts count error:", error);
+      res.json({ unacknowledged: 0 });
+    }
+  });
+
   // Get available sentiment data sources
   app.get("/api/sentiment/sources", requireAuth, async (req, res) => {
     try {
@@ -5240,7 +5401,7 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
           limit: 20,
         });
 
-        const summary = await storage.getSummary({ year, uf: uf as string | undefined });
+        const summary = await storage.getAnalyticsSummary({ year, uf: uf as string | undefined });
 
         return {
           year,
@@ -6052,6 +6213,1964 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
     }
   });
 
+  // ============================================
+  // SENTIMENT MONITORING & CRISIS ALERT ROUTES
+  // ============================================
+
+  // Create a new sentiment monitoring session
+  app.post("/api/sentiment/monitoring-sessions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        entities: z.array(z.object({
+          type: z.enum(["party", "candidate"]),
+          id: z.string(),
+          name: z.string()
+        })).min(1),
+        sourceFilters: z.object({
+          types: z.array(z.string()).optional(),
+          countries: z.array(z.string()).optional()
+        }).optional(),
+        dateRange: z.object({
+          start: z.string(),
+          end: z.string()
+        }).optional(),
+        alertThreshold: z.number().min(-1).max(0).optional()
+      });
+      
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Dados inválidos", details: parsed.error.issues });
+      }
+      
+      const userId = (req.user as any).id;
+      const session = await db.insert(sentimentMonitoringSessions).values({
+        userId,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        entities: parsed.data.entities,
+        sourceFilters: parsed.data.sourceFilters || {},
+        dateRange: parsed.data.dateRange,
+        alertThreshold: parsed.data.alertThreshold?.toString() || "-0.3",
+        isActive: true,
+      }).returning();
+      
+      await logAudit(req, "create_monitoring_session", "sentiment_monitoring", session[0].id.toString(), 
+        { name: parsed.data.name, entityCount: parsed.data.entities.length });
+      
+      res.json(session[0]);
+    } catch (error) {
+      console.error("Error creating monitoring session:", error);
+      res.status(500).json({ error: "Erro ao criar sessão de monitoramento" });
+    }
+  });
+
+  // List user's monitoring sessions
+  app.get("/api/sentiment/monitoring-sessions", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const sessions = await db.select()
+        .from(sentimentMonitoringSessions)
+        .where(eq(sentimentMonitoringSessions.userId, userId))
+        .orderBy(desc(sentimentMonitoringSessions.createdAt));
+      
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching monitoring sessions:", error);
+      res.status(500).json({ error: "Erro ao buscar sessões de monitoramento" });
+    }
+  });
+
+  // Get single monitoring session with snapshots
+  app.get("/api/sentiment/monitoring-sessions/:id", requireAuth, async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const session = await db.select()
+        .from(sentimentMonitoringSessions)
+        .where(eq(sentimentMonitoringSessions.id, sessionId))
+        .limit(1);
+      
+      if (session.length === 0) {
+        return res.status(404).json({ error: "Sessão não encontrada" });
+      }
+      
+      const snapshots = await db.select()
+        .from(sentimentComparisonSnapshots)
+        .where(eq(sentimentComparisonSnapshots.sessionId, sessionId))
+        .orderBy(desc(sentimentComparisonSnapshots.snapshotDate))
+        .limit(30);
+      
+      res.json({ ...session[0], snapshots });
+    } catch (error) {
+      console.error("Error fetching monitoring session:", error);
+      res.status(500).json({ error: "Erro ao buscar sessão" });
+    }
+  });
+
+  // Update monitoring session
+  app.patch("/api/sentiment/monitoring-sessions/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const schema = z.object({
+        name: z.string().optional(),
+        entities: z.array(z.object({
+          type: z.enum(["party", "candidate"]),
+          id: z.string(),
+          name: z.string()
+        })).optional(),
+        sourceFilters: z.object({
+          types: z.array(z.string()).optional(),
+          countries: z.array(z.string()).optional()
+        }).optional(),
+        isActive: z.boolean().optional(),
+        alertThreshold: z.number().optional()
+      });
+      
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Dados inválidos" });
+      }
+      
+      const updateData: Record<string, any> = { updatedAt: new Date() };
+      if (parsed.data.name) updateData.name = parsed.data.name;
+      if (parsed.data.entities) updateData.entities = parsed.data.entities;
+      if (parsed.data.sourceFilters) updateData.sourceFilters = parsed.data.sourceFilters;
+      if (parsed.data.isActive !== undefined) updateData.isActive = parsed.data.isActive;
+      if (parsed.data.alertThreshold !== undefined) updateData.alertThreshold = parsed.data.alertThreshold.toString();
+      
+      const updated = await db.update(sentimentMonitoringSessions)
+        .set(updateData)
+        .where(eq(sentimentMonitoringSessions.id, sessionId))
+        .returning();
+      
+      res.json(updated[0]);
+    } catch (error) {
+      console.error("Error updating monitoring session:", error);
+      res.status(500).json({ error: "Erro ao atualizar sessão" });
+    }
+  });
+
+  // Delete monitoring session
+  app.delete("/api/sentiment/monitoring-sessions/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      
+      await db.delete(sentimentComparisonSnapshots)
+        .where(eq(sentimentComparisonSnapshots.sessionId, sessionId));
+      
+      await db.delete(sentimentMonitoringSessions)
+        .where(eq(sentimentMonitoringSessions.id, sessionId));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting monitoring session:", error);
+      res.status(500).json({ error: "Erro ao excluir sessão" });
+    }
+  });
+
+  // Run multi-entity comparison analysis
+  app.post("/api/sentiment/compare", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        entities: z.array(z.object({
+          type: z.enum(["party", "candidate"]),
+          id: z.string(),
+          name: z.string()
+        })).min(2).max(10),
+        sourceTypes: z.array(z.enum(["news", "social", "blog", "forum"])).optional(),
+        dateRange: z.object({
+          start: z.string(),
+          end: z.string()
+        }).optional(),
+        sessionId: z.number().optional()
+      });
+      
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Dados inválidos", details: parsed.error.issues });
+      }
+      
+      const { entities, sourceTypes, dateRange, sessionId } = parsed.data;
+      
+      const entityResults = [];
+      
+      for (const entity of entities) {
+        const results = await db.select()
+          .from(sentimentAnalysisResults)
+          .where(
+            and(
+              eq(sentimentAnalysisResults.entityType, entity.type),
+              eq(sentimentAnalysisResults.entityId, entity.id)
+            )
+          )
+          .orderBy(desc(sentimentAnalysisResults.analysisDate))
+          .limit(30);
+        
+        const latestResult = results[0];
+        const avgSentiment = results.length > 0 
+          ? results.reduce((sum, r) => sum + parseFloat(r.sentimentScore), 0) / results.length 
+          : 0;
+        
+        const totalMentions = results.reduce((sum, r) => sum + (r.mentionCount || 0), 0);
+        
+        entityResults.push({
+          entityType: entity.type,
+          entityId: entity.id,
+          entityName: entity.name,
+          latestSentiment: latestResult ? parseFloat(latestResult.sentimentScore) : null,
+          avgSentiment,
+          sentimentLabel: latestResult?.sentimentLabel || "neutral",
+          totalMentions,
+          trend: results.length >= 2 
+            ? (parseFloat(results[0].sentimentScore) - parseFloat(results[results.length-1].sentimentScore)) > 0 
+              ? "rising" : "falling"
+            : "stable",
+          timeline: results.map(r => ({
+            date: r.analysisDate,
+            score: parseFloat(r.sentimentScore),
+            mentions: r.mentionCount
+          }))
+        });
+      }
+      
+      entityResults.sort((a, b) => (b.latestSentiment || 0) - (a.latestSentiment || 0));
+      
+      let comparisonAnalysis = "";
+      try {
+        const { analyzeElectoralSentiment } = await import("./ai-insights");
+        const aiAnalysis = await analyzeElectoralSentiment({
+          party: entities.map(e => e.name).join(", "),
+          dateRange
+        });
+        comparisonAnalysis = aiAnalysis.narrativeAnalysis || "";
+      } catch (e) {
+        console.log("AI analysis not available for comparison");
+      }
+      
+      if (sessionId) {
+        await db.insert(sentimentComparisonSnapshots).values({
+          sessionId,
+          snapshotDate: new Date(),
+          entityResults,
+          comparisonAnalysis,
+          overallSentiment: (entityResults.reduce((sum, e) => sum + (e.avgSentiment || 0), 0) / entityResults.length).toString(),
+          sourceBreakdown: { types: sourceTypes || ["all"] }
+        });
+        
+        await db.update(sentimentMonitoringSessions)
+          .set({ lastAnalyzedAt: new Date() })
+          .where(eq(sentimentMonitoringSessions.id, sessionId));
+      }
+      
+      res.json({
+        entities: entityResults,
+        comparisonAnalysis,
+        analyzedAt: new Date().toISOString(),
+        filters: { sourceTypes, dateRange }
+      });
+    } catch (error) {
+      console.error("Error running comparison:", error);
+      res.status(500).json({ error: "Erro ao executar comparação" });
+    }
+  });
+
+  // ============================================
+  // CRISIS ALERT ROUTES
+  // ============================================
+
+  // Get active crisis alerts
+  app.get("/api/sentiment/crisis-alerts", requireAuth, async (req, res) => {
+    try {
+      const { severity, acknowledged, entityType, limit: queryLimit } = req.query;
+      
+      const conditions = [];
+      if (severity) conditions.push(eq(sentimentCrisisAlerts.severity, severity as string));
+      if (acknowledged === "false") conditions.push(eq(sentimentCrisisAlerts.isAcknowledged, false));
+      if (acknowledged === "true") conditions.push(eq(sentimentCrisisAlerts.isAcknowledged, true));
+      if (entityType) conditions.push(eq(sentimentCrisisAlerts.entityType, entityType as string));
+      
+      let query = db.select().from(sentimentCrisisAlerts);
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as any;
+      }
+      
+      const alerts = await query
+        .orderBy(desc(sentimentCrisisAlerts.detectedAt))
+        .limit(parseInt(queryLimit as string) || 50);
+      
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching crisis alerts:", error);
+      res.status(500).json({ error: "Erro ao buscar alertas" });
+    }
+  });
+
+  // Acknowledge crisis alert
+  app.patch("/api/sentiment/crisis-alerts/:id/acknowledge", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const alertId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      
+      const updated = await db.update(sentimentCrisisAlerts)
+        .set({
+          isAcknowledged: true,
+          acknowledgedBy: userId,
+          acknowledgedAt: new Date()
+        })
+        .where(eq(sentimentCrisisAlerts.id, alertId))
+        .returning();
+      
+      await logAudit(req, "acknowledge_crisis_alert", "crisis_alert", alertId.toString(), 
+        { alertTitle: updated[0]?.title });
+      
+      res.json(updated[0]);
+    } catch (error) {
+      console.error("Error acknowledging alert:", error);
+      res.status(500).json({ error: "Erro ao reconhecer alerta" });
+    }
+  });
+
+  // Get crisis alert statistics
+  app.get("/api/sentiment/crisis-alerts/stats", requireAuth, async (req, res) => {
+    try {
+      const now = new Date();
+      const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      const allAlerts = await db.select().from(sentimentCrisisAlerts);
+      
+      const stats = {
+        total: allAlerts.length,
+        unacknowledged: allAlerts.filter(a => !a.isAcknowledged).length,
+        last24h: allAlerts.filter(a => new Date(a.detectedAt) > dayAgo).length,
+        lastWeek: allAlerts.filter(a => new Date(a.detectedAt) > weekAgo).length,
+        bySeverity: {
+          critical: allAlerts.filter(a => a.severity === "critical").length,
+          high: allAlerts.filter(a => a.severity === "high").length,
+          medium: allAlerts.filter(a => a.severity === "medium").length,
+          low: allAlerts.filter(a => a.severity === "low").length
+        },
+        byType: {
+          negative_spike: allAlerts.filter(a => a.alertType === "negative_spike").length,
+          crisis: allAlerts.filter(a => a.alertType === "crisis").length,
+          trending_negative: allAlerts.filter(a => a.alertType === "trending_negative").length,
+          high_volume: allAlerts.filter(a => a.alertType === "high_volume").length
+        }
+      };
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching alert stats:", error);
+      res.status(500).json({ error: "Erro ao buscar estatísticas" });
+    }
+  });
+
+  // ============================================
+  // FILTERED SENTIMENT ANALYSIS ROUTES
+  // ============================================
+
+  // Get sentiment with filters (source type, date range)
+  app.get("/api/sentiment/filtered", requireAuth, async (req, res) => {
+    try {
+      const { 
+        entityType, 
+        entityId, 
+        sourceType, 
+        startDate, 
+        endDate, 
+        limit: queryLimit 
+      } = req.query;
+      
+      const conditions = [];
+      
+      if (entityType) conditions.push(eq(sentimentAnalysisResults.entityType, entityType as string));
+      if (entityId) conditions.push(eq(sentimentAnalysisResults.entityId, entityId as string));
+      if (startDate) conditions.push(gte(sentimentAnalysisResults.analysisDate, new Date(startDate as string)));
+      if (endDate) conditions.push(lte(sentimentAnalysisResults.analysisDate, new Date(endDate as string)));
+      
+      let query = db.select().from(sentimentAnalysisResults);
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as any;
+      }
+      
+      const results = await query
+        .orderBy(desc(sentimentAnalysisResults.analysisDate))
+        .limit(parseInt(queryLimit as string) || 100);
+      
+      let filteredResults = results;
+      if (sourceType) {
+        filteredResults = results.filter(r => {
+          const breakdown = r.sourceBreakdown as Record<string, number> || {};
+          return breakdown[sourceType as string] && breakdown[sourceType as string] > 0;
+        });
+      }
+      
+      res.json(filteredResults);
+    } catch (error) {
+      console.error("Error fetching filtered sentiment:", error);
+      res.status(500).json({ error: "Erro ao buscar dados filtrados" });
+    }
+  });
+
+  // Get sentiment timeline with aggregation
+  app.get("/api/sentiment/timeline/:entityType/:entityId", requireAuth, async (req, res) => {
+    try {
+      const { entityType, entityId } = req.params;
+      const { days } = req.query;
+      
+      const daysBack = parseInt(days as string) || 30;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - daysBack);
+      
+      const results = await db.select()
+        .from(sentimentAnalysisResults)
+        .where(
+          and(
+            eq(sentimentAnalysisResults.entityType, entityType),
+            eq(sentimentAnalysisResults.entityId, entityId),
+            gte(sentimentAnalysisResults.analysisDate, startDate)
+          )
+        )
+        .orderBy(sentimentAnalysisResults.analysisDate);
+      
+      const timeline = results.map(r => ({
+        date: r.analysisDate,
+        score: parseFloat(r.sentimentScore),
+        label: r.sentimentLabel,
+        mentions: r.mentionCount,
+        positive: r.positiveCount,
+        negative: r.negativeCount,
+        neutral: r.neutralCount,
+        sourceBreakdown: r.sourceBreakdown
+      }));
+      
+      const avgScore = timeline.length > 0 
+        ? timeline.reduce((sum, t) => sum + t.score, 0) / timeline.length 
+        : 0;
+      
+      const trend = timeline.length >= 2
+        ? timeline[timeline.length - 1].score - timeline[0].score
+        : 0;
+      
+      res.json({
+        entityType,
+        entityId,
+        timeline,
+        summary: {
+          avgScore,
+          trend: trend > 0.1 ? "improving" : trend < -0.1 ? "declining" : "stable",
+          totalMentions: timeline.reduce((sum, t) => sum + (t.mentions || 0), 0),
+          dataPoints: timeline.length
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching timeline:", error);
+      res.status(500).json({ error: "Erro ao buscar timeline" });
+    }
+  });
+
+  // Get articles filtered by source type and sentiment
+  app.get("/api/sentiment/articles/filtered", requireAuth, async (req, res) => {
+    try {
+      const { sourceType, sentiment, startDate, endDate, limit: queryLimit } = req.query;
+      
+      const conditions = [];
+      
+      if (sourceType) conditions.push(eq(sentimentArticles.sourceType, sourceType as string));
+      if (sentiment) conditions.push(eq(sentimentArticles.sentimentLabel, sentiment as string));
+      if (startDate) conditions.push(gte(sentimentArticles.publishedAt, new Date(startDate as string)));
+      if (endDate) conditions.push(lte(sentimentArticles.publishedAt, new Date(endDate as string)));
+      
+      let query = db.select().from(sentimentArticles);
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as any;
+      }
+      
+      const articles = await query
+        .orderBy(desc(sentimentArticles.publishedAt))
+        .limit(parseInt(queryLimit as string) || 50);
+      
+      res.json(articles);
+    } catch (error) {
+      console.error("Error fetching filtered articles:", error);
+      res.status(500).json({ error: "Erro ao buscar artigos" });
+    }
+  });
+
+  // GPT-4o Advanced Sentiment Classification
+  app.post("/api/sentiment/classify-articles", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        articles: z.array(z.object({
+          id: z.number().optional(),
+          title: z.string(),
+          content: z.string(),
+          source: z.string()
+        })).min(1).max(20)
+      });
+      
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Dados inválidos", details: parsed.error.issues });
+      }
+      
+      const { batchClassifySentiment } = await import("./ai-insights");
+      const result = await batchClassifySentiment(parsed.data.articles);
+      
+      const userId = (req.user as any).id;
+      await logAudit(req, "batch_sentiment_classification", "sentiment_analysis", "batch", 
+        { articleCount: parsed.data.articles.length, summary: result.summary });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error in batch sentiment classification:", error);
+      res.status(500).json({ error: "Erro ao classificar artigos" });
+    }
+  });
+
+  // Classify single article with GPT-4o
+  app.post("/api/sentiment/classify-article", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        title: z.string().min(1),
+        content: z.string().min(10),
+        source: z.string()
+      });
+      
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Dados inválidos" });
+      }
+      
+      const { classifyArticleSentiment } = await import("./ai-insights");
+      const result = await classifyArticleSentiment(parsed.data);
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error classifying article:", error);
+      res.status(500).json({ error: "Erro ao classificar artigo" });
+    }
+  });
+
+  // Generate comparison narrative with GPT-4o
+  app.post("/api/sentiment/comparison-narrative", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        entities: z.array(z.object({
+          name: z.string(),
+          type: z.string(),
+          avgSentiment: z.number(),
+          totalMentions: z.number(),
+          trend: z.string()
+        })).min(2)
+      });
+      
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Dados inválidos" });
+      }
+      
+      const { generateComparisonNarrative } = await import("./ai-insights");
+      const narrative = await generateComparisonNarrative(parsed.data.entities);
+      
+      res.json({ narrative });
+    } catch (error) {
+      console.error("Error generating narrative:", error);
+      res.status(500).json({ error: "Erro ao gerar narrativa" });
+    }
+  });
+
+  // Detect crisis from sentiment changes
+  app.post("/api/sentiment/detect-crisis", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const schema = z.object({
+        entityType: z.string(),
+        entityId: z.string(),
+        entityName: z.string(),
+        currentSentiment: z.number(),
+        previousSentiment: z.number(),
+        mentionCount: z.number(),
+        avgMentionCount: z.number()
+      });
+      
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Dados inválidos" });
+      }
+      
+      const { detectCrisisFromSentiment } = await import("./ai-insights");
+      const alert = await detectCrisisFromSentiment(parsed.data);
+      
+      if (alert && alert.shouldAlert) {
+        const userId = (req.user as any).id;
+        const sentimentChange = parsed.data.previousSentiment - parsed.data.currentSentiment;
+        
+        // Store the alert with correct column names
+        const stored = await db.insert(sentimentCrisisAlerts).values({
+          entityType: parsed.data.entityType,
+          entityId: parsed.data.entityId,
+          entityName: parsed.data.entityName,
+          alertType: alert.alertType!,
+          severity: alert.severity,
+          title: alert.title,
+          description: alert.description,
+          sentimentBefore: parsed.data.previousSentiment.toFixed(4),
+          sentimentAfter: parsed.data.currentSentiment.toFixed(4),
+          sentimentChange: sentimentChange.toFixed(4),
+          mentionCount: parsed.data.mentionCount
+        }).returning();
+        
+        // Add audit log
+        await logAudit(req, "create_crisis_alert", "crisis_alert", stored[0].id.toString(), 
+          { severity: alert.severity, entityName: parsed.data.entityName });
+        
+        res.json({ alert: stored[0], detected: true });
+      } else {
+        res.json({ detected: false, message: "Nenhuma crise detectada" });
+      }
+    } catch (error) {
+      console.error("Error detecting crisis:", error);
+      res.status(500).json({ error: "Erro ao detectar crise" });
+    }
+  });
+
+  // ===== NOTIFICATIONS API =====
+  
+  // Get user's notifications
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      const { getUserNotifications, getUnreadNotificationCount } = await import("./notification-service");
+      const notifications = await getUserNotifications(userId, limit);
+      const unreadCount = await getUnreadNotificationCount(userId);
+      
+      res.json({ notifications, unreadCount });
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Erro ao buscar notificações" });
+    }
+  });
+
+  // Get unread notification count
+  app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const { getUnreadNotificationCount } = await import("./notification-service");
+      const count = await getUnreadNotificationCount(userId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ error: "Erro ao contar notificações" });
+    }
+  });
+
+  // Mark notification as read
+  app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const notificationId = parseInt(req.params.id);
+      
+      const { markNotificationAsRead } = await import("./notification-service");
+      await markNotificationAsRead(notificationId, userId);
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "Erro ao marcar notificação" });
+    }
+  });
+
+  // Mark all notifications as read
+  app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const { markAllNotificationsAsRead } = await import("./notification-service");
+      await markAllNotificationsAsRead(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ error: "Erro ao marcar notificações" });
+    }
+  });
+
+  // ===== ALERT CONFIGURATIONS API =====
+  
+  // Get user's alert configurations
+  app.get("/api/alert-configurations", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const configs = await db.select()
+        .from(alertConfigurations)
+        .where(eq(alertConfigurations.userId, userId))
+        .orderBy(desc(alertConfigurations.createdAt));
+      res.json(configs);
+    } catch (error) {
+      console.error("Error fetching alert configurations:", error);
+      res.status(500).json({ error: "Erro ao buscar configurações" });
+    }
+  });
+
+  // Create alert configuration
+  app.post("/api/alert-configurations", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const configSchema = z.object({
+        name: z.string().min(1),
+        isGlobal: z.boolean().optional(),
+        entityType: z.string().optional(),
+        entityId: z.string().optional(),
+        sentimentDropThreshold: z.number().min(0).max(1).optional(),
+        criticalSentimentLevel: z.number().min(-1).max(1).optional(),
+        mentionSpikeMultiplier: z.number().min(1).optional(),
+        timeWindowMinutes: z.number().min(1).optional(),
+        notifyEmail: z.boolean().optional(),
+        notifyInApp: z.boolean().optional(),
+        emailRecipients: z.array(z.string().email()).optional(),
+        minAlertIntervalMinutes: z.number().min(1).optional(),
+      });
+      
+      const parsed = configSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      
+      const [config] = await db.insert(alertConfigurations).values({
+        userId,
+        name: parsed.data.name,
+        isGlobal: parsed.data.isGlobal || false,
+        entityType: parsed.data.entityType,
+        entityId: parsed.data.entityId,
+        sentimentDropThreshold: parsed.data.sentimentDropThreshold?.toString(),
+        criticalSentimentLevel: parsed.data.criticalSentimentLevel?.toString(),
+        mentionSpikeMultiplier: parsed.data.mentionSpikeMultiplier?.toString(),
+        timeWindowMinutes: parsed.data.timeWindowMinutes,
+        notifyEmail: parsed.data.notifyEmail ?? true,
+        notifyInApp: parsed.data.notifyInApp ?? true,
+        emailRecipients: parsed.data.emailRecipients || [],
+        minAlertIntervalMinutes: parsed.data.minAlertIntervalMinutes,
+        isActive: true,
+      }).returning();
+      
+      await logAudit(req, "create_alert_configuration", "alert_configuration", config.id.toString());
+      res.json(config);
+    } catch (error) {
+      console.error("Error creating alert configuration:", error);
+      res.status(500).json({ error: "Erro ao criar configuração" });
+    }
+  });
+
+  // Update alert configuration
+  app.patch("/api/alert-configurations/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const configId = parseInt(req.params.id);
+      
+      const existing = await db.select()
+        .from(alertConfigurations)
+        .where(and(
+          eq(alertConfigurations.id, configId),
+          eq(alertConfigurations.userId, userId)
+        ))
+        .limit(1);
+      
+      if (existing.length === 0) {
+        return res.status(404).json({ error: "Configuração não encontrada" });
+      }
+      
+      const updateData: Record<string, any> = { updatedAt: new Date() };
+      if (req.body.name) updateData.name = req.body.name;
+      if (typeof req.body.isGlobal === 'boolean') updateData.isGlobal = req.body.isGlobal;
+      if (typeof req.body.isActive === 'boolean') updateData.isActive = req.body.isActive;
+      if (req.body.entityType) updateData.entityType = req.body.entityType;
+      if (req.body.entityId) updateData.entityId = req.body.entityId;
+      if (typeof req.body.sentimentDropThreshold === 'number') updateData.sentimentDropThreshold = req.body.sentimentDropThreshold.toString();
+      if (typeof req.body.criticalSentimentLevel === 'number') updateData.criticalSentimentLevel = req.body.criticalSentimentLevel.toString();
+      if (typeof req.body.mentionSpikeMultiplier === 'number') updateData.mentionSpikeMultiplier = req.body.mentionSpikeMultiplier.toString();
+      if (typeof req.body.timeWindowMinutes === 'number') updateData.timeWindowMinutes = req.body.timeWindowMinutes;
+      if (typeof req.body.notifyEmail === 'boolean') updateData.notifyEmail = req.body.notifyEmail;
+      if (typeof req.body.notifyInApp === 'boolean') updateData.notifyInApp = req.body.notifyInApp;
+      if (Array.isArray(req.body.emailRecipients)) updateData.emailRecipients = req.body.emailRecipients;
+      if (typeof req.body.minAlertIntervalMinutes === 'number') updateData.minAlertIntervalMinutes = req.body.minAlertIntervalMinutes;
+      
+      const [updated] = await db.update(alertConfigurations)
+        .set(updateData)
+        .where(eq(alertConfigurations.id, configId))
+        .returning();
+      
+      await logAudit(req, "update_alert_configuration", "alert_configuration", configId.toString());
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating alert configuration:", error);
+      res.status(500).json({ error: "Erro ao atualizar configuração" });
+    }
+  });
+
+  // Delete alert configuration
+  app.delete("/api/alert-configurations/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const configId = parseInt(req.params.id);
+      
+      await db.delete(alertConfigurations)
+        .where(and(
+          eq(alertConfigurations.id, configId),
+          eq(alertConfigurations.userId, userId)
+        ));
+      
+      await logAudit(req, "delete_alert_configuration", "alert_configuration", configId.toString());
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting alert configuration:", error);
+      res.status(500).json({ error: "Erro ao excluir configuração" });
+    }
+  });
+
+  // ============================================================
+  // IBGE Demographic Data Routes
+  // ============================================================
+
+  // Get IBGE data statistics
+  app.get("/api/ibge/stats", requireAuth, async (_req, res) => {
+    try {
+      const stats = await ibgeService.getStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching IBGE stats:", error);
+      res.status(500).json({ error: "Failed to fetch IBGE statistics" });
+    }
+  });
+
+  // Get import job history
+  app.get("/api/ibge/import-jobs", requireAuth, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const jobs = await ibgeService.getImportJobs(limit);
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching IBGE import jobs:", error);
+      res.status(500).json({ error: "Failed to fetch import jobs" });
+    }
+  });
+
+  // Start import of municipalities
+  app.post("/api/ibge/import/municipios", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const jobId = await ibgeService.createImportJob("municipios", userId, {});
+      
+      await logAudit(req, "IBGE_IMPORT_START", "ibge_import_jobs", jobId.toString(), { type: "municipios" });
+      
+      res.json({ jobId, message: "Import started" });
+
+      // Run import in background
+      ibgeService.importMunicipios(jobId, userId).catch(err => {
+        console.error("Error in municipios import:", err);
+      });
+    } catch (error) {
+      console.error("Error starting municipios import:", error);
+      res.status(500).json({ error: "Failed to start municipios import" });
+    }
+  });
+
+  // Start import of population data
+  app.post("/api/ibge/import/populacao", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const ano = req.body.ano || 2024;
+      const jobId = await ibgeService.createImportJob("populacao", userId, { ano });
+      
+      await logAudit(req, "IBGE_IMPORT_START", "ibge_import_jobs", jobId.toString(), { type: "populacao", ano });
+      
+      res.json({ jobId, message: "Import started" });
+
+      // Run import in background
+      ibgeService.importPopulacao(jobId, ano).catch(err => {
+        console.error("Error in populacao import:", err);
+      });
+    } catch (error) {
+      console.error("Error starting populacao import:", error);
+      res.status(500).json({ error: "Failed to start population import" });
+    }
+  });
+
+  // Start import of indicators data
+  app.post("/api/ibge/import/indicadores", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const jobId = await ibgeService.createImportJob("indicadores", userId, {});
+      
+      await logAudit(req, "IBGE_IMPORT_START", "ibge_import_jobs", jobId.toString(), { type: "indicadores" });
+      
+      res.json({ jobId, message: "Import started" });
+
+      // Run import in background
+      ibgeService.importIndicadores(jobId).catch(err => {
+        console.error("Error in indicadores import:", err);
+      });
+    } catch (error) {
+      console.error("Error starting indicadores import:", error);
+      res.status(500).json({ error: "Failed to start indicators import" });
+    }
+  });
+
+  // Import all data (municipios + populacao + indicadores)
+  app.post("/api/ibge/import/all", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const ano = req.body.ano || 2024;
+      
+      // Create job for full import
+      const jobId = await ibgeService.createImportJob("all", userId, { ano });
+      
+      await logAudit(req, "IBGE_IMPORT_START", "ibge_import_jobs", jobId.toString(), { type: "all", ano });
+      
+      res.json({ jobId, message: "Full import started" });
+
+      // Run imports sequentially in background
+      (async () => {
+        try {
+          // First import municipios
+          const munJobId = await ibgeService.createImportJob("municipios", userId, {});
+          await ibgeService.importMunicipios(munJobId, userId);
+          
+          // Then import population
+          const popJobId = await ibgeService.createImportJob("populacao", userId, { ano });
+          await ibgeService.importPopulacao(popJobId, ano);
+
+          // Finally import indicators
+          const indJobId = await ibgeService.createImportJob("indicadores", userId, {});
+          await ibgeService.importIndicadores(indJobId);
+        } catch (err) {
+          console.error("Error in full IBGE import:", err);
+        }
+      })();
+    } catch (error) {
+      console.error("Error starting full IBGE import:", error);
+      res.status(500).json({ error: "Failed to start full import" });
+    }
+  });
+
+  // Get municipality with demographic data
+  app.get("/api/ibge/municipio/:codigoIbge", requireAuth, async (req, res) => {
+    try {
+      const { codigoIbge } = req.params;
+      const data = await ibgeService.getMunicipioWithData(codigoIbge);
+      
+      if (!data) {
+        return res.status(404).json({ error: "Municipality not found" });
+      }
+      
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching municipality data:", error);
+      res.status(500).json({ error: "Failed to fetch municipality data" });
+    }
+  });
+
+  // Get demographic data for AI predictions
+  app.get("/api/ibge/demographic-data", requireAuth, async (req, res) => {
+    try {
+      const { codigoIbge, uf } = req.query;
+      const data = await ibgeService.getDemographicDataForPrediction(
+        codigoIbge as string,
+        uf as string
+      );
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching demographic data:", error);
+      res.status(500).json({ error: "Failed to fetch demographic data" });
+    }
+  });
+
+  // =====================================================
+  // Campaign Insights AI Module
+  // =====================================================
+
+  // Get all campaign insight sessions
+  app.get("/api/campaign-insights/sessions", requireAuth, async (req, res) => {
+    try {
+      const sessions = await campaignInsightsService.getSessions(req.user?.id);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      res.status(500).json({ error: "Failed to fetch sessions" });
+    }
+  });
+
+  // Create new campaign insight session
+  app.post("/api/campaign-insights/sessions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { name, description, targetPartyId, targetCandidateId, electionYear, position, targetRegion } = req.body;
+      
+      if (!name || !electionYear) {
+        return res.status(400).json({ error: "Name and election year are required" });
+      }
+
+      const sessionId = await campaignInsightsService.createSession({
+        name,
+        description,
+        targetPartyId,
+        targetCandidateId,
+        electionYear,
+        position,
+        targetRegion,
+        createdBy: req.user?.id,
+      });
+
+      await logAudit(req, "CAMPAIGN_INSIGHT_CREATE", "campaign_insight_sessions", sessionId.toString(), { name, electionYear });
+
+      res.json({ id: sessionId, message: "Session created successfully" });
+    } catch (error) {
+      console.error("Error creating session:", error);
+      res.status(500).json({ error: "Failed to create session" });
+    }
+  });
+
+  // Get session by ID with all data
+  app.get("/api/campaign-insights/sessions/:id", requireAuth, async (req, res) => {
+    try {
+      const session = await campaignInsightsService.getSessionById(parseInt(req.params.id));
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      res.json(session);
+    } catch (error) {
+      console.error("Error fetching session:", error);
+      res.status(500).json({ error: "Failed to fetch session" });
+    }
+  });
+
+  // Analyze high-impact segments
+  app.post("/api/campaign-insights/sessions/:id/analyze-segments", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const session = await campaignInsightsService.getSessionById(sessionId);
+      
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      const segments = await campaignInsightsService.analyzeHighImpactSegments({
+        sessionId,
+        electionYear: session.electionYear,
+        targetRegion: session.targetRegion,
+        targetPartyId: session.targetPartyId,
+      });
+
+      await logAudit(req, "CAMPAIGN_SEGMENT_ANALYSIS", "high_impact_segments", sessionId.toString(), { segmentCount: segments.length });
+
+      res.json({ segments, message: "Segment analysis completed" });
+    } catch (error) {
+      console.error("Error analyzing segments:", error);
+      res.status(500).json({ error: "Failed to analyze segments" });
+    }
+  });
+
+  // Generate message strategies
+  app.post("/api/campaign-insights/sessions/:id/generate-messages", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const { segmentId } = req.body;
+
+      const strategies = await campaignInsightsService.generateMessageStrategies({
+        sessionId,
+        segmentId,
+      });
+
+      await logAudit(req, "CAMPAIGN_MESSAGE_STRATEGY", "message_strategies", sessionId.toString(), { strategyCount: strategies.length });
+
+      res.json({ strategies, message: "Message strategies generated" });
+    } catch (error) {
+      console.error("Error generating messages:", error);
+      res.status(500).json({ error: "Failed to generate message strategies" });
+    }
+  });
+
+  // Predict campaign impact
+  app.post("/api/campaign-insights/sessions/:id/predict-impact", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const { investmentType, investmentAmount, targetSegmentIds, duration } = req.body;
+
+      if (!investmentType || !investmentAmount || !targetSegmentIds?.length || !duration) {
+        return res.status(400).json({ error: "Investment details are required" });
+      }
+
+      const prediction = await campaignInsightsService.predictCampaignImpact({
+        sessionId,
+        investmentType,
+        investmentAmount: parseFloat(investmentAmount),
+        targetSegmentIds,
+        duration: parseInt(duration),
+      });
+
+      await logAudit(req, "CAMPAIGN_IMPACT_PREDICTION", "campaign_impact_predictions", prediction.id.toString(), { investmentType, investmentAmount });
+
+      res.json({ prediction, message: "Impact prediction generated" });
+    } catch (error) {
+      console.error("Error predicting impact:", error);
+      res.status(500).json({ error: "Failed to predict impact" });
+    }
+  });
+
+  // Generate executive report
+  app.post("/api/campaign-insights/sessions/:id/generate-report", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const report = await campaignInsightsService.generateExecutiveReport(sessionId, req.user?.id);
+
+      await logAudit(req, "CAMPAIGN_REPORT_GENERATE", "campaign_insight_reports", report.id.toString(), { reportType: "executive" });
+
+      res.json({ report, message: "Report generated successfully" });
+    } catch (error) {
+      console.error("Error generating report:", error);
+      res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
+  // ============ CAMPAIGN MANAGEMENT ROUTES ============
+
+  // Get all campaigns
+  app.get("/api/campaigns", requireAuth, async (req, res) => {
+    try {
+      const { status, partyId } = req.query;
+      const campaigns = await storage.getCampaigns({
+        status: status as string | undefined,
+        partyId: partyId ? parseInt(partyId as string) : undefined,
+      });
+      res.json(campaigns);
+    } catch (error) {
+      console.error("Error fetching campaigns:", error);
+      res.status(500).json({ error: "Failed to fetch campaigns" });
+    }
+  });
+
+  // Create a new campaign
+  app.post("/api/campaigns", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const { startDate, endDate, ...rest } = req.body;
+      const campaign = await storage.createCampaign({
+        ...rest,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        createdBy: req.user?.id,
+      });
+      
+      await logAudit(req, "CAMPAIGN_CREATE", "campaigns", campaign.id.toString(), { name: campaign.name });
+      
+      res.status(201).json(campaign);
+    } catch (error) {
+      console.error("Error creating campaign:", error);
+      res.status(500).json({ error: "Failed to create campaign" });
+    }
+  });
+
+  // Get campaign by ID with full details
+  app.get("/api/campaigns/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await storage.getCampaignWithDetails(id);
+      
+      if (!result) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching campaign:", error);
+      res.status(500).json({ error: "Failed to fetch campaign" });
+    }
+  });
+
+  // Update campaign
+  app.patch("/api/campaigns/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateCampaign(id, req.body);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      await logAudit(req, "CAMPAIGN_UPDATE", "campaigns", id.toString(), req.body);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating campaign:", error);
+      res.status(500).json({ error: "Failed to update campaign" });
+    }
+  });
+
+  // Delete campaign
+  app.delete("/api/campaigns/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteCampaign(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      await logAudit(req, "CAMPAIGN_DELETE", "campaigns", id.toString(), {});
+      
+      res.json({ message: "Campaign deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting campaign:", error);
+      res.status(500).json({ error: "Failed to delete campaign" });
+    }
+  });
+
+  // Get campaign performance summary
+  app.get("/api/campaigns/:id/performance", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const summary = await storage.getCampaignPerformanceSummary(id);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching performance:", error);
+      res.status(500).json({ error: "Failed to fetch performance summary" });
+    }
+  });
+
+  // Link AI session to campaign
+  app.post("/api/campaigns/:id/link-ai-session", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { aiSessionId } = req.body;
+      
+      const updated = await storage.updateCampaign(id, { aiSessionId });
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      await logAudit(req, "CAMPAIGN_LINK_AI", "campaigns", id.toString(), { aiSessionId });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error linking AI session:", error);
+      res.status(500).json({ error: "Failed to link AI session" });
+    }
+  });
+
+  // ============ CAMPAIGN TEAM MEMBERS ============
+  
+  // Get team members for a campaign
+  app.get("/api/campaigns/:id/team", requireAuth, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const members = await storage.getCampaignTeamMembers(campaignId);
+      
+      // Enrich with user details
+      const enrichedMembers = await Promise.all(members.map(async (member) => {
+        const user = await storage.getUser(member.userId);
+        return {
+          ...member,
+          user: user ? { id: user.id, name: user.name, username: user.username, email: user.email, role: user.role } : null
+        };
+      }));
+      
+      res.json(enrichedMembers);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      res.status(500).json({ error: "Failed to fetch team members" });
+    }
+  });
+
+  // Add team member to campaign
+  app.post("/api/campaigns/:id/team", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { userId, role, permissions, notes } = req.body;
+      
+      // Check if user already a member
+      const existing = await storage.getCampaignTeamMemberByUser(campaignId, userId);
+      if (existing) {
+        return res.status(400).json({ error: "User is already a team member" });
+      }
+      
+      const member = await storage.createCampaignTeamMember({
+        campaignId,
+        userId,
+        role: role || "member",
+        permissions: permissions || [],
+        notes,
+      });
+      
+      // Create notification for the added user
+      const campaign = await storage.getCampaign(campaignId);
+      if (campaign) {
+        await storage.createCampaignNotification({
+          campaignId,
+          type: "team_added",
+          recipientUserId: userId,
+          title: "Adicionado à campanha",
+          message: `Você foi adicionado à equipe da campanha "${campaign.name}" como ${role || "membro"}.`,
+          severity: "info",
+        });
+      }
+      
+      await logAudit(req, "TEAM_MEMBER_ADD", "campaign_team_members", member.id.toString(), { userId, role });
+      
+      res.status(201).json(member);
+    } catch (error) {
+      console.error("Error adding team member:", error);
+      res.status(500).json({ error: "Failed to add team member" });
+    }
+  });
+
+  // Update team member
+  app.patch("/api/campaigns/:campaignId/team/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateCampaignTeamMember(id, req.body);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Team member not found" });
+      }
+      
+      await logAudit(req, "TEAM_MEMBER_UPDATE", "campaign_team_members", id.toString(), req.body);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating team member:", error);
+      res.status(500).json({ error: "Failed to update team member" });
+    }
+  });
+
+  // Remove team member
+  app.delete("/api/campaigns/:campaignId/team/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteCampaignTeamMember(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Team member not found" });
+      }
+      
+      await logAudit(req, "TEAM_MEMBER_REMOVE", "campaign_team_members", id.toString(), {});
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing team member:", error);
+      res.status(500).json({ error: "Failed to remove team member" });
+    }
+  });
+
+  // ============ ACTIVITY ASSIGNEES ============
+  
+  // Get assignees for an activity
+  app.get("/api/campaigns/:campaignId/activities/:activityId/assignees", requireAuth, async (req, res) => {
+    try {
+      const activityId = parseInt(req.params.activityId);
+      const assignees = await storage.getActivityAssignees(activityId);
+      
+      // Enrich with team member and user details
+      const enrichedAssignees = await Promise.all(assignees.map(async (assignee) => {
+        const teamMember = await storage.getCampaignTeamMember(assignee.teamMemberId);
+        let user = null;
+        if (teamMember) {
+          user = await storage.getUser(teamMember.userId);
+        }
+        return {
+          ...assignee,
+          teamMember,
+          user: user ? { id: user.id, name: user.name, username: user.username } : null
+        };
+      }));
+      
+      res.json(enrichedAssignees);
+    } catch (error) {
+      console.error("Error fetching assignees:", error);
+      res.status(500).json({ error: "Failed to fetch assignees" });
+    }
+  });
+
+  // Assign team member to activity
+  app.post("/api/campaigns/:campaignId/activities/:activityId/assignees", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const activityId = parseInt(req.params.activityId);
+      const campaignId = parseInt(req.params.campaignId);
+      const { teamMemberId, notes } = req.body;
+      
+      const assignee = await storage.createActivityAssignee({
+        activityId,
+        teamMemberId,
+        assignedBy: req.user?.id,
+        notes,
+      });
+      
+      // Create notification for the assigned user
+      const teamMember = await storage.getCampaignTeamMember(teamMemberId);
+      const activity = await storage.getCampaignActivity(activityId);
+      const campaign = await storage.getCampaign(campaignId);
+      
+      if (teamMember && activity && campaign) {
+        await storage.createCampaignNotification({
+          campaignId,
+          type: "task_assigned",
+          recipientUserId: teamMember.userId,
+          title: "Nova tarefa atribuída",
+          message: `Você foi atribuído à tarefa "${activity.title}" na campanha "${campaign.name}".`,
+          severity: "info",
+          relatedActivityId: activityId,
+        });
+      }
+      
+      await logAudit(req, "ACTIVITY_ASSIGN", "activity_assignees", assignee.id.toString(), { activityId, teamMemberId });
+      
+      res.status(201).json(assignee);
+    } catch (error) {
+      console.error("Error assigning to activity:", error);
+      res.status(500).json({ error: "Failed to assign to activity" });
+    }
+  });
+
+  // Remove assignee from activity
+  app.delete("/api/campaigns/:campaignId/activities/:activityId/assignees/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteActivityAssignee(id);
+      
+      await logAudit(req, "ACTIVITY_UNASSIGN", "activity_assignees", id.toString(), {});
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing assignee:", error);
+      res.status(500).json({ error: "Failed to remove assignee" });
+    }
+  });
+
+  // ============ AI KPI GOALS ============
+  
+  // Get KPI goals for a campaign
+  app.get("/api/campaigns/:id/kpi-goals", requireAuth, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const goals = await storage.getAiKpiGoals(campaignId);
+      res.json(goals);
+    } catch (error) {
+      console.error("Error fetching KPI goals:", error);
+      res.status(500).json({ error: "Failed to fetch KPI goals" });
+    }
+  });
+
+  // Create KPI goal
+  app.post("/api/campaigns/:id/kpi-goals", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { startDate, endDate, ...rest } = req.body;
+      
+      const goal = await storage.createAiKpiGoal({
+        ...rest,
+        campaignId,
+        startDate: startDate ? new Date(startDate) : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+      });
+      
+      await logAudit(req, "KPI_GOAL_CREATE", "ai_kpi_goals", goal.id.toString(), { kpiName: goal.kpiName });
+      
+      res.status(201).json(goal);
+    } catch (error) {
+      console.error("Error creating KPI goal:", error);
+      res.status(500).json({ error: "Failed to create KPI goal" });
+    }
+  });
+
+  // Update KPI goal
+  app.patch("/api/campaigns/:campaignId/kpi-goals/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const campaignId = parseInt(req.params.campaignId);
+      const { startDate, endDate, ...rest } = req.body;
+      
+      const updateData: any = { ...rest };
+      if (startDate) updateData.startDate = new Date(startDate);
+      if (endDate) updateData.endDate = new Date(endDate);
+      
+      const updated = await storage.updateAiKpiGoal(id, updateData);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "KPI goal not found" });
+      }
+      
+      // Check if goal achieved and send notification
+      if (updated.status === "achieved" || (updated.currentValue && updated.targetValue && 
+          parseFloat(String(updated.currentValue)) >= parseFloat(String(updated.targetValue)))) {
+        const campaign = await storage.getCampaign(campaignId);
+        const teamMembers = await storage.getCampaignTeamMembers(campaignId);
+        
+        for (const member of teamMembers) {
+          await storage.createCampaignNotification({
+            campaignId,
+            type: "kpi_alert",
+            recipientUserId: member.userId,
+            title: "Meta de KPI alcançada!",
+            message: `A meta de "${updated.kpiName}" foi alcançada na campanha "${campaign?.name}".`,
+            severity: "info",
+            relatedKpiGoalId: id,
+          });
+        }
+      }
+      
+      await logAudit(req, "KPI_GOAL_UPDATE", "ai_kpi_goals", id.toString(), req.body);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating KPI goal:", error);
+      res.status(500).json({ error: "Failed to update KPI goal" });
+    }
+  });
+
+  // Delete KPI goal
+  app.delete("/api/campaigns/:campaignId/kpi-goals/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteAiKpiGoal(id);
+      
+      await logAudit(req, "KPI_GOAL_DELETE", "ai_kpi_goals", id.toString(), {});
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting KPI goal:", error);
+      res.status(500).json({ error: "Failed to delete KPI goal" });
+    }
+  });
+
+  // Generate AI recommendations for KPI goals
+  app.post("/api/campaigns/:id/kpi-goals/ai-recommendations", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const campaign = await storage.getCampaign(campaignId);
+      
+      if (!campaign) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      const goals = await storage.getAiKpiGoals(campaignId);
+      const metrics = await storage.getCampaignMetrics(campaignId);
+      
+      const prompt = `Analise a campanha eleitoral "${campaign.name}" (cargo: ${campaign.position}, região: ${campaign.targetRegion}) e forneça recomendações de KPIs estratégicos.
+
+Metas atuais:
+${goals.map(g => `- ${g.kpiName}: Meta ${g.targetValue}, Atual ${g.currentValue || "N/A"}`).join("\n") || "Nenhuma meta definida"}
+
+Métricas históricas:
+${metrics.slice(0, 10).map(m => `- ${m.kpiName}: ${m.kpiValue} (${new Date(m.metricDate).toLocaleDateString()})`).join("\n") || "Sem métricas"}
+
+Meta de votos: ${campaign.targetVotes || "Não definida"}
+Orçamento: R$ ${campaign.totalBudget || 0}
+
+Forneça até 5 recomendações de KPIs estratégicos no formato JSON:
+[
+  {
+    "kpiName": "nome do KPI",
+    "suggestedTarget": "valor numérico sugerido",
+    "rationale": "justificativa breve",
+    "priority": "high/medium/low",
+    "confidence": "porcentagem de confiança"
+  }
+]`;
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: "Você é um estrategista político especialista em campanhas eleitorais brasileiras. Responda apenas em JSON válido." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content || "[]";
+      
+      // Parse JSON from response
+      let recommendations = [];
+      try {
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          recommendations = JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.error("Failed to parse AI recommendations:", e);
+      }
+      
+      res.json({ recommendations });
+    } catch (error) {
+      console.error("Error generating AI recommendations:", error);
+      res.status(500).json({ error: "Failed to generate AI recommendations" });
+    }
+  });
+
+  // ============ CALENDAR ACTIVITIES ============
+  
+  // Get activities for calendar view
+  app.get("/api/campaigns/:id/calendar", requireAuth, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "startDate and endDate are required" });
+      }
+      
+      const activities = await storage.getCalendarActivities(
+        campaignId,
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+      
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching calendar activities:", error);
+      res.status(500).json({ error: "Failed to fetch calendar activities" });
+    }
+  });
+
+  // ============ CAMPAIGN NOTIFICATIONS ============
+  
+  // Get campaign notifications
+  app.get("/api/campaigns/:id/notifications", requireAuth, async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const notifications = await storage.getCampaignNotifications(campaignId);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching campaign notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  // Get user's campaign notifications across all campaigns
+  app.get("/api/user/campaign-notifications", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
+      const notifications = await storage.getUserCampaignNotifications(userId);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching user campaign notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  // ============ CAMPAIGN BUDGETS ============
+
+  // Get campaign budgets
+  app.get("/api/campaigns/:id/budgets", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const budgets = await storage.getCampaignBudgets(id);
+      res.json(budgets);
+    } catch (error) {
+      console.error("Error fetching budgets:", error);
+      res.status(500).json({ error: "Failed to fetch budgets" });
+    }
+  });
+
+  // Create budget allocation
+  app.post("/api/campaigns/:id/budgets", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const budget = await storage.createCampaignBudget({
+        ...req.body,
+        campaignId,
+      });
+      
+      await logAudit(req, "BUDGET_CREATE", "campaign_budgets", budget.id.toString(), { category: budget.category });
+      
+      res.status(201).json(budget);
+    } catch (error) {
+      console.error("Error creating budget:", error);
+      res.status(500).json({ error: "Failed to create budget" });
+    }
+  });
+
+  // Update budget
+  app.patch("/api/campaigns/:campaignId/budgets/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateCampaignBudget(id, req.body);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Budget not found" });
+      }
+      
+      await logAudit(req, "BUDGET_UPDATE", "campaign_budgets", id.toString(), req.body);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating budget:", error);
+      res.status(500).json({ error: "Failed to update budget" });
+    }
+  });
+
+  // Delete budget
+  app.delete("/api/campaigns/:campaignId/budgets/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteCampaignBudget(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Budget not found" });
+      }
+      
+      await logAudit(req, "BUDGET_DELETE", "campaign_budgets", id.toString(), {});
+      
+      res.json({ message: "Budget deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting budget:", error);
+      res.status(500).json({ error: "Failed to delete budget" });
+    }
+  });
+
+  // ============ CAMPAIGN RESOURCES ============
+
+  // Get campaign resources
+  app.get("/api/campaigns/:id/resources", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const resources = await storage.getCampaignResources(id);
+      res.json(resources);
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+      res.status(500).json({ error: "Failed to fetch resources" });
+    }
+  });
+
+  // Create resource
+  app.post("/api/campaigns/:id/resources", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const resource = await storage.createCampaignResource({
+        ...req.body,
+        campaignId,
+      });
+      
+      await logAudit(req, "RESOURCE_CREATE", "campaign_resources", resource.id.toString(), { name: resource.name });
+      
+      res.status(201).json(resource);
+    } catch (error) {
+      console.error("Error creating resource:", error);
+      res.status(500).json({ error: "Failed to create resource" });
+    }
+  });
+
+  // Update resource
+  app.patch("/api/campaigns/:campaignId/resources/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateCampaignResource(id, req.body);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+      
+      await logAudit(req, "RESOURCE_UPDATE", "campaign_resources", id.toString(), req.body);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating resource:", error);
+      res.status(500).json({ error: "Failed to update resource" });
+    }
+  });
+
+  // Delete resource
+  app.delete("/api/campaigns/:campaignId/resources/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteCampaignResource(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+      
+      await logAudit(req, "RESOURCE_DELETE", "campaign_resources", id.toString(), {});
+      
+      res.json({ message: "Resource deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting resource:", error);
+      res.status(500).json({ error: "Failed to delete resource" });
+    }
+  });
+
+  // ============ CAMPAIGN METRICS ============
+
+  // Get campaign metrics
+  app.get("/api/campaigns/:id/metrics", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { kpiName, startDate, endDate } = req.query;
+      
+      const metrics = await storage.getCampaignMetrics(id, {
+        kpiName: kpiName as string | undefined,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      });
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching metrics:", error);
+      res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+  });
+
+  // Create metric
+  app.post("/api/campaigns/:id/metrics", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { metricDate, ...rest } = req.body;
+      const metric = await storage.createCampaignMetric({
+        ...rest,
+        metricDate: new Date(metricDate),
+        campaignId,
+      });
+      
+      await logAudit(req, "METRIC_CREATE", "campaign_metrics", metric.id.toString(), { kpiName: metric.kpiName });
+      
+      res.status(201).json(metric);
+    } catch (error) {
+      console.error("Error creating metric:", error);
+      res.status(500).json({ error: "Failed to create metric" });
+    }
+  });
+
+  // Update metric
+  app.patch("/api/campaigns/:campaignId/metrics/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateCampaignMetric(id, req.body);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Metric not found" });
+      }
+      
+      await logAudit(req, "METRIC_UPDATE", "campaign_metrics", id.toString(), req.body);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating metric:", error);
+      res.status(500).json({ error: "Failed to update metric" });
+    }
+  });
+
+  // Delete metric
+  app.delete("/api/campaigns/:campaignId/metrics/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteCampaignMetric(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Metric not found" });
+      }
+      
+      await logAudit(req, "METRIC_DELETE", "campaign_metrics", id.toString(), {});
+      
+      res.json({ message: "Metric deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting metric:", error);
+      res.status(500).json({ error: "Failed to delete metric" });
+    }
+  });
+
+  // ============ CAMPAIGN ACTIVITIES ============
+
+  // Get campaign activities
+  app.get("/api/campaigns/:id/activities", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, type } = req.query;
+      
+      const activities = await storage.getCampaignActivities(id, {
+        status: status as string | undefined,
+        type: type as string | undefined,
+      });
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ error: "Failed to fetch activities" });
+    }
+  });
+
+  // Create activity
+  app.post("/api/campaigns/:id/activities", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { scheduledDate, ...rest } = req.body;
+      const activity = await storage.createCampaignActivity({
+        ...rest,
+        scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
+        campaignId,
+        createdBy: req.user?.id,
+      });
+      
+      await logAudit(req, "ACTIVITY_CREATE", "campaign_activities", activity.id.toString(), { title: activity.title });
+      
+      res.status(201).json(activity);
+    } catch (error) {
+      console.error("Error creating activity:", error);
+      res.status(500).json({ error: "Failed to create activity" });
+    }
+  });
+
+  // Update activity
+  app.patch("/api/campaigns/:campaignId/activities/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateCampaignActivity(id, req.body);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      await logAudit(req, "ACTIVITY_UPDATE", "campaign_activities", id.toString(), req.body);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating activity:", error);
+      res.status(500).json({ error: "Failed to update activity" });
+    }
+  });
+
+  // Delete activity
+  app.delete("/api/campaigns/:campaignId/activities/:id", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteCampaignActivity(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      await logAudit(req, "ACTIVITY_DELETE", "campaign_activities", id.toString(), {});
+      
+      res.json({ message: "Activity deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+      res.status(500).json({ error: "Failed to delete activity" });
+    }
+  });
+
   return httpServer;
 }
 
@@ -6247,4 +8366,3 @@ function mapParsedRowToVote(row: Record<string, unknown>): Record<string, unknow
     dsSitTotTurno: row.DS_SIT_TOT_TURNO as string,
   };
 }
-

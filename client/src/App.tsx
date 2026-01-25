@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/notification-bell";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -32,6 +33,9 @@ import Forecasts from "@/pages/forecasts";
 import AdminSettings from "@/pages/admin-settings";
 import ReportAutomation from "@/pages/report-automation";
 import SentimentAnalysis from "@/pages/sentiment-analysis";
+import CampaignInsights from "@/pages/campaign-insights";
+import Campaigns from "@/pages/campaigns";
+import IBGEData from "@/pages/ibge-data";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -59,6 +63,9 @@ function Router() {
       <Route path="/admin-settings" component={AdminSettings} />
       <Route path="/report-automation" component={ReportAutomation} />
       <Route path="/sentiment-analysis" component={SentimentAnalysis} />
+      <Route path="/ibge-data" component={IBGEData} />
+      <Route path="/campaigns" component={Campaigns} />
+      <Route path="/campaign-insights" component={CampaignInsights} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -94,7 +101,10 @@ function AuthenticatedApp() {
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between gap-4 p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <NotificationBell />
+              <ThemeToggle />
+            </div>
           </header>
           <main className="flex-1 overflow-auto p-6 bg-muted/30">
             <Router />

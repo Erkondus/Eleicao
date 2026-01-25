@@ -23,8 +23,11 @@ export const parties = pgTable("parties", {
   number: integer("number").notNull().unique(),
   color: text("color").notNull().default("#003366"),
   coalition: text("coalition"),
+  notes: text("notes"),
+  tags: text("tags").array(),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
   createdBy: varchar("created_by").references(() => users.id),
 });
 
@@ -36,8 +39,11 @@ export const candidates = pgTable("candidates", {
   partyId: integer("party_id").notNull().references(() => parties.id, { onDelete: "cascade" }),
   position: text("position").notNull().default("vereador"),
   biography: text("biography"),
+  notes: text("notes"),
+  tags: text("tags").array(),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
   createdBy: varchar("created_by").references(() => users.id),
 });
 
@@ -1256,6 +1262,7 @@ export type SentimentDataSource = typeof sentimentDataSources.$inferSelect;
 export const sentimentArticles = pgTable("sentiment_articles", {
   id: serial("id").primaryKey(),
   sourceId: integer("source_id").references(() => sentimentDataSources.id),
+  sourceType: text("source_type").default("news"), // 'news', 'social', 'blog', 'forum'
   title: text("title").notNull(),
   content: text("content").notNull(),
   summary: text("summary"),
@@ -1266,9 +1273,13 @@ export const sentimentArticles = pgTable("sentiment_articles", {
   language: text("language").default("pt"),
   country: text("country").default("BR"),
   processedAt: timestamp("processed_at"),
+  overallSentiment: decimal("overall_sentiment", { precision: 5, scale: 4 }), // article-level sentiment
+  sentimentLabel: text("sentiment_label"), // 'positive', 'negative', 'neutral'
 }, (table) => [
   index("articles_source_idx").on(table.sourceId),
   index("articles_published_idx").on(table.publishedAt),
+  index("articles_source_type_idx").on(table.sourceType),
+  index("articles_sentiment_idx").on(table.sentimentLabel),
 ]);
 
 export const insertSentimentArticleSchema = createInsertSchema(sentimentArticles).omit({ id: true, fetchedAt: true });
@@ -1321,3 +1332,708 @@ export const sentimentKeywords = pgTable("sentiment_keywords", {
 export const insertSentimentKeywordSchema = createInsertSchema(sentimentKeywords).omit({ id: true, firstSeen: true, lastSeen: true });
 export type InsertSentimentKeyword = z.infer<typeof insertSentimentKeywordSchema>;
 export type SentimentKeyword = typeof sentimentKeywords.$inferSelect;
+
+// Sentiment Crisis Alerts - detect and notify about negative sentiment spikes
+export const sentimentCrisisAlerts = pgTable("sentiment_crisis_alerts", {
+  id: serial("id").primaryKey(),
+  entityType: text("entity_type").notNull(), // 'party', 'candidate'
+  entityId: text("entity_id").notNull(),
+  entityName: text("entity_name").notNull(),
+  alertType: text("alert_type").notNull(), // 'negative_spike', 'crisis', 'trending_negative', 'high_volume'
+  severity: text("severity").notNull().default("medium"), // 'low', 'medium', 'high', 'critical'
+  title: text("title").notNull(),
+  description: text("description"),
+  sentimentBefore: decimal("sentiment_before", { precision: 5, scale: 4 }),
+  sentimentAfter: decimal("sentiment_after", { precision: 5, scale: 4 }),
+  sentimentChange: decimal("sentiment_change", { precision: 5, scale: 4 }),
+  mentionCount: integer("mention_count").default(0),
+  triggerArticleIds: jsonb("trigger_article_ids").default([]), // IDs of articles that triggered alert
+  triggerKeywords: jsonb("trigger_keywords").default([]), // keywords associated with crisis
+  isAcknowledged: boolean("is_acknowledged").default(false),
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  detectedAt: timestamp("detected_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("crisis_entity_idx").on(table.entityType, table.entityId),
+  index("crisis_severity_idx").on(table.severity),
+  index("crisis_detected_idx").on(table.detectedAt),
+  index("crisis_acknowledged_idx").on(table.isAcknowledged),
+]);
+
+export const insertSentimentCrisisAlertSchema = createInsertSchema(sentimentCrisisAlerts).omit({ id: true, createdAt: true, detectedAt: true });
+export type InsertSentimentCrisisAlert = z.infer<typeof insertSentimentCrisisAlertSchema>;
+export type SentimentCrisisAlert = typeof sentimentCrisisAlerts.$inferSelect;
+
+// Sentiment Monitoring Sessions - track multi-entity comparison sessions
+export const sentimentMonitoringSessions = pgTable("sentiment_monitoring_sessions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  entities: jsonb("entities").notNull().default([]), // [{ type: 'party'|'candidate', id: string, name: string }]
+  sourceFilters: jsonb("source_filters").default({}), // { types: ['news', 'social'], countries: ['BR'] }
+  dateRange: jsonb("date_range"), // { start: timestamp, end: timestamp }
+  alertThreshold: decimal("alert_threshold", { precision: 5, scale: 4 }).default("-0.3"), // sentiment drop threshold for alerts
+  isActive: boolean("is_active").default(true),
+  lastAnalyzedAt: timestamp("last_analyzed_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("monitoring_user_idx").on(table.userId),
+  index("monitoring_active_idx").on(table.isActive),
+]);
+
+export const insertSentimentMonitoringSessionSchema = createInsertSchema(sentimentMonitoringSessions).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSentimentMonitoringSession = z.infer<typeof insertSentimentMonitoringSessionSchema>;
+export type SentimentMonitoringSession = typeof sentimentMonitoringSessions.$inferSelect;
+
+// Sentiment Comparison Snapshots - store point-in-time comparisons
+export const sentimentComparisonSnapshots = pgTable("sentiment_comparison_snapshots", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => sentimentMonitoringSessions.id),
+  snapshotDate: timestamp("snapshot_date").notNull(),
+  entityResults: jsonb("entity_results").notNull().default([]), // [{ entityType, entityId, entityName, sentimentScore, mentionCount, topKeywords }]
+  comparisonAnalysis: text("comparison_analysis"), // AI-generated comparative analysis
+  overallSentiment: decimal("overall_sentiment", { precision: 5, scale: 4 }),
+  sourceBreakdown: jsonb("source_breakdown").default({}),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("snapshot_session_idx").on(table.sessionId),
+  index("snapshot_date_idx").on(table.snapshotDate),
+]);
+
+export const insertSentimentComparisonSnapshotSchema = createInsertSchema(sentimentComparisonSnapshots).omit({ id: true, createdAt: true });
+export type InsertSentimentComparisonSnapshot = z.infer<typeof insertSentimentComparisonSnapshotSchema>;
+export type SentimentComparisonSnapshot = typeof sentimentComparisonSnapshots.$inferSelect;
+
+// Article Entity Mentions - link articles to entities they mention
+export const articleEntityMentions = pgTable("article_entity_mentions", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").references(() => sentimentArticles.id).notNull(),
+  entityType: text("entity_type").notNull(), // 'party', 'candidate'
+  entityId: text("entity_id").notNull(),
+  entityName: text("entity_name").notNull(),
+  mentionCount: integer("mention_count").default(1),
+  sentimentScore: decimal("sentiment_score", { precision: 5, scale: 4 }),
+  sentimentLabel: text("sentiment_label"), // 'positive', 'negative', 'neutral'
+  excerpts: jsonb("excerpts").default([]), // text snippets mentioning the entity
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("mention_article_idx").on(table.articleId),
+  index("mention_entity_idx").on(table.entityType, table.entityId),
+]);
+
+export const insertArticleEntityMentionSchema = createInsertSchema(articleEntityMentions).omit({ id: true, createdAt: true });
+export type InsertArticleEntityMention = z.infer<typeof insertArticleEntityMentionSchema>;
+export type ArticleEntityMention = typeof articleEntityMentions.$inferSelect;
+
+// Alert Configuration - configurable thresholds for crisis detection
+export const alertConfigurations = pgTable("alert_configurations", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  isGlobal: boolean("is_global").default(false), // if true, applies to all entities
+  entityType: text("entity_type"), // 'party', 'candidate', null for global
+  entityId: text("entity_id"), // specific entity or null for type-wide
+  // Thresholds for crisis detection
+  sentimentDropThreshold: decimal("sentiment_drop_threshold", { precision: 5, scale: 4 }).default("0.3"), // drop of 30%
+  criticalSentimentLevel: decimal("critical_sentiment_level", { precision: 5, scale: 4 }).default("-0.5"),
+  mentionSpikeMultiplier: decimal("mention_spike_multiplier", { precision: 5, scale: 2 }).default("2.0"), // 2x average
+  timeWindowMinutes: integer("time_window_minutes").default(60), // detection window
+  // Notification preferences
+  notifyEmail: boolean("notify_email").default(true),
+  notifyInApp: boolean("notify_in_app").default(true),
+  emailRecipients: jsonb("email_recipients").default([]), // additional email addresses
+  // Rate limiting
+  minAlertIntervalMinutes: integer("min_alert_interval_minutes").default(30), // avoid alert spam
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertAlertConfigurationSchema = createInsertSchema(alertConfigurations).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAlertConfiguration = z.infer<typeof insertAlertConfigurationSchema>;
+export type AlertConfiguration = typeof alertConfigurations.$inferSelect;
+
+// In-App Notifications - real-time notifications for users
+export const inAppNotifications = pgTable("in_app_notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(), // 'crisis_alert', 'import_complete', 'report_ready', 'system'
+  severity: text("severity").default("info"), // 'info', 'warning', 'error', 'critical'
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  actionUrl: text("action_url"), // optional link to relevant page
+  relatedEntityType: text("related_entity_type"), // 'party', 'candidate', 'import', etc.
+  relatedEntityId: text("related_entity_id"),
+  metadata: jsonb("metadata").default({}), // additional context
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("notification_user_idx").on(table.userId),
+  index("notification_read_idx").on(table.isRead),
+  index("notification_type_idx").on(table.type),
+  index("notification_created_idx").on(table.createdAt),
+]);
+
+export const insertInAppNotificationSchema = createInsertSchema(inAppNotifications).omit({ id: true, createdAt: true });
+export type InsertInAppNotification = z.infer<typeof insertInAppNotificationSchema>;
+export type InAppNotification = typeof inAppNotifications.$inferSelect;
+
+// IBGE Demographic Data - Municipalities
+export const ibgeMunicipios = pgTable("ibge_municipios", {
+  id: serial("id").primaryKey(),
+  codigoIbge: varchar("codigo_ibge", { length: 7 }).notNull().unique(), // 7-digit IBGE code
+  nome: text("nome").notNull(),
+  uf: varchar("uf", { length: 2 }).notNull(),
+  ufNome: text("uf_nome"),
+  regiaoNome: text("regiao_nome"),
+  mesorregiao: text("mesorregiao"),
+  microrregiao: text("microrregiao"),
+  areaKm2: decimal("area_km2", { precision: 12, scale: 3 }),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("municipio_uf_idx").on(table.uf),
+  index("municipio_codigo_idx").on(table.codigoIbge),
+]);
+
+export const insertIbgeMunicipioSchema = createInsertSchema(ibgeMunicipios).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertIbgeMunicipio = z.infer<typeof insertIbgeMunicipioSchema>;
+export type IbgeMunicipio = typeof ibgeMunicipios.$inferSelect;
+
+// IBGE Population Data - Historical population estimates
+export const ibgePopulacao = pgTable("ibge_populacao", {
+  id: serial("id").primaryKey(),
+  municipioId: integer("municipio_id").references(() => ibgeMunicipios.id, { onDelete: "cascade" }),
+  codigoIbge: varchar("codigo_ibge", { length: 7 }).notNull(),
+  ano: integer("ano").notNull(),
+  populacao: bigint("populacao", { mode: "number" }),
+  populacaoMasculina: bigint("populacao_masculina", { mode: "number" }),
+  populacaoFeminina: bigint("populacao_feminina", { mode: "number" }),
+  densidadeDemografica: decimal("densidade_demografica", { precision: 12, scale: 4 }),
+  fonte: text("fonte").default("IBGE/SIDRA"),
+  tabelaSidra: varchar("tabela_sidra", { length: 10 }),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("populacao_municipio_idx").on(table.municipioId),
+  index("populacao_ano_idx").on(table.ano),
+  index("populacao_codigo_ano_idx").on(table.codigoIbge, table.ano),
+]);
+
+export const insertIbgePopulacaoSchema = createInsertSchema(ibgePopulacao).omit({ id: true, createdAt: true });
+export type InsertIbgePopulacao = z.infer<typeof insertIbgePopulacaoSchema>;
+export type IbgePopulacao = typeof ibgePopulacao.$inferSelect;
+
+// IBGE Socioeconomic Indicators
+export const ibgeIndicadores = pgTable("ibge_indicadores", {
+  id: serial("id").primaryKey(),
+  municipioId: integer("municipio_id").references(() => ibgeMunicipios.id, { onDelete: "cascade" }),
+  codigoIbge: varchar("codigo_ibge", { length: 7 }).notNull(),
+  ano: integer("ano").notNull(),
+  // Education indicators
+  taxaAlfabetizacao: decimal("taxa_alfabetizacao", { precision: 6, scale: 3 }), // %
+  taxaEscolarizacao6a14: decimal("taxa_escolarizacao_6_14", { precision: 6, scale: 3 }), // %
+  ideb: decimal("ideb", { precision: 4, scale: 2 }), // IDEB score
+  // Economic indicators
+  pibPerCapita: decimal("pib_per_capita", { precision: 14, scale: 2 }),
+  rendaMediaDomiciliar: decimal("renda_media_domiciliar", { precision: 12, scale: 2 }),
+  salarioMedioMensal: decimal("salario_medio_mensal", { precision: 10, scale: 2 }),
+  taxaDesemprego: decimal("taxa_desemprego", { precision: 6, scale: 3 }),
+  // Social indicators
+  idhm: decimal("idhm", { precision: 5, scale: 4 }), // Human Development Index
+  idhmEducacao: decimal("idhm_educacao", { precision: 5, scale: 4 }),
+  idhmLongevidade: decimal("idhm_longevidade", { precision: 5, scale: 4 }),
+  idhmRenda: decimal("idhm_renda", { precision: 5, scale: 4 }),
+  indiceGini: decimal("indice_gini", { precision: 5, scale: 4 }),
+  // Infrastructure
+  percentualUrbanizacao: decimal("percentual_urbanizacao", { precision: 6, scale: 3 }),
+  percentualSaneamento: decimal("percentual_saneamento", { precision: 6, scale: 3 }),
+  percentualAguaEncanada: decimal("percentual_agua_encanada", { precision: 6, scale: 3 }),
+  percentualEnergiaEletrica: decimal("percentual_energia_eletrica", { precision: 6, scale: 3 }),
+  // Electoral data
+  eleitoresAptos: integer("eleitores_aptos"),
+  comparecimento: integer("comparecimento"),
+  abstencao: integer("abstencao"),
+  votosValidos: integer("votos_validos"),
+  fonte: text("fonte").default("IBGE"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("indicadores_municipio_idx").on(table.municipioId),
+  index("indicadores_ano_idx").on(table.ano),
+  index("indicadores_codigo_ano_idx").on(table.codigoIbge, table.ano),
+]);
+
+export const insertIbgeIndicadorSchema = createInsertSchema(ibgeIndicadores).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertIbgeIndicador = z.infer<typeof insertIbgeIndicadorSchema>;
+export type IbgeIndicador = typeof ibgeIndicadores.$inferSelect;
+
+// IBGE Import Jobs - Track import operations
+export const ibgeImportJobs = pgTable("ibge_import_jobs", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // 'municipios', 'populacao', 'indicadores', 'all'
+  status: text("status").notNull().default("pending"), // 'pending', 'running', 'completed', 'failed'
+  totalRecords: integer("total_records").default(0),
+  processedRecords: integer("processed_records").default(0),
+  failedRecords: integer("failed_records").default(0),
+  errorMessage: text("error_message"),
+  errorDetails: jsonb("error_details"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  source: text("source").default("IBGE/SIDRA"),
+  parameters: jsonb("parameters"), // API parameters used
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("ibge_import_status_idx").on(table.status),
+  index("ibge_import_type_idx").on(table.type),
+]);
+
+export const insertIbgeImportJobSchema = createInsertSchema(ibgeImportJobs).omit({ id: true, createdAt: true });
+export type InsertIbgeImportJob = z.infer<typeof insertIbgeImportJobSchema>;
+export type IbgeImportJob = typeof ibgeImportJobs.$inferSelect;
+
+// Campaign Insights - AI-powered campaign strategy analysis
+export const campaignInsightSessions = pgTable("campaign_insight_sessions", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  targetPartyId: integer("target_party_id").references(() => parties.id),
+  targetCandidateId: integer("target_candidate_id").references(() => candidates.id),
+  electionYear: integer("election_year").notNull(),
+  position: text("position"), // 'deputado_federal', 'deputado_estadual', 'vereador', etc.
+  targetRegion: text("target_region"), // UF or 'NACIONAL'
+  status: text("status").default("active"), // 'active', 'archived'
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("campaign_insight_party_idx").on(table.targetPartyId),
+  index("campaign_insight_year_idx").on(table.electionYear),
+]);
+
+export const insertCampaignInsightSessionSchema = createInsertSchema(campaignInsightSessions).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCampaignInsightSession = z.infer<typeof insertCampaignInsightSessionSchema>;
+export type CampaignInsightSession = typeof campaignInsightSessions.$inferSelect;
+
+// High Impact Segments - Identified voter segments with high campaign potential
+export const highImpactSegments = pgTable("high_impact_segments", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => campaignInsightSessions.id).notNull(),
+  segmentType: text("segment_type").notNull(), // 'demographic', 'geographic', 'behavioral'
+  segmentName: text("segment_name").notNull(),
+  description: text("description"),
+  // Geographic data
+  uf: text("uf"),
+  municipios: jsonb("municipios"), // Array of municipality codes
+  region: text("region"), // 'norte', 'nordeste', 'sudeste', 'sul', 'centro-oeste'
+  // Demographic data
+  ageGroup: text("age_group"), // '18-24', '25-34', '35-44', '45-59', '60+'
+  educationLevel: text("education_level"),
+  incomeLevel: text("income_level"), // 'baixa', 'media', 'alta'
+  // Impact metrics
+  estimatedVoters: integer("estimated_voters"),
+  impactScore: decimal("impact_score", { precision: 5, scale: 2 }), // 0-100
+  conversionPotential: decimal("conversion_potential", { precision: 5, scale: 2 }), // 0-100
+  currentSentiment: decimal("current_sentiment", { precision: 5, scale: 2 }), // -100 to 100
+  volatility: decimal("volatility", { precision: 5, scale: 2 }), // 0-100, how likely to change
+  priorityRank: integer("priority_rank"),
+  // AI analysis
+  aiRationale: text("ai_rationale"),
+  keyFactors: jsonb("key_factors"), // Array of factors driving the score
+  historicalTrends: jsonb("historical_trends"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("segment_session_idx").on(table.sessionId),
+  index("segment_impact_idx").on(table.impactScore),
+]);
+
+export const insertHighImpactSegmentSchema = createInsertSchema(highImpactSegments).omit({ id: true, createdAt: true });
+export type InsertHighImpactSegment = z.infer<typeof insertHighImpactSegmentSchema>;
+export type HighImpactSegment = typeof highImpactSegments.$inferSelect;
+
+// Message Strategies - AI-suggested communication strategies per segment
+export const messageStrategies = pgTable("message_strategies", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => campaignInsightSessions.id).notNull(),
+  segmentId: integer("segment_id").references(() => highImpactSegments.id),
+  // Target info
+  targetAudience: text("target_audience").notNull(),
+  sentimentProfile: text("sentiment_profile"), // 'positive', 'neutral', 'negative', 'mixed'
+  // Strategy
+  mainTheme: text("main_theme").notNull(),
+  keyMessages: jsonb("key_messages"), // Array of suggested messages
+  toneRecommendation: text("tone_recommendation"), // 'formal', 'informal', 'emocional', 'tecnico'
+  channelRecommendations: jsonb("channel_recommendations"), // 'tv', 'radio', 'redes_sociais', 'presencial'
+  // Content suggestions
+  topicsToEmphasize: jsonb("topics_to_emphasize"),
+  topicsToAvoid: jsonb("topics_to_avoid"),
+  competitorWeaknesses: jsonb("competitor_weaknesses"),
+  // Sentiment analysis
+  currentSentimentTrend: text("current_sentiment_trend"), // 'rising', 'falling', 'stable'
+  sentimentDrivers: jsonb("sentiment_drivers"),
+  // AI analysis
+  aiAnalysis: text("ai_analysis"),
+  confidenceScore: decimal("confidence_score", { precision: 5, scale: 2 }),
+  expectedEffectiveness: decimal("expected_effectiveness", { precision: 5, scale: 2 }),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("message_session_idx").on(table.sessionId),
+  index("message_segment_idx").on(table.segmentId),
+]);
+
+export const insertMessageStrategySchema = createInsertSchema(messageStrategies).omit({ id: true, createdAt: true });
+export type InsertMessageStrategy = z.infer<typeof insertMessageStrategySchema>;
+export type MessageStrategy = typeof messageStrategies.$inferSelect;
+
+// Campaign Impact Predictions - Predicted outcomes of campaign investments
+export const campaignImpactPredictions = pgTable("campaign_impact_predictions", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => campaignInsightSessions.id).notNull(),
+  predictionType: text("prediction_type").notNull(), // 'investment', 'event', 'message', 'overall'
+  // Investment scenario
+  investmentType: text("investment_type"), // 'publicidade_tv', 'redes_sociais', 'eventos', 'santinhos'
+  investmentAmount: decimal("investment_amount", { precision: 14, scale: 2 }),
+  targetSegments: jsonb("target_segments"), // Array of segment IDs
+  duration: integer("duration"), // days
+  // Predicted outcomes
+  predictedSentimentChange: decimal("predicted_sentiment_change", { precision: 5, scale: 2 }),
+  predictedVoteIntention: decimal("predicted_vote_intention", { precision: 5, scale: 2 }), // percentage
+  predictedVoteChange: decimal("predicted_vote_change", { precision: 5, scale: 2 }), // delta
+  confidenceInterval: jsonb("confidence_interval"), // { lower: number, upper: number }
+  probabilityOfSuccess: decimal("probability_of_success", { precision: 5, scale: 2 }),
+  // ROI analysis
+  estimatedReach: integer("estimated_reach"),
+  costPerVoterReached: decimal("cost_per_voter_reached", { precision: 10, scale: 2 }),
+  expectedROI: decimal("expected_roi", { precision: 5, scale: 2 }),
+  // Comparative analysis
+  comparisonBaseline: jsonb("comparison_baseline"),
+  alternativeScenarios: jsonb("alternative_scenarios"),
+  // AI analysis
+  aiNarrative: text("ai_narrative"),
+  riskFactors: jsonb("risk_factors"),
+  recommendations: jsonb("recommendations"),
+  methodology: text("methodology"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("prediction_session_idx").on(table.sessionId),
+  index("prediction_type_idx").on(table.predictionType),
+]);
+
+export const insertCampaignImpactPredictionSchema = createInsertSchema(campaignImpactPredictions).omit({ id: true, createdAt: true });
+export type InsertCampaignImpactPrediction = z.infer<typeof insertCampaignImpactPredictionSchema>;
+export type CampaignImpactPrediction = typeof campaignImpactPredictions.$inferSelect;
+
+// Campaign Insight Reports - Generated AI reports
+export const campaignInsightReports = pgTable("campaign_insight_reports", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => campaignInsightSessions.id).notNull(),
+  reportType: text("report_type").notNull(), // 'full', 'segments', 'messages', 'predictions', 'executive'
+  title: text("title").notNull(),
+  executiveSummary: text("executive_summary"),
+  fullContent: text("full_content"),
+  visualizations: jsonb("visualizations"), // Chart configurations
+  keyInsights: jsonb("key_insights"),
+  actionItems: jsonb("action_items"),
+  dataSnapshot: jsonb("data_snapshot"), // Snapshot of data used
+  generatedAt: timestamp("generated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+}, (table) => [
+  index("report_session_idx").on(table.sessionId),
+  index("report_type_idx").on(table.reportType),
+]);
+
+export const insertCampaignInsightReportSchema = createInsertSchema(campaignInsightReports).omit({ id: true, generatedAt: true });
+export type InsertCampaignInsightReport = z.infer<typeof insertCampaignInsightReportSchema>;
+export type CampaignInsightReport = typeof campaignInsightReports.$inferSelect;
+
+// ============ CAMPAIGN MANAGEMENT MODULE ============
+
+// Campaigns - Main campaign entity
+export const campaigns = pgTable("campaigns", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  status: text("status").notNull().default("planning"), // planning, active, paused, completed, cancelled
+  goal: text("goal"), // Main campaign goal/objective
+  targetVotes: integer("target_votes"),
+  targetRegion: text("target_region"),
+  position: text("position").notNull().default("vereador"),
+  totalBudget: decimal("total_budget", { precision: 15, scale: 2 }).default("0"),
+  spentBudget: decimal("spent_budget", { precision: 15, scale: 2 }).default("0"),
+  targetPartyId: integer("target_party_id").references(() => parties.id),
+  targetCandidateId: integer("target_candidate_id").references(() => candidates.id),
+  aiSessionId: integer("ai_session_id").references(() => campaignInsightSessions.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("campaign_status_idx").on(table.status),
+  index("campaign_party_idx").on(table.targetPartyId),
+  index("campaign_dates_idx").on(table.startDate, table.endDate),
+]);
+
+export const insertCampaignSchema = createInsertSchema(campaigns).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+export type Campaign = typeof campaigns.$inferSelect;
+
+// Campaign Budgets - Budget allocation by category
+export const campaignBudgets = pgTable("campaign_budgets", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }).notNull(),
+  category: text("category").notNull(), // advertising, events, staff, materials, digital, transport, other
+  categoryLabel: text("category_label").notNull(),
+  allocatedAmount: decimal("allocated_amount", { precision: 15, scale: 2 }).notNull().default("0"),
+  spentAmount: decimal("spent_amount", { precision: 15, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("budget_campaign_idx").on(table.campaignId),
+  index("budget_category_idx").on(table.category),
+]);
+
+export const insertCampaignBudgetSchema = createInsertSchema(campaignBudgets).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCampaignBudget = z.infer<typeof insertCampaignBudgetSchema>;
+export type CampaignBudget = typeof campaignBudgets.$inferSelect;
+
+// Campaign Resources - Human and material resources
+export const campaignResources = pgTable("campaign_resources", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // staff, volunteer, vehicle, equipment, material
+  quantity: integer("quantity").notNull().default(1),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
+  totalCost: decimal("total_cost", { precision: 12, scale: 2 }),
+  status: text("status").notNull().default("available"), // available, allocated, unavailable
+  assignedTo: text("assigned_to"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("resource_campaign_idx").on(table.campaignId),
+  index("resource_type_idx").on(table.type),
+  index("resource_status_idx").on(table.status),
+]);
+
+export const insertCampaignResourceSchema = createInsertSchema(campaignResources).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCampaignResource = z.infer<typeof insertCampaignResourceSchema>;
+export type CampaignResource = typeof campaignResources.$inferSelect;
+
+// Campaign Metrics - Performance tracking
+export const campaignMetrics = pgTable("campaign_metrics", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }).notNull(),
+  metricDate: timestamp("metric_date").notNull(),
+  kpiName: text("kpi_name").notNull(), // voter_reach, engagement_rate, conversion_rate, sentiment_score, poll_position
+  kpiValue: decimal("kpi_value", { precision: 15, scale: 4 }).notNull(),
+  targetValue: decimal("target_value", { precision: 15, scale: 4 }),
+  unit: text("unit"), // percentage, number, currency
+  source: text("source"), // manual, ai_analysis, survey, social_media
+  notes: text("notes"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("metric_campaign_idx").on(table.campaignId),
+  index("metric_date_idx").on(table.metricDate),
+  index("metric_kpi_idx").on(table.kpiName),
+]);
+
+export const insertCampaignMetricSchema = createInsertSchema(campaignMetrics).omit({ id: true, createdAt: true });
+export type InsertCampaignMetric = z.infer<typeof insertCampaignMetricSchema>;
+export type CampaignMetric = typeof campaignMetrics.$inferSelect;
+
+// Campaign Activities - Action items and events
+export const campaignActivities = pgTable("campaign_activities", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull(), // event, meeting, action, milestone
+  scheduledDate: timestamp("scheduled_date"),
+  completedDate: timestamp("completed_date"),
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, cancelled
+  priority: text("priority").notNull().default("medium"), // low, medium, high, critical
+  assignedTo: text("assigned_to"),
+  budgetId: integer("budget_id").references(() => campaignBudgets.id),
+  estimatedCost: decimal("estimated_cost", { precision: 12, scale: 2 }),
+  actualCost: decimal("actual_cost", { precision: 12, scale: 2 }),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("activity_campaign_idx").on(table.campaignId),
+  index("activity_status_idx").on(table.status),
+  index("activity_date_idx").on(table.scheduledDate),
+  index("activity_type_idx").on(table.type),
+]);
+
+export const insertCampaignActivitySchema = createInsertSchema(campaignActivities).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCampaignActivity = z.infer<typeof insertCampaignActivitySchema>;
+export type CampaignActivity = typeof campaignActivities.$inferSelect;
+
+// Relations for Campaign Management
+export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
+  party: one(parties, { fields: [campaigns.targetPartyId], references: [parties.id] }),
+  candidate: one(candidates, { fields: [campaigns.targetCandidateId], references: [candidates.id] }),
+  aiSession: one(campaignInsightSessions, { fields: [campaigns.aiSessionId], references: [campaignInsightSessions.id] }),
+  createdByUser: one(users, { fields: [campaigns.createdBy], references: [users.id] }),
+  budgets: many(campaignBudgets),
+  resources: many(campaignResources),
+  metrics: many(campaignMetrics),
+  activities: many(campaignActivities),
+  teamMembers: many(campaignTeamMembers),
+  kpiGoals: many(aiKpiGoals),
+  notifications: many(campaignNotifications),
+}));
+
+export const campaignBudgetsRelations = relations(campaignBudgets, ({ one, many }) => ({
+  campaign: one(campaigns, { fields: [campaignBudgets.campaignId], references: [campaigns.id] }),
+  activities: many(campaignActivities),
+}));
+
+export const campaignResourcesRelations = relations(campaignResources, ({ one }) => ({
+  campaign: one(campaigns, { fields: [campaignResources.campaignId], references: [campaigns.id] }),
+}));
+
+export const campaignMetricsRelations = relations(campaignMetrics, ({ one }) => ({
+  campaign: one(campaigns, { fields: [campaignMetrics.campaignId], references: [campaigns.id] }),
+}));
+
+export const campaignActivitiesRelations = relations(campaignActivities, ({ one, many }) => ({
+  campaign: one(campaigns, { fields: [campaignActivities.campaignId], references: [campaigns.id] }),
+  budget: one(campaignBudgets, { fields: [campaignActivities.budgetId], references: [campaignBudgets.id] }),
+  createdByUser: one(users, { fields: [campaignActivities.createdBy], references: [users.id] }),
+  assignees: many(activityAssignees),
+}));
+
+// Campaign Team Members - linking users to campaigns with roles
+export const campaignTeamMembers = pgTable("campaign_team_members", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  role: text("role").notNull().default("member"), // coordinator, manager, member, volunteer
+  permissions: text("permissions").array().default([]), // view, edit, manage_budget, manage_team
+  joinedAt: timestamp("joined_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  leftAt: timestamp("left_at"),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("team_member_campaign_idx").on(table.campaignId),
+  index("team_member_user_idx").on(table.userId),
+  index("team_member_active_idx").on(table.isActive),
+]);
+
+export const insertCampaignTeamMemberSchema = createInsertSchema(campaignTeamMembers).omit({ id: true, createdAt: true });
+export type InsertCampaignTeamMember = z.infer<typeof insertCampaignTeamMemberSchema>;
+export type CampaignTeamMember = typeof campaignTeamMembers.$inferSelect;
+
+// Activity Assignees - many-to-many relationship between activities and team members
+export const activityAssignees = pgTable("activity_assignees", {
+  id: serial("id").primaryKey(),
+  activityId: integer("activity_id").references(() => campaignActivities.id, { onDelete: "cascade" }).notNull(),
+  teamMemberId: integer("team_member_id").references(() => campaignTeamMembers.id, { onDelete: "cascade" }).notNull(),
+  assignedAt: timestamp("assigned_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  assignedBy: varchar("assigned_by").references(() => users.id),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+}, (table) => [
+  index("assignee_activity_idx").on(table.activityId),
+  index("assignee_member_idx").on(table.teamMemberId),
+]);
+
+export const insertActivityAssigneeSchema = createInsertSchema(activityAssignees).omit({ id: true });
+export type InsertActivityAssignee = z.infer<typeof insertActivityAssigneeSchema>;
+export type ActivityAssignee = typeof activityAssignees.$inferSelect;
+
+// AI KPI Goals - KPI goals linked to AI sessions for tracking
+export const aiKpiGoals = pgTable("ai_kpi_goals", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }).notNull(),
+  aiSessionId: integer("ai_session_id").references(() => campaignInsightSessions.id, { onDelete: "set null" }),
+  kpiName: text("kpi_name").notNull(), // voter_reach, engagement_rate, conversion_rate, sentiment_score, poll_position
+  targetValue: decimal("target_value", { precision: 15, scale: 4 }).notNull(),
+  baselineValue: decimal("baseline_value", { precision: 15, scale: 4 }),
+  predictedValue: decimal("predicted_value", { precision: 15, scale: 4 }), // AI predicted value
+  currentValue: decimal("current_value", { precision: 15, scale: 4 }),
+  unit: text("unit"), // percentage, number, currency
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  trackingWindow: text("tracking_window").default("weekly"), // daily, weekly, monthly
+  status: text("status").notNull().default("active"), // active, achieved, missed, cancelled
+  priority: text("priority").notNull().default("medium"), // low, medium, high, critical
+  aiRecommendation: text("ai_recommendation"), // AI-generated recommendation for achieving this goal
+  aiConfidence: decimal("ai_confidence", { precision: 5, scale: 2 }), // AI confidence in prediction (0-100)
+  notes: text("notes"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("kpi_goal_campaign_idx").on(table.campaignId),
+  index("kpi_goal_session_idx").on(table.aiSessionId),
+  index("kpi_goal_status_idx").on(table.status),
+  index("kpi_goal_name_idx").on(table.kpiName),
+]);
+
+export const insertAiKpiGoalSchema = createInsertSchema(aiKpiGoals).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAiKpiGoal = z.infer<typeof insertAiKpiGoalSchema>;
+export type AiKpiGoal = typeof aiKpiGoals.$inferSelect;
+
+// Campaign Notifications Queue - for tracking pending notifications
+export const campaignNotifications = pgTable("campaign_notifications", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }).notNull(),
+  type: text("type").notNull(), // status_change, task_assigned, task_completed, deadline_reminder, kpi_alert
+  recipientUserId: varchar("recipient_user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  severity: text("severity").default("info"), // info, warning, error, critical
+  relatedActivityId: integer("related_activity_id").references(() => campaignActivities.id, { onDelete: "set null" }),
+  relatedKpiGoalId: integer("related_kpi_goal_id").references(() => aiKpiGoals.id, { onDelete: "set null" }),
+  scheduledFor: timestamp("scheduled_for"), // for deadline reminders
+  sentAt: timestamp("sent_at"),
+  inAppNotificationId: integer("in_app_notification_id").references(() => inAppNotifications.id),
+  emailSent: boolean("email_sent").default(false),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("campaign_notif_campaign_idx").on(table.campaignId),
+  index("campaign_notif_recipient_idx").on(table.recipientUserId),
+  index("campaign_notif_type_idx").on(table.type),
+  index("campaign_notif_scheduled_idx").on(table.scheduledFor),
+]);
+
+export const insertCampaignNotificationSchema = createInsertSchema(campaignNotifications).omit({ id: true, createdAt: true });
+export type InsertCampaignNotification = z.infer<typeof insertCampaignNotificationSchema>;
+export type CampaignNotification = typeof campaignNotifications.$inferSelect;
+
+// Relations for new campaign tables
+export const campaignTeamMembersRelations = relations(campaignTeamMembers, ({ one, many }) => ({
+  campaign: one(campaigns, { fields: [campaignTeamMembers.campaignId], references: [campaigns.id] }),
+  user: one(users, { fields: [campaignTeamMembers.userId], references: [users.id] }),
+  assignments: many(activityAssignees),
+}));
+
+export const activityAssigneesRelations = relations(activityAssignees, ({ one }) => ({
+  activity: one(campaignActivities, { fields: [activityAssignees.activityId], references: [campaignActivities.id] }),
+  teamMember: one(campaignTeamMembers, { fields: [activityAssignees.teamMemberId], references: [campaignTeamMembers.id] }),
+  assignedByUser: one(users, { fields: [activityAssignees.assignedBy], references: [users.id] }),
+}));
+
+export const aiKpiGoalsRelations = relations(aiKpiGoals, ({ one }) => ({
+  campaign: one(campaigns, { fields: [aiKpiGoals.campaignId], references: [campaigns.id] }),
+  aiSession: one(campaignInsightSessions, { fields: [aiKpiGoals.aiSessionId], references: [campaignInsightSessions.id] }),
+}));
+
+export const campaignNotificationsRelations = relations(campaignNotifications, ({ one }) => ({
+  campaign: one(campaigns, { fields: [campaignNotifications.campaignId], references: [campaigns.id] }),
+  recipient: one(users, { fields: [campaignNotifications.recipientUserId], references: [users.id] }),
+  activity: one(campaignActivities, { fields: [campaignNotifications.relatedActivityId], references: [campaignActivities.id] }),
+  kpiGoal: one(aiKpiGoals, { fields: [campaignNotifications.relatedKpiGoalId], references: [aiKpiGoals.id] }),
+  inAppNotification: one(inAppNotifications, { fields: [campaignNotifications.inAppNotificationId], references: [inAppNotifications.id] }),
+}));

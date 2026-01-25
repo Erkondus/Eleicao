@@ -1,0 +1,47 @@
+Aja como um engenheiro de software sênior especializado em processamento de linguagem natural e análise de sentimento. Sua tarefa é aprimorar o componente `SentimentAnalyzer` existente, conforme descrito no prompt original.
+
+**Objetivo:** Implementar funcionalidades de alerta de crise automatizadas no `SentimentAnalyzer` para permitir uma resposta proativa a desafios de relações públicas e tendências eleitorais.
+
+**Requisitos Detalhados:**
+
+1.  **Gatilhos Automatizados de Alerta de Crise:**
+    *   Implemente lógica para detectar "picos significativos de sentimento negativo". Defina o que constitui um "pico significativo" (por exemplo, queda de X pontos em Y minutos/horas, ou sentimento caindo abaixo de um limiar de Z).
+    *   Implemente lógica para detectar "notícias impactantes". Isso pode envolver a integração com um feed de notícias externo ou a análise de fontes de notícias relevantes para identificar eventos de alta prioridade que podem afetar o sentimento público.
+    *   Defina os critérios exatos para acionar um alerta de crise.
+
+2.  **Notificações em Tempo Real:**
+    *   Configure um sistema para enviar notificações em tempo real quando um gatilho de alerta de crise for ativado.
+    *   Os canais de notificação devem incluir:
+        *   E-mail: Especificar o formato do e-mail (assunto, corpo contendo detalhes do alerta).
+        *   Notificações no aplicativo: Especificar como essas notificações serão apresentadas dentro da interface do usuário existente.
+    *   Os detalhes da notificação devem incluir:
+        *   Timestamp do evento.
+        *   Natureza do gatilho (pico de sentimento negativo, notícia impactante).
+        *   Pontuação de sentimento associada (se aplicável).
+        *   Link ou resumo da notícia impactante (se aplicável).
+        *   Entidades/Tópicos mais afetados.
+
+3.  **Integração com ElectoralDashboard:**
+    *   Integre os dados de tendências de sentimento diretamente no `ElectoralDashboard`.
+    *   Especifique como os dados de tendências serão apresentados (por exemplo, gráficos de séries temporais, visualizações de sentimento acumulado).
+    *   Certifique-se de que a integração seja eficiente e não cause lentidão no painel.
+    *   Os dados a serem integrados incluem:
+        *   Tendência de sentimento ao longo do tempo (diário, semanal, mensal).
+        *   Picos de sentimento (positivos e negativos).
+        *   Fontes de dados de sentimento utilizadas.
+
+**Considerações Técnicas:**
+
+*   **Escalabilidade:** A solução deve ser escalável para lidar com grandes volumes de dados de sentimento e notificações.
+*   **Latência:** Minimizar a latência entre a detecção do evento e o envio da notificação.
+*   **Configurabilidade:** Os limiares e parâmetros para acionar alertas devem ser configuráveis.
+*   **Gerenciamento de Falsos Positivos:** Implementar mecanismos para reduzir falsos positivos.
+
+**Formato da Entrega:**
+Descreva a arquitetura da solução aprimorada, incluindo quaisquer novas classes, funções ou módulos necessários. Forneça pseudocódigo ou descrições detalhadas dos algoritmos para a detecção de picos de sentimento e notícias impactantes, bem como para o processo de notificação e integração com o dashboard.
+
+**Critérios de Sucesso:**
+*   O sistema detecta com precisão picos de sentimento negativo e notícias relevantes.
+*   As notificações são enviadas em tempo hábil e contêm informações acionáveis.
+*   A integração com o `ElectoralDashboard` exibe dados de tendências de sentimento claros e úteis.
+*   A solução é robusta e configurável.

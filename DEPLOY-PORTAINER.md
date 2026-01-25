@@ -2,6 +2,8 @@
 
 Guia completo para deploy do SimulaVoto usando Portainer.
 
+> **Atualizando uma instalação existente?** Consulte [DEPLOY-UPDATE-PORTAINER.md](./DEPLOY-UPDATE-PORTAINER.md)
+
 ---
 
 ## Pré-requisitos
@@ -224,3 +226,42 @@ pg_dump $DATABASE_URL > backup.sql
 ```bash
 psql $DATABASE_URL < backup.sql
 ```
+
+---
+
+## 9. Funcionalidades Disponíveis
+
+### Módulos Principais
+
+| Módulo | Descrição |
+|--------|-----------|
+| **Dashboard Eleitoral** | Mapa interativo do Brasil, métricas consolidadas, status de importações |
+| **Simulações** | Cálculo de quocientes eleitorais, distribuição de cadeiras (D'Hondt) |
+| **Importação TSE** | Upload de CSV até 5GB com monitoramento em tempo real |
+| **Previsões IA** | Monte Carlo, análise de tendências, narrativas GPT-4o |
+| **Análise de Sentimento** | Multi-fonte (notícias, redes sociais), word cloud, alertas de crise |
+| **Campanhas** | Gestão de equipe, calendário, orçamento, KPIs estratégicos |
+| **Relatórios** | Geração automática CSV/PDF, agendamento, envio por email |
+
+### Módulo de Campanhas (Janeiro 2026)
+
+O módulo de campanhas inclui:
+
+- **Gestão de Equipe**: Adicionar/remover membros com funções (Coordenador, Gerente, Membro, Voluntário)
+- **Calendário**: Visualização mensal de atividades com codificação por cores
+- **Metas de KPIs**: Recomendações IA, criação manual, acompanhamento de progresso
+- **Notificações**: Alertas automáticos para eventos da campanha
+
+### Variáveis de Ambiente Completas
+
+| Variável | Obrigatória | Descrição |
+|----------|-------------|-----------|
+| `DATABASE_URL` | Sim | Connection string PostgreSQL/Supabase |
+| `SESSION_SECRET` | Sim | Segredo para criptografia de sessões |
+| `OPENAI_API_KEY` | Não* | Para recursos de IA (previsões, análise, KPIs) |
+| `RESEND_API_KEY` | Não | Para envio de relatórios por email |
+| `NODE_ENV` | Não | Ambiente de execução (padrão: production) |
+| `PORT` | Não | Porta do servidor (padrão: 5000) |
+| `DOMAIN` | Não | Domínio para proxy reverso |
+
+*Recursos de IA requerem OPENAI_API_KEY para funcionar completamente.
