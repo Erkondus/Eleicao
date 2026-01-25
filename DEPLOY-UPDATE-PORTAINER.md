@@ -170,16 +170,29 @@ Esta atualização inclui:
 
 ### Migrações de Banco de Dados
 
-O sistema criará automaticamente as novas tabelas:
+O sistema requer novas tabelas para funcionar corretamente. Execute uma das opções:
+
+**Opção 1: Via Drizzle (Recomendado)**
+```bash
+docker exec simulavoto npm run db:push
+```
+
+**Opção 2: Via SQL no Supabase**
+1. Acesse o Supabase Dashboard
+2. Vá em **SQL Editor**
+3. Cole e execute o conteúdo de `scripts/migration-2026-01.sql`
+
+**Novas tabelas incluídas:**
+- `in_app_notifications` - Notificações in-app
+- `ibge_municipios` - Municípios do IBGE
+- `ibge_populacao` - Dados de população
+- `ibge_indicadores` - Indicadores socioeconômicos
+- `ibge_import_jobs` - Jobs de importação IBGE
 - `campaign_team_members` - Membros da equipe de campanha
 - `activity_assignees` - Atribuições de atividades
 - `ai_kpi_goals` - Metas de KPI com suporte IA
 - `campaign_notifications` - Notificações de campanha
-
-Execute após a atualização:
-```bash
-docker exec simulavoto npm run db:push
-```
+- E outras tabelas de análise de sentimento, dashboards, etc.
 
 ---
 

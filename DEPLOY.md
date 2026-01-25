@@ -58,6 +58,12 @@ Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dad
    ```
    scripts/init-db.sql
    ```
+2. Para funcionalidades completas, execute também:
+   ```
+   scripts/migration-2026-01.sql
+   ```
+
+> **Nota**: O `init-db.sql` cria tabelas básicas. O `migration-2026-01.sql` adiciona tabelas avançadas (IBGE, notificações, campanhas, análise de sentimento).
 
 ### 4. Obter Connection String
 

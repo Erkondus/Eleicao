@@ -27,6 +27,9 @@ CREATE EXTENSION IF NOT EXISTS vector;
 1. Acesse: https://supabase.com/dashboard
 2. Vá em **SQL Editor**
 3. Cole e execute o conteúdo de `scripts/init-db.sql`
+4. **Para instalações completas**, execute também `scripts/migration-2026-01.sql`
+
+> **Nota**: O script `init-db.sql` cria as tabelas básicas. O script `migration-2026-01.sql` adiciona tabelas para funcionalidades avançadas (IBGE, notificações, campanhas, análise de sentimento).
 
 ### 1.3 Obter Connection String
 1. Vá em **Settings** → **Database**

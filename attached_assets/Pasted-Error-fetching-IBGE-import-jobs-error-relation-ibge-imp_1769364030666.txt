@@ -1,0 +1,440 @@
+Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:28 PM [express] GET /api/ibge/import-jobs 500 in 15ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7278)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 114,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '27',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:32 PM [express] GET /api/ibge/stats 500 in 15ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:34 PM [express] GET /api/ibge/import-jobs 500 in 13ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:39 PM [express] GET /api/ibge/import-jobs 500 in 14ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7278)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 114,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '27',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:43 PM [express] GET /api/ibge/stats 500 in 15ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:44 PM [express] GET /api/ibge/import-jobs 500 in 14ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | 5:59:46 PM [express] GET /api/imports/tse 304 in 16ms :: []
+simulavoto  | Error fetching notifications: error: relation "in_app_notifications" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:28823 {
+simulavoto  |   length: 120,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '175',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:46 PM [express] GET /api/notifications 500 in 4ms :: {"error":"Erro ao buscar notificações"}      
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:50 PM [express] GET /api/ibge/import-jobs 500 in 14ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7278)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 114,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '27',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:53 PM [express] GET /api/ibge/stats 500 in 30ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 5:59:55 PM [express] GET /api/ibge/import-jobs 500 in 16ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:00 PM [express] GET /api/ibge/import-jobs 500 in 90ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | Error fetching IBGE stats: error: relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7278)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 114,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '27',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:04 PM [express] GET /api/ibge/stats 500 in 396ms :: {"error":"Failed to fetch IBGE statistics"}   
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:06 PM [express] GET /api/ibge/import-jobs 500 in 95ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:11 PM [express] GET /api/ibge/import-jobs 500 in 30ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7278)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 114,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '27',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:14 PM [express] GET /api/ibge/stats 500 in 16ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:16 PM [express] GET /api/ibge/import-jobs 500 in 31ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | 6:00:17 PM [express] GET /api/imports/tse 304 in 20ms :: []
+simulavoto  | Error fetching notifications: error: relation "in_app_notifications" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:28823 {
+simulavoto  |   length: 120,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '175',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:17 PM [express] GET /api/notifications 500 in 3ms :: {"error":"Erro ao buscar notificações"}      
+simulavoto  | Error fetching IBGE import jobs: error: relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 116,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42P01',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '208',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '1392',
+simulavoto  |   routine: 'parserOpenTable'
+simulavoto  | }
+simulavoto  | 6:00:22 PM [express] GET /api/ibge/import-jobs 500 in 14ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: relation "ibge_municipios" does not exist
