@@ -42,6 +42,26 @@ interface LocalidadeMunicipio {
   };
 }
 
+interface ImportError {
+  timestamp: string;
+  record: string;
+  errorType: string;
+  errorMessage: string;
+  errorCode?: string;
+  details?: string;
+}
+
+interface ImportProgress {
+  phase: string;
+  phaseDescription: string;
+  currentBatch: number;
+  totalBatches: number;
+  recordsPerSecond: number;
+  estimatedTimeRemaining: string;
+  lastProcessedRecord: string;
+  errors: ImportError[];
+}
+
 export class IBGEService {
   private static instance: IBGEService;
   private cancelledJobs: Set<number> = new Set();
@@ -57,6 +77,48 @@ export class IBGEService {
 
   isJobCancelled(jobId: number): boolean {
     return this.cancelledJobs.has(jobId);
+  }
+
+  private formatDuration(seconds: number): string {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  }
+
+  private async updateProgress(
+    jobId: number, 
+    phase: string,
+    phaseDescription: string,
+    processed: number, 
+    failed: number, 
+    total: number,
+    startTime: Date,
+    lastRecord: string,
+    errors: ImportError[]
+  ): Promise<void> {
+    const elapsed = (Date.now() - startTime.getTime()) / 1000;
+    const recordsPerSecond = processed > 0 ? processed / elapsed : 0;
+    const remaining = total - processed - failed;
+    const estimatedSeconds = recordsPerSecond > 0 ? remaining / recordsPerSecond : 0;
+
+    const progress: ImportProgress = {
+      phase,
+      phaseDescription,
+      currentBatch: Math.ceil(processed / 100),
+      totalBatches: Math.ceil(total / 100),
+      recordsPerSecond: Math.round(recordsPerSecond * 10) / 10,
+      estimatedTimeRemaining: this.formatDuration(estimatedSeconds),
+      lastProcessedRecord: lastRecord,
+      errors: errors.slice(-20), // Keep last 20 errors for display
+    };
+
+    await db.update(ibgeImportJobs)
+      .set({ 
+        processedRecords: processed,
+        failedRecords: failed,
+        errorDetails: { progress, allErrors: errors },
+      })
+      .where(eq(ibgeImportJobs.id, jobId));
   }
 
   async cancelJob(jobId: number): Promise<boolean> {
@@ -108,6 +170,44 @@ export class IBGEService {
     return job || null;
   }
 
+  async getJobErrorReport(jobId: number): Promise<{
+    job: any;
+    summary: {
+      totalErrors: number;
+      errorsByType: Record<string, number>;
+      affectedRecords: string[];
+    };
+    errors: ImportError[];
+  } | null> {
+    const [job] = await db.select().from(ibgeImportJobs).where(eq(ibgeImportJobs.id, jobId)).limit(1);
+    
+    if (!job) return null;
+
+    const errorDetails = job.errorDetails as { allErrors?: ImportError[] } | null;
+    const allErrors = errorDetails?.allErrors || [];
+
+    // Group errors by type
+    const errorsByType: Record<string, number> = {};
+    const affectedRecords: string[] = [];
+
+    allErrors.forEach((err: ImportError) => {
+      errorsByType[err.errorType] = (errorsByType[err.errorType] || 0) + 1;
+      if (!affectedRecords.includes(err.record)) {
+        affectedRecords.push(err.record);
+      }
+    });
+
+    return {
+      job,
+      summary: {
+        totalErrors: allErrors.length,
+        errorsByType,
+        affectedRecords: affectedRecords.slice(0, 100), // Limit to 100
+      },
+      errors: allErrors,
+    };
+  }
+
   async fetchMunicipios(): Promise<LocalidadeMunicipio[]> {
     const response = await fetch(`${IBGE_LOCALIDADES_API}/municipios?orderBy=nome`);
     if (!response.ok) {
@@ -142,16 +242,31 @@ export class IBGEService {
   async importMunicipios(jobId: number, userId?: string): Promise<{ imported: number; errors: number }> {
     let imported = 0;
     let errors = 0;
+    const errorList: ImportError[] = [];
+    const startTime = new Date();
 
     try {
       await db.update(ibgeImportJobs)
-        .set({ status: "running", startedAt: new Date() })
+        .set({ 
+          status: "running", 
+          startedAt: startTime,
+          errorDetails: { progress: { phase: "fetch", phaseDescription: "Buscando dados da API IBGE..." } }
+        })
         .where(eq(ibgeImportJobs.id, jobId));
 
       const municipios = await this.fetchMunicipios();
       
       await db.update(ibgeImportJobs)
-        .set({ totalRecords: municipios.length })
+        .set({ 
+          totalRecords: municipios.length,
+          errorDetails: { 
+            progress: { 
+              phase: "import", 
+              phaseDescription: `Importando ${municipios.length} municípios...`,
+              totalBatches: Math.ceil(municipios.length / 100)
+            } 
+          }
+        })
         .where(eq(ibgeImportJobs.id, jobId));
 
       const batchSize = 100;
@@ -167,7 +282,8 @@ export class IBGEService {
                 completedAt: new Date(),
                 processedRecords: imported,
                 failedRecords: errors,
-                errorMessage: "Cancelado pelo usuário"
+                errorMessage: "Cancelado pelo usuário",
+                errorDetails: { progress: { phase: "cancelled" }, allErrors: errorList }
               })
               .where(eq(ibgeImportJobs.id, jobId));
             this.cancelledJobs.delete(jobId);
@@ -177,14 +293,20 @@ export class IBGEService {
           try {
             const codigoIbge = mun.id.toString().padStart(7, '0');
             
+            // Handle municipalities with incomplete data from IBGE API
+            const microrregiao = mun.microrregiao;
+            const mesorregiao = microrregiao?.mesorregiao;
+            const uf = mesorregiao?.UF;
+            const regiao = uf?.regiao;
+            
             const insertData: InsertIbgeMunicipio = {
               codigoIbge,
               nome: mun.nome,
-              uf: mun.microrregiao.mesorregiao.UF.sigla,
-              ufNome: mun.microrregiao.mesorregiao.UF.nome,
-              regiaoNome: mun.microrregiao.mesorregiao.UF.regiao.nome,
-              mesorregiao: mun.microrregiao.mesorregiao.nome,
-              microrregiao: mun.microrregiao.nome,
+              uf: uf?.sigla || "??",
+              ufNome: uf?.nome || "Desconhecido",
+              regiaoNome: regiao?.nome || "Desconhecido",
+              mesorregiao: mesorregiao?.nome || "Desconhecido",
+              microrregiao: microrregiao?.nome || "Desconhecido",
             };
 
             await db.insert(ibgeMunicipios)
@@ -204,34 +326,81 @@ export class IBGEService {
             
             imported++;
           } catch (err) {
+            const error = err as Error & { code?: string };
             console.error(`Error importing municipio ${mun.id}:`, err);
+            errorList.push({
+              timestamp: new Date().toISOString(),
+              record: `${mun.nome} (${mun.id})`,
+              errorType: error.code || "DATABASE_ERROR",
+              errorMessage: error.message || "Erro desconhecido",
+              errorCode: error.code,
+              details: JSON.stringify({ municipioId: mun.id, nome: mun.nome }),
+            });
             errors++;
           }
         }
 
-        await db.update(ibgeImportJobs)
-          .set({ processedRecords: imported + errors })
-          .where(eq(ibgeImportJobs.id, jobId));
+        // Update progress every batch
+        await this.updateProgress(
+          jobId, 
+          "import",
+          `Importando municípios... (${imported + errors}/${municipios.length})`,
+          imported,
+          errors,
+          municipios.length,
+          startTime,
+          batch[batch.length - 1]?.nome || "",
+          errorList
+        );
       }
 
+      // Final status
+      const duration = (Date.now() - startTime.getTime()) / 1000;
       await db.update(ibgeImportJobs)
         .set({ 
-          status: "completed", 
+          status: errors === 0 ? "completed" : "completed",
           completedAt: new Date(),
           processedRecords: imported,
-          failedRecords: errors
+          failedRecords: errors,
+          errorMessage: errors > 0 ? `Importação concluída com ${errors} erro(s)` : null,
+          errorDetails: { 
+            progress: { 
+              phase: "completed",
+              phaseDescription: `Importação concluída em ${this.formatDuration(duration)}`,
+              recordsPerSecond: Math.round(imported / duration * 10) / 10,
+            },
+            allErrors: errorList,
+            summary: {
+              duration: this.formatDuration(duration),
+              totalProcessed: imported + errors,
+              successRate: ((imported / (imported + errors)) * 100).toFixed(1) + "%",
+            }
+          }
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      const error = err as Error;
+      const errorMessage = error.message || "Unknown error";
+      errorList.push({
+        timestamp: new Date().toISOString(),
+        record: "SISTEMA",
+        errorType: "FATAL_ERROR",
+        errorMessage,
+        details: error.stack,
+      });
+      
       await db.update(ibgeImportJobs)
         .set({ 
           status: "failed", 
           completedAt: new Date(),
           errorMessage,
           processedRecords: imported,
-          failedRecords: errors
+          failedRecords: errors,
+          errorDetails: { 
+            progress: { phase: "failed", phaseDescription: errorMessage },
+            allErrors: errorList 
+          }
         })
         .where(eq(ibgeImportJobs.id, jobId));
       throw err;
@@ -243,10 +412,16 @@ export class IBGEService {
   async importPopulacao(jobId: number, ano?: number): Promise<{ imported: number; errors: number }> {
     let imported = 0;
     let errors = 0;
+    const errorList: ImportError[] = [];
+    const startTime = new Date();
 
     try {
       await db.update(ibgeImportJobs)
-        .set({ status: "running", startedAt: new Date() })
+        .set({ 
+          status: "running", 
+          startedAt: startTime,
+          errorDetails: { progress: { phase: "fetch", phaseDescription: "Buscando dados da API SIDRA..." } }
+        })
         .where(eq(ibgeImportJobs.id, jobId));
 
       const populationData = ano && ano <= 2022 
@@ -254,12 +429,32 @@ export class IBGEService {
         : await this.fetchPopulacaoEstimada(ano || 2024);
       
       await db.update(ibgeImportJobs)
-        .set({ totalRecords: populationData.length })
+        .set({ 
+          totalRecords: populationData.length,
+          errorDetails: { 
+            progress: { 
+              phase: "prepare", 
+              phaseDescription: "Carregando mapa de municípios...",
+            } 
+          }
+        })
         .where(eq(ibgeImportJobs.id, jobId));
 
       const municipiosMap = new Map<string, number>();
       const allMunicipios = await db.select().from(ibgeMunicipios);
       allMunicipios.forEach(m => municipiosMap.set(m.codigoIbge, m.id));
+
+      await db.update(ibgeImportJobs)
+        .set({ 
+          errorDetails: { 
+            progress: { 
+              phase: "import", 
+              phaseDescription: `Importando ${populationData.length} registros de população...`,
+              totalBatches: Math.ceil(populationData.length / 100)
+            } 
+          }
+        })
+        .where(eq(ibgeImportJobs.id, jobId));
 
       const targetAno = ano || 2024;
       const batchSize = 100;
@@ -276,7 +471,8 @@ export class IBGEService {
                 completedAt: new Date(),
                 processedRecords: imported,
                 failedRecords: errors,
-                errorMessage: "Cancelado pelo usuário"
+                errorMessage: "Cancelado pelo usuário",
+                errorDetails: { progress: { phase: "cancelled" }, allErrors: errorList }
               })
               .where(eq(ibgeImportJobs.id, jobId));
             this.cancelledJobs.delete(jobId);
@@ -285,10 +481,30 @@ export class IBGEService {
 
           try {
             const codigoIbge = record.D1C?.padStart(7, '0');
-            if (!codigoIbge) continue;
+            if (!codigoIbge) {
+              errorList.push({
+                timestamp: new Date().toISOString(),
+                record: record.D1N || "UNKNOWN",
+                errorType: "INVALID_CODE",
+                errorMessage: "Código IBGE inválido ou ausente",
+                details: JSON.stringify(record),
+              });
+              errors++;
+              continue;
+            }
 
             const populacao = parseInt(record.V) || null;
-            if (populacao === null) continue;
+            if (populacao === null) {
+              errorList.push({
+                timestamp: new Date().toISOString(),
+                record: record.D1N || codigoIbge,
+                errorType: "INVALID_POPULATION",
+                errorMessage: "Valor de população inválido",
+                details: JSON.stringify({ value: record.V }),
+              });
+              errors++;
+              continue;
+            }
 
             const municipioId = municipiosMap.get(codigoIbge);
 
@@ -319,34 +535,82 @@ export class IBGEService {
             
             imported++;
           } catch (err) {
+            const error = err as Error & { code?: string };
             console.error(`Error importing population record:`, err);
+            errorList.push({
+              timestamp: new Date().toISOString(),
+              record: record.D1N || record.D1C || "UNKNOWN",
+              errorType: error.code || "DATABASE_ERROR",
+              errorMessage: error.message || "Erro desconhecido",
+              errorCode: error.code,
+              details: JSON.stringify(record),
+            });
             errors++;
           }
         }
 
-        await db.update(ibgeImportJobs)
-          .set({ processedRecords: imported + errors })
-          .where(eq(ibgeImportJobs.id, jobId));
+        // Update progress every batch
+        await this.updateProgress(
+          jobId, 
+          "import",
+          `Importando população... (${imported + errors}/${populationData.length})`,
+          imported,
+          errors,
+          populationData.length,
+          startTime,
+          batch[batch.length - 1]?.D1N || "",
+          errorList
+        );
       }
 
+      // Final status
+      const duration = (Date.now() - startTime.getTime()) / 1000;
       await db.update(ibgeImportJobs)
         .set({ 
           status: "completed", 
           completedAt: new Date(),
           processedRecords: imported,
-          failedRecords: errors
+          failedRecords: errors,
+          errorMessage: errors > 0 ? `Importação concluída com ${errors} erro(s)` : null,
+          errorDetails: { 
+            progress: { 
+              phase: "completed",
+              phaseDescription: `Importação concluída em ${this.formatDuration(duration)}`,
+              recordsPerSecond: Math.round(imported / duration * 10) / 10,
+            },
+            allErrors: errorList,
+            summary: {
+              duration: this.formatDuration(duration),
+              totalProcessed: imported + errors,
+              successRate: ((imported / (imported + errors)) * 100).toFixed(1) + "%",
+              ano: targetAno,
+            }
+          }
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      const error = err as Error;
+      const errorMessage = error.message || "Unknown error";
+      errorList.push({
+        timestamp: new Date().toISOString(),
+        record: "SISTEMA",
+        errorType: "FATAL_ERROR",
+        errorMessage,
+        details: error.stack,
+      });
+      
       await db.update(ibgeImportJobs)
         .set({ 
           status: "failed", 
           completedAt: new Date(),
           errorMessage,
           processedRecords: imported,
-          failedRecords: errors
+          failedRecords: errors,
+          errorDetails: { 
+            progress: { phase: "failed", phaseDescription: errorMessage },
+            allErrors: errorList 
+          }
         })
         .where(eq(ibgeImportJobs.id, jobId));
       throw err;
@@ -397,17 +661,36 @@ export class IBGEService {
   async importIndicadores(jobId: number): Promise<{ imported: number; errors: number }> {
     let imported = 0;
     let errors = 0;
+    const errorList: ImportError[] = [];
+    const startTime = new Date();
 
     try {
       await db.update(ibgeImportJobs)
-        .set({ status: "running", startedAt: new Date() })
+        .set({ 
+          status: "running", 
+          startedAt: startTime,
+          errorDetails: { progress: { phase: "prepare", phaseDescription: "Carregando lista de municípios..." } }
+        })
         .where(eq(ibgeImportJobs.id, jobId));
 
       // Get all municipalities with UF info for regional indicators
       const municipios = await db.select().from(ibgeMunicipios);
       
+      if (municipios.length === 0) {
+        throw new Error("Nenhum município encontrado. Importe os municípios primeiro.");
+      }
+
       await db.update(ibgeImportJobs)
-        .set({ totalRecords: municipios.length })
+        .set({ 
+          totalRecords: municipios.length,
+          errorDetails: { 
+            progress: { 
+              phase: "import", 
+              phaseDescription: `Gerando indicadores para ${municipios.length} municípios...`,
+              totalBatches: Math.ceil(municipios.length / 100)
+            } 
+          }
+        })
         .where(eq(ibgeImportJobs.id, jobId));
 
       const ano = 2010; // IDHM data reference year
@@ -425,7 +708,8 @@ export class IBGEService {
                 completedAt: new Date(),
                 processedRecords: imported,
                 failedRecords: errors,
-                errorMessage: "Cancelado pelo usuário"
+                errorMessage: "Cancelado pelo usuário",
+                errorDetails: { progress: { phase: "cancelled" }, allErrors: errorList }
               })
               .where(eq(ibgeImportJobs.id, jobId));
             this.cancelledJobs.delete(jobId);
@@ -473,34 +757,87 @@ export class IBGEService {
             
             imported++;
           } catch (err) {
+            const error = err as Error & { code?: string };
             console.error(`Error importing indicators for ${mun.codigoIbge}:`, err);
+            errorList.push({
+              timestamp: new Date().toISOString(),
+              record: `${mun.nome} (${mun.codigoIbge})`,
+              errorType: error.code || "DATABASE_ERROR",
+              errorMessage: error.message || "Erro desconhecido",
+              errorCode: error.code,
+              details: JSON.stringify({ 
+                municipio: mun.nome, 
+                codigoIbge: mun.codigoIbge,
+                uf: mun.uf,
+                stack: error.stack?.substring(0, 500)
+              }),
+            });
             errors++;
           }
         }
 
-        await db.update(ibgeImportJobs)
-          .set({ processedRecords: imported + errors })
-          .where(eq(ibgeImportJobs.id, jobId));
+        // Update progress every batch
+        await this.updateProgress(
+          jobId, 
+          "import",
+          `Gerando indicadores... (${imported + errors}/${municipios.length})`,
+          imported,
+          errors,
+          municipios.length,
+          startTime,
+          batch[batch.length - 1]?.nome || "",
+          errorList
+        );
       }
 
+      // Final status
+      const duration = (Date.now() - startTime.getTime()) / 1000;
       await db.update(ibgeImportJobs)
         .set({ 
           status: "completed", 
           completedAt: new Date(),
           processedRecords: imported,
-          failedRecords: errors
+          failedRecords: errors,
+          errorMessage: errors > 0 ? `Importação concluída com ${errors} erro(s)` : null,
+          errorDetails: { 
+            progress: { 
+              phase: "completed",
+              phaseDescription: `Importação concluída em ${this.formatDuration(duration)}`,
+              recordsPerSecond: Math.round(imported / duration * 10) / 10,
+            },
+            allErrors: errorList,
+            summary: {
+              duration: this.formatDuration(duration),
+              totalProcessed: imported + errors,
+              successRate: ((imported / (imported + errors)) * 100).toFixed(1) + "%",
+              anoReferencia: ano,
+            }
+          }
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      const error = err as Error;
+      const errorMessage = error.message || "Unknown error";
+      errorList.push({
+        timestamp: new Date().toISOString(),
+        record: "SISTEMA",
+        errorType: "FATAL_ERROR",
+        errorMessage,
+        details: error.stack,
+      });
+      
       await db.update(ibgeImportJobs)
         .set({ 
           status: "failed", 
           completedAt: new Date(),
           errorMessage,
           processedRecords: imported,
-          failedRecords: errors
+          failedRecords: errors,
+          errorDetails: { 
+            progress: { phase: "failed", phaseDescription: errorMessage },
+            allErrors: errorList 
+          }
         })
         .where(eq(ibgeImportJobs.id, jobId));
       throw err;

@@ -7261,6 +7261,40 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
     }
   });
 
+  // Get IBGE import job error report
+  app.get("/api/ibge/import/:jobId/report", requireAuth, async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const report = await ibgeService.getJobErrorReport(jobId);
+      
+      if (!report) {
+        return res.status(404).json({ error: "Job não encontrado" });
+      }
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching IBGE import report:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to fetch report" });
+    }
+  });
+
+  // Get single IBGE import job status
+  app.get("/api/ibge/import/:jobId", requireAuth, async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const job = await ibgeService.getJob(jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job não encontrado" });
+      }
+      
+      res.json(job);
+    } catch (error) {
+      console.error("Error fetching IBGE import job:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to fetch job" });
+    }
+  });
+
   // =====================================================
   // Campaign Insights AI Module
   // =====================================================

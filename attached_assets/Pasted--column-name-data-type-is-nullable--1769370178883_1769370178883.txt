@@ -1,0 +1,29 @@
+| column_name                 | data_type                   | is_nullable |
+| --------------------------- | --------------------------- | ----------- |
+| id                          | integer                     | NO          |
+| municipio_id                | integer                     | YES         |
+| codigo_ibge                 | character varying           | NO          |
+| ano                         | integer                     | NO          |
+| taxa_alfabetizacao          | numeric                     | YES         |
+| taxa_escolarizacao_6_14     | numeric                     | YES         |
+| ideb                        | numeric                     | YES         |
+| pib_per_capita              | numeric                     | YES         |
+| renda_media_domiciliar      | numeric                     | YES         |
+| salario_medio_mensal        | numeric                     | YES         |
+| taxa_desemprego             | numeric                     | YES         |
+| idhm                        | numeric                     | YES         |
+| idhm_educacao               | numeric                     | YES         |
+| idhm_longevidade            | numeric                     | YES         |
+| idhm_renda                  | numeric                     | YES         |
+| indice_gini                 | numeric                     | YES         |
+| percentual_urbanizacao      | numeric                     | YES         |
+| percentual_saneamento       | numeric                     | YES         |
+| percentual_agua_encanada    | numeric                     | YES         |
+| percentual_energia_eletrica | numeric                     | YES         |
+| eleitores_aptos             | integer                     | YES         |
+| comparecimento              | integer                     | YES         |
+| abstencao                   | integer                     | YES         |
+| votos_validos               | integer                     | YES         |
+| fonte                       | text                        | YES         |
+| created_at                  | timestamp without time zone | NO          |
+| updated_at                  | timestamp without time zone | NO          |

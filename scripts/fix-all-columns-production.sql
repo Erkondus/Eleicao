@@ -6,6 +6,11 @@
 -- ANTES de reiniciar o container Docker
 -- =====================================================
 
+-- 0. ÍNDICES DUPLICADOS - Remover índices idênticos
+DROP INDEX IF EXISTS sentiment_results_entity_idx;
+DROP INDEX IF EXISTS ibge_import_type_idx;
+DROP INDEX IF EXISTS ibge_import_status_idx;
+
 -- 1. PARTIES - Adicionar colunas faltantes
 ALTER TABLE parties ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE parties ADD COLUMN IF NOT EXISTS tags TEXT[];
@@ -54,12 +59,13 @@ BEGIN
   END IF;
 END $$;
 
--- 6. IBGE_INDICADORES - Recriar com estrutura correta
+-- 6. IBGE_INDICADORES - Recriar com estrutura EXATA do Drizzle Schema
+-- IMPORTANTE: Colunas devem corresponder EXATAMENTE ao schema.ts
 DROP TABLE IF EXISTS ibge_indicadores CASCADE;
 
 CREATE TABLE ibge_indicadores (
     id SERIAL PRIMARY KEY,
-    municipio_id INTEGER REFERENCES ibge_municipios(id),
+    municipio_id INTEGER REFERENCES ibge_municipios(id) ON DELETE CASCADE,
     codigo_ibge VARCHAR(7) NOT NULL,
     ano INTEGER NOT NULL,
     -- Indicadores de Educação
@@ -82,27 +88,27 @@ CREATE TABLE ibge_indicadores (
     percentual_saneamento DECIMAL(6,3),
     percentual_agua_encanada DECIMAL(6,3),
     percentual_energia_eletrica DECIMAL(6,3),
-    -- Dados Eleitorais
+    -- Dados Eleitorais (NOMES EXATOS DO SCHEMA)
     eleitores_aptos INTEGER,
-    comparecimento_ultimo_pleito DECIMAL(6,3),
-    abstencao_ultimo_pleito DECIMAL(6,3),
+    comparecimento INTEGER,
+    abstencao INTEGER,
+    votos_validos INTEGER,
     -- Metadados
-    fonte TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fonte TEXT DEFAULT 'IBGE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     UNIQUE(codigo_ibge, ano)
 );
 
-CREATE INDEX IF NOT EXISTS idx_ibge_indicadores_codigo ON ibge_indicadores(codigo_ibge);
-CREATE INDEX IF NOT EXISTS idx_ibge_indicadores_municipio ON ibge_indicadores(municipio_id);
-CREATE INDEX IF NOT EXISTS idx_ibge_indicadores_ano ON ibge_indicadores(ano);
+CREATE INDEX IF NOT EXISTS indicadores_municipio_idx ON ibge_indicadores(municipio_id);
+CREATE INDEX IF NOT EXISTS indicadores_ano_idx ON ibge_indicadores(ano);
+CREATE INDEX IF NOT EXISTS indicadores_codigo_ano_idx ON ibge_indicadores(codigo_ibge, ano);
 
 -- 7. VERIFICAR RESULTADOS
 SELECT 'Correções aplicadas com sucesso!' AS status;
 
--- Mostrar contagem de colunas por tabela
-SELECT table_name, COUNT(*) as total_colunas
+-- Mostrar estrutura da tabela ibge_indicadores para confirmar
+SELECT column_name, data_type, is_nullable
 FROM information_schema.columns 
-WHERE table_name IN ('parties', 'scenarios', 'report_schedules', 'ibge_indicadores', 'ibge_municipios', 'ibge_populacao')
-GROUP BY table_name
-ORDER BY table_name;
+WHERE table_name = 'ibge_indicadores'
+ORDER BY ordinal_position;

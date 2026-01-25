@@ -11,6 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
   Table,
   TableBody,
   TableCell,
@@ -36,6 +44,10 @@ import {
   StopCircle,
   RotateCcw,
   Ban,
+  FileText,
+  AlertTriangle,
+  Timer,
+  Gauge,
 } from "lucide-react";
 
 interface IBGEStats {
@@ -46,6 +58,26 @@ interface IBGEStats {
   populacaoByYear: { ano: number; count: number }[];
 }
 
+interface ImportProgress {
+  phase: string;
+  phaseDescription: string;
+  currentBatch: number;
+  totalBatches: number;
+  recordsPerSecond: number;
+  estimatedTimeRemaining: string;
+  lastProcessedRecord: string;
+  errors: ImportError[];
+}
+
+interface ImportError {
+  timestamp: string;
+  record: string;
+  errorType: string;
+  errorMessage: string;
+  errorCode?: string;
+  details?: string;
+}
+
 interface IBGEImportJob {
   id: number;
   type: string;
@@ -54,10 +86,29 @@ interface IBGEImportJob {
   processedRecords: number;
   failedRecords: number;
   errorMessage: string | null;
+  errorDetails: {
+    progress?: ImportProgress;
+    allErrors?: ImportError[];
+    summary?: {
+      duration?: string;
+      totalProcessed?: number;
+      successRate?: string;
+    };
+  } | null;
   startedAt: string | null;
   completedAt: string | null;
   source: string;
   createdAt: string;
+}
+
+interface ErrorReport {
+  job: IBGEImportJob;
+  summary: {
+    totalErrors: number;
+    errorsByType: Record<string, number>;
+    affectedRecords: string[];
+  };
+  errors: ImportError[];
 }
 
 export default function IBGEDataPage() {
@@ -65,6 +116,7 @@ export default function IBGEDataPage() {
   const [selectedYear, setSelectedYear] = useState<string>("2024");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [errorReportJobId, setErrorReportJobId] = useState<number | null>(null);
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<IBGEStats>({
     queryKey: ["/api/ibge/stats"],
@@ -73,7 +125,7 @@ export default function IBGEDataPage() {
 
   const { data: importJobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery<IBGEImportJob[]>({
     queryKey: ["/api/ibge/import-jobs"],
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const { data: demographicData } = useQuery<{
@@ -86,6 +138,11 @@ export default function IBGEDataPage() {
     };
   }>({
     queryKey: ["/api/ibge/demographic-data"],
+  });
+
+  const { data: errorReport, isLoading: errorReportLoading } = useQuery<ErrorReport>({
+    queryKey: ["/api/ibge/import", errorReportJobId, "report"],
+    enabled: errorReportJobId !== null,
   });
 
   const importMunicipiosMutation = useMutation({
@@ -240,7 +297,74 @@ export default function IBGEDataPage() {
     }
   };
 
+  const getJobTypeName = (type: string) => {
+    switch (type) {
+      case "municipios": return "Municípios";
+      case "populacao": return "População";
+      case "indicadores": return "Indicadores";
+      case "all": return "Completa";
+      default: return type;
+    }
+  };
+
   const hasActiveImport = importJobs?.some(j => j.status === "running" || j.status === "pending");
+
+  const renderProgressDetails = (job: IBGEImportJob) => {
+    const progress = job.errorDetails?.progress;
+    const percentage = job.totalRecords > 0 ? (job.processedRecords / job.totalRecords) * 100 : 0;
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Progress value={percentage} className="flex-1" />
+          <span className="text-xs font-medium min-w-[50px] text-right">
+            {percentage.toFixed(1)}%
+          </span>
+        </div>
+        
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <FileText className="h-3 w-3" />
+            {formatNumber(job.processedRecords)} / {formatNumber(job.totalRecords)}
+          </span>
+          
+          {job.failedRecords > 0 && (
+            <span className="flex items-center gap-1 text-destructive">
+              <AlertTriangle className="h-3 w-3" />
+              {job.failedRecords} erros
+            </span>
+          )}
+          
+          {progress?.recordsPerSecond && job.status === "running" && (
+            <span className="flex items-center gap-1">
+              <Gauge className="h-3 w-3" />
+              {progress.recordsPerSecond}/s
+            </span>
+          )}
+          
+          {progress?.estimatedTimeRemaining && job.status === "running" && (
+            <span className="flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              ~{progress.estimatedTimeRemaining}
+            </span>
+          )}
+        </div>
+
+        {progress?.phaseDescription && job.status === "running" && (
+          <p className="text-xs text-muted-foreground italic truncate">
+            {progress.phaseDescription}
+          </p>
+        )}
+
+        {job.errorDetails?.summary?.duration && job.status === "completed" && (
+          <p className="text-xs text-muted-foreground">
+            Concluído em {job.errorDetails.summary.duration}
+            {job.errorDetails.summary.successRate && ` • ${job.errorDetails.summary.successRate} sucesso`}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6" data-testid="page-ibge-data">
@@ -531,7 +655,7 @@ export default function IBGEDataPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Histórico de Importações</CardTitle>
-                <CardDescription>Acompanhe as importações de dados do IBGE</CardDescription>
+                <CardDescription>Acompanhe as importações de dados do IBGE com progresso detalhado</CardDescription>
               </div>
               <Button variant="outline" size="sm" onClick={() => refetchJobs()}>
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -542,52 +666,43 @@ export default function IBGEDataPage() {
               {jobsLoading ? (
                 <div className="space-y-2">
                   {[...Array(3)].map((_, i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
+                    <Skeleton key={i} className="h-24 w-full" />
                   ))}
                 </div>
               ) : importJobs && importJobs.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Progresso</TableHead>
-                      <TableHead>Iniciado</TableHead>
-                      <TableHead>Concluído</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {importJobs.map((job) => (
-                      <TableRow key={job.id}>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {job.type === "municipios" && "Municípios"}
-                            {job.type === "populacao" && "População"}
-                            {job.type === "indicadores" && "Indicadores"}
-                            {job.type === "all" && "Completa"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(job.status)}</TableCell>
-                        <TableCell className="w-48">
-                          <div className="space-y-1">
-                            <Progress 
-                              value={job.totalRecords > 0 ? (job.processedRecords / job.totalRecords) * 100 : 0} 
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {formatNumber(job.processedRecords)} / {formatNumber(job.totalRecords)}
-                              {job.failedRecords > 0 && (
-                                <span className="text-destructive ml-2">
-                                  ({job.failedRecords} erros)
-                                </span>
+                <div className="space-y-4">
+                  {importJobs.map((job) => (
+                    <Card key={job.id} className="border">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <Badge variant="outline" className="font-mono">
+                                #{job.id}
+                              </Badge>
+                              <Badge variant="secondary">
+                                {getJobTypeName(job.type)}
+                              </Badge>
+                              {getStatusBadge(job.status)}
+                            </div>
+                            
+                            {renderProgressDetails(job)}
+                            
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <span>Iniciado: {formatDate(job.startedAt)}</span>
+                              {job.completedAt && (
+                                <span>Concluído: {formatDate(job.completedAt)}</span>
                               )}
-                            </span>
+                            </div>
+
+                            {job.errorMessage && (
+                              <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">
+                                {job.errorMessage}
+                              </p>
+                            )}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-sm">{formatDate(job.startedAt)}</TableCell>
-                        <TableCell className="text-sm">{formatDate(job.completedAt)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
+
+                          <div className="flex flex-col gap-2">
                             {(job.status === "running" || job.status === "pending") && (
                               <Button
                                 variant="outline"
@@ -600,11 +715,12 @@ export default function IBGEDataPage() {
                                 {cancelJobMutation.isPending ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <StopCircle className="h-4 w-4" />
+                                  <StopCircle className="h-4 w-4 mr-1" />
                                 )}
-                                <span className="ml-1 hidden sm:inline">Cancelar</span>
+                                Cancelar
                               </Button>
                             )}
+                            
                             {(job.status === "failed" || job.status === "cancelled") && (
                               <Button
                                 variant="outline"
@@ -616,20 +732,29 @@ export default function IBGEDataPage() {
                                 {restartJobMutation.isPending ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <RotateCcw className="h-4 w-4" />
+                                  <RotateCcw className="h-4 w-4 mr-1" />
                                 )}
-                                <span className="ml-1 hidden sm:inline">Reiniciar</span>
+                                Reiniciar
                               </Button>
                             )}
-                            {job.status === "completed" && (
-                              <span className="text-xs text-muted-foreground">—</span>
+
+                            {job.failedRecords > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setErrorReportJobId(job.id)}
+                                data-testid={`button-view-errors-${job.id}`}
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                Ver Erros
+                              </Button>
                             )}
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -703,6 +828,108 @@ export default function IBGEDataPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={errorReportJobId !== null} onOpenChange={(open) => !open && setErrorReportJobId(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Relatório de Erros - Job #{errorReportJobId}
+            </DialogTitle>
+            <DialogDescription>
+              Detalhes dos erros ocorridos durante a importação
+            </DialogDescription>
+          </DialogHeader>
+
+          {errorReportLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : errorReport ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-destructive">
+                      {errorReport.summary.totalErrors}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Total de Erros</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold">
+                      {Object.keys(errorReport.summary.errorsByType).length}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Tipos de Erro</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold">
+                      {errorReport.summary.affectedRecords.length}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Registros Afetados</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {Object.keys(errorReport.summary.errorsByType).length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Erros por Tipo:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(errorReport.summary.errorsByType).map(([type, count]) => (
+                      <Badge key={type} variant="outline" className="font-mono">
+                        {type}: {count}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h4 className="font-medium mb-2">Lista de Erros:</h4>
+                <ScrollArea className="h-[300px] border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[150px]">Horário</TableHead>
+                        <TableHead>Registro</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Mensagem</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {errorReport.errors.map((error, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-mono text-xs">
+                            {new Date(error.timestamp).toLocaleTimeString("pt-BR")}
+                          </TableCell>
+                          <TableCell className="font-medium max-w-[200px] truncate">
+                            {error.record}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {error.errorType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
+                            {error.errorMessage}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">
+              Nenhum relatório de erro disponível.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

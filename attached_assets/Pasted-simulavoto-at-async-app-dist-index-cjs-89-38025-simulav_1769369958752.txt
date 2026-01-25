@@ -1,0 +1,857 @@
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 4114401: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 3139409: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 3139508: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 1302702: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2205904: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 4114500: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 1200344: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 4311759: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2920403: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2920452: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 3139607: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 3203304: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 4311775: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 3139805: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2704906: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 5212808: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 1302801: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 1504208: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 3528700: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2106326: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 3528809: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 4210407: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 5005400: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 1504307: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2307650: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2920502: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2704500: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2920601: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2609204: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2106359: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2307700: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 2106375: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error importing indicators for 1504406: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 7:37:14 PM [express] POST /api/ibge/import/15/cancel 200 in 18ms :: {"success":true,"message":"Job cancelado com sucesso"}
+simulavoto  | Error importing indicators for 3528858: error: column "comparecimento" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.importIndicadores (/app/dist/index.cjs:749:7737)
+simulavoto  |     at async /app/dist/index.cjs:1231:36283 {
+simulavoto  |   length: 115,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '399',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 7:37:14 PM [express] GET /api/ibge/import-jobs 200 in 4ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"pending","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":null,"completedAt":null,"source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:37:14 PM [express] GET /api/ibge/stats 304 in 8ms :: {"totalMunicipios":5570,"totalPopulacaoRecords":0,"totalIndicadoresRecords":0,"lastUpdate":"2026-01-25T19:36:42.354Z","populacaoByYear":[]}
+simulavoto  | 7:37:19 PM [express] POST /api/ibge/import/12/cancel 200 in 6ms :: {"success":true,"message":"Job cancelado com sucesso"}
+simulavoto  | 7:37:19 PM [express] GET /api/ibge/import-jobs 200 in 4ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:37:19 PM [express] GET /api/ibge/stats 304 in 7ms :: {"totalMunicipios":5570,"totalPopulacaoRecords":0,"totalIndicadoresRecords":0,"lastUpdate":"2026-01-25T19:36:42.354Z","populacaoByYear":[]}
+simulavoto  | 7:37:25 PM [express] GET /api/ibge/import-jobs 304 in 3ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:37:28 PM [express] GET /api/notifications 304 in 7ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | 7:37:28 PM [express] GET /api/imports/tse 304 in 16ms :: []
+simulavoto  | 7:37:29 PM [express] GET /api/ibge/stats 304 in 10ms :: {"totalMunicipios":5570,"totalPopulacaoRecords":0,"totalIndicadoresRecords":0,"lastUpdate":"2026-01-25T19:36:42.354Z","populacaoByYear":[]}
+simulavoto  | 7:37:30 PM [express] GET /api/ibge/import-jobs 304 in 4ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:37:35 PM [express] GET /api/ibge/import-jobs 304 in 3ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:37:40 PM [express] GET /api/ibge/stats 304 in 6ms :: {"totalMunicipios":5570,"totalPopulacaoRecords":0,"totalIndicadoresRecords":0,"lastUpdate":"2026-01-25T19:36:42.354Z","populacaoByYear":[]}
+simulavoto  | 7:37:40 PM [express] GET /api/ibge/import-jobs 304 in 3ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:38:38 PM [express] GET /api/ibge/import-jobs 304 in 20ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:38:40 PM [express] GET /api/ibge/stats 304 in 8ms :: {"totalMunicipios":5570,"totalPopulacaoRecords":0,"totalIndicadoresRecords":0,"lastUpdate":"2026-01-25T19:36:42.354Z","populacaoByYear":[]}
+simulavoto  | 7:38:43 PM [express] GET /api/ibge/import-jobs 304 in 50ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:38:48 PM [express] GET /api/ibge/import-jobs 304 in 3ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
+simulavoto  | 7:38:51 PM [express] GET /api/ibge/stats 304 in 4ms :: {"totalMunicipios":5570,"totalPopulacaoRecords":0,"totalIndicadoresRecords":0,"lastUpdate":"2026-01-25T19:36:42.354Z","populacaoByYear":[]}
+simulavoto  | 7:38:54 PM [express] GET /api/ibge/import-jobs 304 in 4ms :: [{"id":15,"type":"indicadores","status":"cancelled","totalRecords":5570,"processedRecords":0,"failedRecords":2927,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":"2026-01-25T19:36:42.356Z","completedAt":"2026-01-25T19:37:14.391Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:42.355Z"},{"id":14,"type":"populacao","status":"completed","totalRecords":5571,"processedRecords":0,"failedRecords":0,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:41.861Z","completedAt":"2026-01-25T19:36:42.354Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:41.860Z"},{"id":13,"type":"municipios","status":"completed","totalRecords":5571,"processedRecords":5570,"failedRecords":1,"errorMessage":null,"errorDetails":null,"startedAt":"2026-01-25T19:36:35.494Z","completedAt":"2026-01-25T19:36:41.859Z","source":"IBGE/SIDRA","parameters":{},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.492Z"},{"id":12,"type":"all","status":"cancelled","totalRecords":0,"processedRecords":0,"failedRecords":0,"errorMessage":"Cancelado pelo usuário","errorDetails":null,"startedAt":null,"completedAt":"2026-01-25T19:37:19.167Z","source":"IBGE/SIDRA","parameters":{"ano":2024},"createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15","createdAt":"2026-01-25T19:36:35.483Z"}]
