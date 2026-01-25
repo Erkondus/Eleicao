@@ -181,6 +181,25 @@ docker exec simulavoto npm run db:push
 1. Acesse o Supabase Dashboard
 2. Vá em **SQL Editor**
 3. Cole e execute o conteúdo de `scripts/migration-2026-01.sql`
+4. **Se houver erros de colunas**, execute também `scripts/fix-columns-2026-01.sql`
+
+**Opção 3: Correção de colunas faltantes (IMPORTANTE!)**
+Se o banco já tem tabelas mas com estrutura diferente, você verá erros como:
+- `column "uf_nome" does not exist`
+- `column "severity" does not exist`
+- `column "type" does not exist`
+
+Para corrigir:
+1. Execute `scripts/fix-columns-2026-01.sql` no SQL Editor do Supabase
+2. Reinicie o container: `docker compose restart simulavoto`
+
+**Este script corrige:**
+- `ibge_municipios`: Adiciona `uf_nome`, `regiao_nome`, converte `codigo_ibge` para VARCHAR(7)
+- `ibge_import_jobs`: Renomeia `job_type` → `type`, `total_items` → `total_records`
+- `ibge_populacao`: Renomeia `populacao_total` → `populacao`, converte `codigo_ibge` para VARCHAR(7)
+- `in_app_notifications`: Adiciona `severity`, `type`, `metadata`, renomeia `read` → `is_read`
+- `sentiment_analysis_results`: Adiciona `analysis_date`, `sentiment_score`, `sentiment_label`
+- `sentiment_crisis_alerts`: Adiciona `alert_type`, `severity`, `title`, `description`
 
 **Novas tabelas incluídas:**
 - `in_app_notifications` - Notificações in-app

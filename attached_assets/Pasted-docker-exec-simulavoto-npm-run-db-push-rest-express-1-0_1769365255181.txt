@@ -1,0 +1,1000 @@
+docker exec simulavoto npm run db:push
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/app/drizzle.config.ts'
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[✓] Pulling schema from database...
+
+Is key_insights column in campaign_insight_reports table created or renamed from another column?
+❯ + key_insights                   create column
+  ~ recommendations › key_insights rename column
+  ~ file_path › key_insights       rename column
+  ~ file_format › key_insights     rename column
+  ~ created_at › key_insights      rename column^[[B^[[A^[[C^[[Droot@worker1:/opt/simulavoto# docker exec simulavoto npm run db:pus^C
+root@worker1:/opt/simulavoto# docker compose logs -f
+root@worker1:/opt/simulavoto# docker compose logs -f
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  |
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test successful!
+simulavoto  | Registering routes...
+simulavoto  | Routes registered successfully!
+simulavoto  | WebSocket server initialized on /ws/imports
+simulavoto  | WebSocket server initialized
+simulavoto  | 6:14:21 PM [express] serving on port 5000
+simulavoto  | Report scheduler started (checking every 5 minutes)
+simulavoto  | 6:14:23 PM [express] GET /api/ibge/stats 401 in 15ms :: {"error":"Unauthorized"}
+simulavoto  | 6:14:28 PM [express] GET /api/ibge/import-jobs 401 in 5ms :: {"error":"Unauthorized"}
+simulavoto  | 6:16:12 PM [express] GET /api/ibge/import-jobs 401 in 2ms :: {"error":"Unauthorized"}
+simulavoto  | 6:18:00 PM [express] GET /api/health 200 in 35ms :: {"status":"healthy","timestamp":"2026-01-25T18:18:00.121Z","version":"1.0.0","database":"connected","stats":{}}
+simulavoto  | 6:18:34 PM [express] GET /api/ibge/stats 401 in 2ms :: {"error":"Unauthorized"}
+simulavoto  | 6:18:35 PM [express] GET /api/auth/me 401 in 2ms :: {"error":"Unauthorized"}
+simulavoto  | 6:18:36 PM [express] POST /api/auth/login 200 in 74ms :: {"id":"7ea108a0-4f20-4599-a083-8b2532963d15","username":"admin","name":"Administrador","email":"admin@simulavoto.gov.br","role":"admin","active":true,"createdAt":"2026-01-21T19:08:08.714Z"}
+simulavoto  | 6:18:37 PM [express] GET /api/imports/tse 304 in 6ms :: []
+simulavoto  | Error fetching notifications: error: column "severity" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:28823 {
+simulavoto  |   length: 108,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '33',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:37 PM [express] GET /api/notifications 500 in 9ms :: {"error":"Erro ao buscar notificações"}      
+simulavoto  | 6:18:37 PM [express] GET /api/scenarios 500 in 33ms :: {"error":"Failed to fetch scenarios"}
+simulavoto  | 6:18:37 PM [express] GET /api/parties 500 in 38ms :: {"error":"Failed to fetch parties"}
+simulavoto  | 6:18:37 PM [express] GET /api/simulations/recent 304 in 37ms :: []
+simulavoto  | Alerts count error: error: column "alert_type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1229:2156 {
+simulavoto  |   length: 110,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '57',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:37 PM [express] GET /api/stats 200 in 47ms :: {"parties":0,"candidates":0,"scenarios":0,"simulations":0}
+simulavoto  | 6:18:37 PM [express] GET /api/sentiment/alerts/count 304 in 38ms :: {"unacknowledged":0}
+simulavoto  | Sentiment summary error: error: column "analysis_date" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1229:1846 {
+simulavoto  |   length: 113,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '57',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:37 PM [express] GET /api/sentiment/summary 304 in 39ms :: {"entities":[]}
+simulavoto  | WebSocket client connected (user: 7ea108a0-4f20-4599-a083-8b2532963d15). Total clients: 1
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:41 PM [express] GET /api/ibge/stats 500 in 17ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:41 PM [express] GET /api/ibge/import-jobs 500 in 12ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching demographic data: error: column ibge_populacao.populacao does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getDemographicDataForPrediction (/app/dist/index.cjs:749:8457)
+simulavoto  |     at async /app/dist/index.cjs:1231:36764 {
+simulavoto  |   length: 122,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '91',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:41 PM [express] GET /api/ibge/demographic-data 500 in 26ms :: {"error":"Failed to fetch demographic data"}
+simulavoto  | Error starting full IBGE import: error: column "type" of relation "ibge_import_jobs" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.createImportJob (/app/dist/index.cjs:749:9145)
+simulavoto  |     at async /app/dist/index.cjs:1231:35736 {
+simulavoto  |   length: 133,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '39',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_target.c',
+simulavoto  |   line: '1075',
+simulavoto  |   routine: 'checkInsertTargets'
+simulavoto  | }
+simulavoto  | 6:18:44 PM [express] POST /api/ibge/import/all 500 in 15ms :: {"error":"Failed to start full import"}  
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:47 PM [express] GET /api/ibge/import-jobs 500 in 13ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:52 PM [express] GET /api/ibge/stats 500 in 17ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:52 PM [express] GET /api/ibge/import-jobs 500 in 14ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:18:57 PM [express] GET /api/ibge/import-jobs 500 in 16ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:02 PM [express] GET /api/ibge/stats 500 in 26ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | 6:19:03 PM [express] GET /api/ibge/import-jobs 500 in 21ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:07 PM [express] GET /api/imports/tse 304 in 15ms :: []
+simulavoto  | Error fetching notifications: error: column "severity" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:28823 {
+simulavoto  |   length: 108,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '33',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:07 PM [express] GET /api/notifications 500 in 4ms :: {"error":"Erro ao buscar notificações"}      
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:08 PM [express] GET /api/ibge/import-jobs 500 in 13ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | 6:19:12 PM [express] GET /api/ibge/stats 500 in 31ms :: {"error":"Failed to fetch IBGE statistics"}
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:13 PM [express] GET /api/ibge/import-jobs 500 in 17ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:19 PM [express] GET /api/ibge/import-jobs 500 in 16ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Report scheduler error: error: column "time_of_day" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async Timeout.e [as _onTimeout] (/app/dist/index.cjs:1253:12037) {
+simulavoto  |   length: 111,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '81',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:23 PM [express] GET /api/ibge/stats 500 in 25ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:24 PM [express] GET /api/ibge/import-jobs 500 in 13ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:29 PM [express] GET /api/ibge/import-jobs 500 in 16ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:33 PM [express] GET /api/ibge/stats 500 in 15ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | 6:19:35 PM [express] GET /api/ibge/import-jobs 500 in 17ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:37 PM [express] GET /api/imports/tse 304 in 14ms :: []
+simulavoto  | Error fetching notifications: error: column "severity" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:28823 {
+simulavoto  |   length: 108,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '33',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:38 PM [express] GET /api/notifications 500 in 4ms :: {"error":"Erro ao buscar notificações"}      
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:40 PM [express] GET /api/ibge/import-jobs 500 in 15ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:43 PM [express] GET /api/ibge/stats 500 in 22ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:45 PM [express] GET /api/ibge/import-jobs 500 in 13ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:51 PM [express] GET /api/ibge/import-jobs 500 in 14ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:54 PM [express] GET /api/ibge/stats 500 in 18ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:19:56 PM [express] GET /api/ibge/import-jobs 500 in 17ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:20:01 PM [express] GET /api/ibge/import-jobs 500 in 36ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:20:04 PM [express] GET /api/ibge/stats 500 in 81ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:20:07 PM [express] GET /api/ibge/import-jobs 500 in 29ms :: {"error":"Failed to fetch import jobs"}  
+simulavoto  | 6:20:08 PM [express] GET /api/imports/tse 304 in 49ms :: []
+simulavoto  | Error fetching notifications: error: column "severity" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:28823 {
+simulavoto  |   length: 108,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '33',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:20:08 PM [express] GET /api/notifications 500 in 13ms :: {"error":"Erro ao buscar notificações"}     
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:20:12 PM [express] GET /api/ibge/import-jobs 500 in 16ms :: {"error":"Failed to fetch import jobs"}
+simulavoto  | Error fetching IBGE stats: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async t.getStats (/app/dist/index.cjs:749:7438)
+simulavoto  |     at async /app/dist/index.cjs:1231:33770 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:20:14 PM [express] GET /api/ibge/stats 500 in 21ms :: {"error":"Failed to fetch IBGE statistics"}    
+simulavoto  | Error fetching IBGE import jobs: error: column "type" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38025
+simulavoto  |     at async /app/dist/index.cjs:1231:34005 {
+simulavoto  |   length: 104,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '14',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_relation.c',
+simulavoto  |   line: '3665',
+simulavoto  |   routine: 'errorMissingColumn'
+simulavoto  | }
+simulavoto  | 6:20:17 PM [express] GET /api/ibge/import-jobs 500 in 19ms :: {"error":"Failed to fetch import jobs"}

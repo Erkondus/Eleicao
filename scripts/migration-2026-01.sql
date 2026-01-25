@@ -11,18 +11,22 @@ CREATE TABLE IF NOT EXISTS in_app_notifications (
   user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   message TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'info',
-  entity_type TEXT,
-  entity_id INTEGER,
-  read BOOLEAN NOT NULL DEFAULT false,
+  type TEXT NOT NULL DEFAULT 'system',
+  severity TEXT DEFAULT 'info',
+  related_entity_type TEXT,
+  related_entity_id TEXT,
+  is_read BOOLEAN NOT NULL DEFAULT false,
   read_at TIMESTAMP,
   action_url TEXT,
+  metadata JSONB DEFAULT '{}',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS in_app_notifications_user_idx ON in_app_notifications(user_id);
-CREATE INDEX IF NOT EXISTS in_app_notifications_read_idx ON in_app_notifications(read);
+CREATE INDEX IF NOT EXISTS in_app_notifications_read_idx ON in_app_notifications(is_read);
 CREATE INDEX IF NOT EXISTS in_app_notifications_created_at_idx ON in_app_notifications(created_at);
+CREATE INDEX IF NOT EXISTS in_app_notifications_type_idx ON in_app_notifications(type);
+CREATE INDEX IF NOT EXISTS in_app_notifications_severity_idx ON in_app_notifications(severity);
 
 -- ===========================================
 -- TABELAS DO IBGE
@@ -30,38 +34,31 @@ CREATE INDEX IF NOT EXISTS in_app_notifications_created_at_idx ON in_app_notific
 
 CREATE TABLE IF NOT EXISTS ibge_municipios (
   id SERIAL PRIMARY KEY,
-  codigo_ibge INTEGER NOT NULL UNIQUE,
+  codigo_ibge VARCHAR(7) NOT NULL UNIQUE,
   nome TEXT NOT NULL,
-  uf TEXT NOT NULL,
-  codigo_uf INTEGER NOT NULL,
-  regiao TEXT NOT NULL,
+  uf VARCHAR(2) NOT NULL,
+  uf_nome TEXT,
+  regiao_nome TEXT,
   mesorregiao TEXT,
   microrregiao TEXT,
-  latitude DECIMAL(10, 7),
-  longitude DECIMAL(10, 7),
   area_km2 DECIMAL(12, 3),
-  capital BOOLEAN DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS ibge_municipios_codigo_idx ON ibge_municipios(codigo_ibge);
 CREATE INDEX IF NOT EXISTS ibge_municipios_uf_idx ON ibge_municipios(uf);
-CREATE INDEX IF NOT EXISTS ibge_municipios_regiao_idx ON ibge_municipios(regiao);
+CREATE INDEX IF NOT EXISTS municipio_uf_idx ON ibge_municipios(uf);
+CREATE INDEX IF NOT EXISTS municipio_codigo_idx ON ibge_municipios(codigo_ibge);
 
 CREATE TABLE IF NOT EXISTS ibge_populacao (
   id SERIAL PRIMARY KEY,
   municipio_id INTEGER REFERENCES ibge_municipios(id) ON DELETE CASCADE,
-  codigo_ibge INTEGER NOT NULL,
+  codigo_ibge VARCHAR(7) NOT NULL,
   ano INTEGER NOT NULL,
-  populacao_total INTEGER,
-  populacao_urbana INTEGER,
-  populacao_rural INTEGER,
-  populacao_masculina INTEGER,
-  populacao_feminina INTEGER,
-  densidade_demografica DECIMAL(12, 4),
-  taxa_crescimento DECIMAL(8, 4),
-  fonte TEXT,
+  populacao BIGINT,
+  fonte TEXT DEFAULT 'IBGE/SIDRA',
+  tabela_sidra VARCHAR(10),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
   UNIQUE(codigo_ibge, ano)
 );
@@ -73,7 +70,7 @@ CREATE INDEX IF NOT EXISTS ibge_populacao_ano_idx ON ibge_populacao(ano);
 CREATE TABLE IF NOT EXISTS ibge_indicadores (
   id SERIAL PRIMARY KEY,
   municipio_id INTEGER REFERENCES ibge_municipios(id) ON DELETE CASCADE,
-  codigo_ibge INTEGER NOT NULL,
+  codigo_ibge VARCHAR(7) NOT NULL,
   ano INTEGER NOT NULL,
   idh DECIMAL(6, 4),
   idh_renda DECIMAL(6, 4),
@@ -93,7 +90,7 @@ CREATE TABLE IF NOT EXISTS ibge_indicadores (
   acesso_esgoto DECIMAL(6, 2),
   acesso_energia DECIMAL(6, 2),
   acesso_internet DECIMAL(6, 2),
-  fonte TEXT,
+  fonte TEXT DEFAULT 'IBGE/SIDRA',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
   UNIQUE(codigo_ibge, ano)
@@ -106,13 +103,15 @@ CREATE INDEX IF NOT EXISTS ibge_indicadores_idh_idx ON ibge_indicadores(idh);
 
 CREATE TABLE IF NOT EXISTS ibge_import_jobs (
   id SERIAL PRIMARY KEY,
-  job_type TEXT NOT NULL,
+  type TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  total_items INTEGER DEFAULT 0,
-  processed_items INTEGER DEFAULT 0,
-  failed_items INTEGER DEFAULT 0,
+  source TEXT DEFAULT 'IBGE/SIDRA',
+  parameters JSONB,
+  total_records INTEGER DEFAULT 0,
+  processed_records INTEGER DEFAULT 0,
+  failed_records INTEGER DEFAULT 0,
   error_message TEXT,
-  metadata JSONB,
+  error_details JSONB,
   started_at TIMESTAMP,
   completed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -120,7 +119,9 @@ CREATE TABLE IF NOT EXISTS ibge_import_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS ibge_import_jobs_status_idx ON ibge_import_jobs(status);
-CREATE INDEX IF NOT EXISTS ibge_import_jobs_type_idx ON ibge_import_jobs(job_type);
+CREATE INDEX IF NOT EXISTS ibge_import_jobs_type_idx ON ibge_import_jobs(type);
+CREATE INDEX IF NOT EXISTS ibge_import_status_idx ON ibge_import_jobs(status);
+CREATE INDEX IF NOT EXISTS ibge_import_type_idx ON ibge_import_jobs(type);
 
 -- ===========================================
 -- TABELAS DE CONFIGURAÇÃO DE ALERTAS
@@ -130,7 +131,7 @@ CREATE TABLE IF NOT EXISTS alert_configurations (
   id SERIAL PRIMARY KEY,
   user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
   entity_type TEXT NOT NULL,
-  entity_id INTEGER,
+  entity_id TEXT,
   entity_name TEXT,
   threshold_low DECIMAL(5, 4) DEFAULT 0.2,
   threshold_medium DECIMAL(5, 4) DEFAULT 0.3,
@@ -200,102 +201,106 @@ CREATE INDEX IF NOT EXISTS sentiment_articles_sentiment_idx ON sentiment_article
 CREATE TABLE IF NOT EXISTS sentiment_analysis_results (
   id SERIAL PRIMARY KEY,
   entity_type TEXT NOT NULL,
-  entity_id INTEGER,
-  entity_name TEXT NOT NULL,
-  period_start TIMESTAMP NOT NULL,
-  period_end TIMESTAMP NOT NULL,
-  total_articles INTEGER DEFAULT 0,
-  positive_count INTEGER DEFAULT 0,
-  negative_count INTEGER DEFAULT 0,
-  neutral_count INTEGER DEFAULT 0,
-  average_score DECIMAL(5, 4),
-  score_trend DECIMAL(5, 4),
-  sentiment_distribution JSONB,
-  top_topics JSONB,
-  top_keywords JSONB,
-  sources_breakdown JSONB,
-  ai_summary TEXT,
+  entity_id TEXT NOT NULL,
+  entity_name TEXT,
+  analysis_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sentiment_score DECIMAL(5, 4) DEFAULT 0,
+  sentiment_label TEXT DEFAULT 'neutral',
+  confidence DECIMAL(5, 4) DEFAULT 0.8,
+  mention_count INTEGER DEFAULT 0,
+  source_breakdown JSONB DEFAULT '{}',
+  top_keywords JSONB DEFAULT '[]',
+  sample_mentions JSONB DEFAULT '[]',
+  ai_analysis TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS sentiment_results_entity_idx ON sentiment_analysis_results(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS sentiment_results_period_idx ON sentiment_analysis_results(period_start, period_end);
+CREATE INDEX IF NOT EXISTS sentiment_results_date_idx ON sentiment_analysis_results(analysis_date);
+CREATE INDEX IF NOT EXISTS sentiment_entity_idx ON sentiment_analysis_results(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS sentiment_date_idx ON sentiment_analysis_results(analysis_date);
 
 CREATE TABLE IF NOT EXISTS sentiment_keywords (
   id SERIAL PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
   keyword TEXT NOT NULL,
-  entity_type TEXT,
-  entity_id INTEGER,
-  entity_name TEXT,
   frequency INTEGER DEFAULT 1,
-  sentiment TEXT,
-  sentiment_score DECIMAL(5, 4),
-  period_start TIMESTAMP,
-  period_end TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE(keyword, entity_type, entity_id, period_start)
+  sentiment TEXT DEFAULT 'neutral',
+  first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS sentiment_keywords_keyword_idx ON sentiment_keywords(keyword);
 CREATE INDEX IF NOT EXISTS sentiment_keywords_entity_idx ON sentiment_keywords(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS sentiment_keywords_keyword_idx ON sentiment_keywords(keyword);
 
 CREATE TABLE IF NOT EXISTS sentiment_crisis_alerts (
   id SERIAL PRIMARY KEY,
   entity_type TEXT NOT NULL,
-  entity_id INTEGER,
-  entity_name TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  entity_name TEXT,
+  alert_type TEXT NOT NULL DEFAULT 'negative_spike',
   severity TEXT NOT NULL DEFAULT 'medium',
+  title TEXT NOT NULL DEFAULT 'Alerta de Sentimento',
+  description TEXT,
+  sentiment_before DECIMAL(5, 4),
+  sentiment_after DECIMAL(5, 4),
   sentiment_change DECIMAL(5, 4),
-  previous_score DECIMAL(5, 4),
-  current_score DECIMAL(5, 4),
-  trigger_articles JSONB,
-  ai_analysis TEXT,
-  acknowledged BOOLEAN DEFAULT false,
+  mention_count INTEGER DEFAULT 0,
+  trigger_article_ids JSONB DEFAULT '[]',
+  trigger_keywords JSONB DEFAULT '[]',
+  is_acknowledged BOOLEAN DEFAULT false,
   acknowledged_by VARCHAR REFERENCES users(id),
   acknowledged_at TIMESTAMP,
-  resolved BOOLEAN DEFAULT false,
-  resolved_at TIMESTAMP,
+  resolution_notes TEXT,
+  detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS crisis_alerts_entity_idx ON sentiment_crisis_alerts(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS crisis_alerts_severity_idx ON sentiment_crisis_alerts(severity);
-CREATE INDEX IF NOT EXISTS crisis_alerts_acknowledged_idx ON sentiment_crisis_alerts(acknowledged);
+CREATE INDEX IF NOT EXISTS sentiment_alerts_entity_idx ON sentiment_crisis_alerts(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS sentiment_alerts_severity_idx ON sentiment_crisis_alerts(severity);
+CREATE INDEX IF NOT EXISTS sentiment_alerts_acknowledged_idx ON sentiment_crisis_alerts(is_acknowledged);
+CREATE INDEX IF NOT EXISTS crisis_alerts_type_idx ON sentiment_crisis_alerts(alert_type);
 
 CREATE TABLE IF NOT EXISTS sentiment_monitoring_sessions (
   id SERIAL PRIMARY KEY,
+  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
-  entities JSONB NOT NULL DEFAULT '[]',
-  source_filters JSONB,
-  alert_thresholds JSONB,
+  entity_types TEXT[] DEFAULT '{}',
+  entity_ids TEXT[] DEFAULT '{}',
+  source_filters JSONB DEFAULT '{}',
+  alert_thresholds JSONB DEFAULT '{}',
   active BOOLEAN DEFAULT true,
-  last_checked_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS monitoring_sessions_user_idx ON sentiment_monitoring_sessions(user_id);
 
 CREATE TABLE IF NOT EXISTS sentiment_comparison_snapshots (
   id SERIAL PRIMARY KEY,
-  session_id INTEGER REFERENCES sentiment_monitoring_sessions(id) ON DELETE CASCADE,
-  entities_data JSONB NOT NULL,
-  comparison_analysis TEXT,
-  period_start TIMESTAMP,
-  period_end TIMESTAMP,
+  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT,
+  entity_configs JSONB NOT NULL,
+  comparison_data JSONB NOT NULL,
+  ai_narrative TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS comparison_snapshots_user_idx ON sentiment_comparison_snapshots(user_id);
+
 CREATE TABLE IF NOT EXISTS article_entity_mentions (
   id SERIAL PRIMARY KEY,
-  article_id INTEGER NOT NULL REFERENCES sentiment_articles(id) ON DELETE CASCADE,
+  article_id INTEGER REFERENCES sentiment_articles(id) ON DELETE CASCADE,
   entity_type TEXT NOT NULL,
-  entity_id INTEGER,
-  entity_name TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  entity_name TEXT,
   mention_count INTEGER DEFAULT 1,
   sentiment TEXT,
   sentiment_score DECIMAL(5, 4),
-  context_snippets JSONB,
+  context_snippets JSONB DEFAULT '[]',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
@@ -303,47 +308,47 @@ CREATE INDEX IF NOT EXISTS entity_mentions_article_idx ON article_entity_mention
 CREATE INDEX IF NOT EXISTS entity_mentions_entity_idx ON article_entity_mentions(entity_type, entity_id);
 
 -- ===========================================
--- TABELAS DE DASHBOARDS CUSTOMIZADOS
+-- TABELAS DE DASHBOARDS PERSONALIZADOS
 -- ===========================================
 
 CREATE TABLE IF NOT EXISTS custom_dashboards (
   id SERIAL PRIMARY KEY,
+  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
-  layout JSONB NOT NULL DEFAULT '[]',
-  filters JSONB,
-  widgets JSONB,
+  layout JSONB DEFAULT '{}',
+  widgets JSONB DEFAULT '[]',
+  filters JSONB DEFAULT '{}',
   is_public BOOLEAN DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS custom_dashboards_created_by_idx ON custom_dashboards(created_by);
+CREATE INDEX IF NOT EXISTS custom_dashboards_user_idx ON custom_dashboards(user_id);
 CREATE INDEX IF NOT EXISTS custom_dashboards_public_idx ON custom_dashboards(is_public);
 
 -- ===========================================
--- TABELAS DE SUGESTÕES IA
+-- TABELAS DE SUGESTÕES AI
 -- ===========================================
 
 CREATE TABLE IF NOT EXISTS ai_suggestions (
   id SERIAL PRIMARY KEY,
+  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
   suggestion_type TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
-  parameters JSONB,
-  relevance_score DECIMAL(5, 4),
-  context JSONB,
-  accepted BOOLEAN,
-  accepted_at TIMESTAMP,
+  relevance_score DECIMAL(5, 4) DEFAULT 0.5,
+  context_data JSONB DEFAULT '{}',
+  is_applied BOOLEAN DEFAULT false,
+  applied_at TIMESTAMP,
   dismissed BOOLEAN DEFAULT false,
   dismissed_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
+  expires_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS ai_suggestions_user_idx ON ai_suggestions(user_id);
 CREATE INDEX IF NOT EXISTS ai_suggestions_type_idx ON ai_suggestions(suggestion_type);
-CREATE INDEX IF NOT EXISTS ai_suggestions_created_by_idx ON ai_suggestions(created_by);
 
 -- ===========================================
 -- TABELAS DE CAMPANHAS
@@ -353,41 +358,33 @@ CREATE TABLE IF NOT EXISTS campaigns (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
-  candidate_id INTEGER REFERENCES candidates(id) ON DELETE SET NULL,
-  party_id INTEGER REFERENCES parties(id) ON DELETE SET NULL,
+  candidate_id INTEGER,
   election_year INTEGER NOT NULL,
-  election_type TEXT NOT NULL DEFAULT 'municipal',
-  position TEXT NOT NULL,
-  state TEXT,
-  city TEXT,
+  election_type TEXT NOT NULL,
+  target_position TEXT,
+  target_region TEXT,
   status TEXT NOT NULL DEFAULT 'planning',
   start_date TIMESTAMP,
   end_date TIMESTAMP,
-  total_budget DECIMAL(14, 2) DEFAULT 0,
-  spent_budget DECIMAL(14, 2) DEFAULT 0,
-  goals JSONB,
-  metadata JSONB,
+  budget DECIMAL(14, 2),
+  goals JSONB DEFAULT '{}',
+  created_by VARCHAR REFERENCES users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS campaigns_candidate_idx ON campaigns(candidate_id);
-CREATE INDEX IF NOT EXISTS campaigns_party_idx ON campaigns(party_id);
 CREATE INDEX IF NOT EXISTS campaigns_year_idx ON campaigns(election_year);
 CREATE INDEX IF NOT EXISTS campaigns_status_idx ON campaigns(status);
+CREATE INDEX IF NOT EXISTS campaigns_created_by_idx ON campaigns(created_by);
 
 CREATE TABLE IF NOT EXISTS campaign_team_members (
   id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
-  name TEXT NOT NULL,
-  email TEXT,
+  campaign_id INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,
+  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
   role TEXT NOT NULL DEFAULT 'member',
-  permissions JSONB,
-  active BOOLEAN DEFAULT true,
+  permissions JSONB DEFAULT '{}',
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+  UNIQUE(campaign_id, user_id)
 );
 
 CREATE INDEX IF NOT EXISTS campaign_team_campaign_idx ON campaign_team_members(campaign_id);
@@ -395,274 +392,117 @@ CREATE INDEX IF NOT EXISTS campaign_team_user_idx ON campaign_team_members(user_
 
 CREATE TABLE IF NOT EXISTS campaign_activities (
   id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
-  activity_type TEXT NOT NULL DEFAULT 'event',
-  status TEXT NOT NULL DEFAULT 'planned',
+  activity_type TEXT NOT NULL DEFAULT 'task',
+  status TEXT NOT NULL DEFAULT 'pending',
   priority TEXT DEFAULT 'medium',
-  start_date TIMESTAMP,
-  end_date TIMESTAMP,
+  scheduled_date TIMESTAMP,
+  due_date TIMESTAMP,
+  completed_at TIMESTAMP,
   location TEXT,
-  budget_allocated DECIMAL(12, 2) DEFAULT 0,
-  budget_spent DECIMAL(12, 2) DEFAULT 0,
-  target_audience TEXT,
-  expected_reach INTEGER,
-  actual_reach INTEGER,
+  budget_allocated DECIMAL(12, 2),
+  budget_spent DECIMAL(12, 2),
   notes TEXT,
-  metadata JSONB,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
-);
-
-CREATE INDEX IF NOT EXISTS campaign_activities_campaign_idx ON campaign_activities(campaign_id);
-CREATE INDEX IF NOT EXISTS campaign_activities_type_idx ON campaign_activities(activity_type);
-CREATE INDEX IF NOT EXISTS campaign_activities_status_idx ON campaign_activities(status);
-CREATE INDEX IF NOT EXISTS campaign_activities_dates_idx ON campaign_activities(start_date, end_date);
-
-CREATE TABLE IF NOT EXISTS activity_assignees (
-  id SERIAL PRIMARY KEY,
-  activity_id INTEGER NOT NULL REFERENCES campaign_activities(id) ON DELETE CASCADE,
-  team_member_id INTEGER NOT NULL REFERENCES campaign_team_members(id) ON DELETE CASCADE,
-  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  UNIQUE(activity_id, team_member_id)
-);
-
-CREATE INDEX IF NOT EXISTS activity_assignees_activity_idx ON activity_assignees(activity_id);
-CREATE INDEX IF NOT EXISTS activity_assignees_member_idx ON activity_assignees(team_member_id);
-
-CREATE TABLE IF NOT EXISTS campaign_budgets (
-  id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  category TEXT NOT NULL,
-  description TEXT,
-  allocated_amount DECIMAL(14, 2) NOT NULL DEFAULT 0,
-  spent_amount DECIMAL(14, 2) NOT NULL DEFAULT 0,
+  metadata JSONB DEFAULT '{}',
+  created_by VARCHAR REFERENCES users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS campaign_budgets_campaign_idx ON campaign_budgets(campaign_id);
+CREATE INDEX IF NOT EXISTS campaign_activities_campaign_idx ON campaign_activities(campaign_id);
+CREATE INDEX IF NOT EXISTS campaign_activities_status_idx ON campaign_activities(status);
+CREATE INDEX IF NOT EXISTS campaign_activities_type_idx ON campaign_activities(activity_type);
+CREATE INDEX IF NOT EXISTS campaign_activities_scheduled_idx ON campaign_activities(scheduled_date);
 
-CREATE TABLE IF NOT EXISTS campaign_metrics (
+CREATE TABLE IF NOT EXISTS campaign_activity_assignees (
   id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  metric_date DATE NOT NULL,
-  metric_type TEXT NOT NULL,
-  value DECIMAL(14, 4),
-  previous_value DECIMAL(14, 4),
-  target_value DECIMAL(14, 4),
-  source TEXT,
-  notes TEXT,
-  metadata JSONB,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+  activity_id INTEGER REFERENCES campaign_activities(id) ON DELETE CASCADE,
+  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  UNIQUE(activity_id, user_id)
 );
 
-CREATE INDEX IF NOT EXISTS campaign_metrics_campaign_idx ON campaign_metrics(campaign_id);
-CREATE INDEX IF NOT EXISTS campaign_metrics_date_idx ON campaign_metrics(metric_date);
-CREATE INDEX IF NOT EXISTS campaign_metrics_type_idx ON campaign_metrics(metric_type);
+CREATE INDEX IF NOT EXISTS activity_assignees_activity_idx ON campaign_activity_assignees(activity_id);
+CREATE INDEX IF NOT EXISTS activity_assignees_user_idx ON campaign_activity_assignees(user_id);
 
-CREATE TABLE IF NOT EXISTS campaign_resources (
+CREATE TABLE IF NOT EXISTS campaign_kpi_goals (
   id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  resource_type TEXT NOT NULL,
-  description TEXT,
-  url TEXT,
-  file_path TEXT,
-  file_size INTEGER,
-  mime_type TEXT,
-  tags TEXT[] DEFAULT '{}',
-  metadata JSONB,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
-);
-
-CREATE INDEX IF NOT EXISTS campaign_resources_campaign_idx ON campaign_resources(campaign_id);
-CREATE INDEX IF NOT EXISTS campaign_resources_type_idx ON campaign_resources(resource_type);
-
-CREATE TABLE IF NOT EXISTS ai_kpi_goals (
-  id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  metric_name TEXT NOT NULL,
-  description TEXT,
-  baseline_value DECIMAL(14, 4),
-  current_value DECIMAL(14, 4),
-  target_value DECIMAL(14, 4),
-  unit TEXT,
+  campaign_id INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,
+  kpi_name TEXT NOT NULL,
+  kpi_category TEXT DEFAULT 'general',
+  target_value DECIMAL(14, 2) NOT NULL,
+  current_value DECIMAL(14, 2) DEFAULT 0,
+  baseline_value DECIMAL(14, 2) DEFAULT 0,
+  unit TEXT DEFAULT 'count',
   priority TEXT DEFAULT 'medium',
+  rationale TEXT,
   ai_suggested BOOLEAN DEFAULT false,
-  ai_rationale TEXT,
   ai_confidence DECIMAL(5, 4),
-  status TEXT DEFAULT 'active',
-  target_date TIMESTAMP,
-  achieved_at TIMESTAMP,
+  tracking_method TEXT,
+  measurement_frequency TEXT DEFAULT 'weekly',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS ai_kpi_goals_campaign_idx ON ai_kpi_goals(campaign_id);
-CREATE INDEX IF NOT EXISTS ai_kpi_goals_status_idx ON ai_kpi_goals(status);
-CREATE INDEX IF NOT EXISTS ai_kpi_goals_priority_idx ON ai_kpi_goals(priority);
-
-CREATE TABLE IF NOT EXISTS campaign_notifications (
-  id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  notification_type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  entity_type TEXT,
-  entity_id INTEGER,
-  read BOOLEAN DEFAULT false,
-  read_at TIMESTAMP,
-  in_app_notification_id INTEGER REFERENCES in_app_notifications(id),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS campaign_notifications_campaign_idx ON campaign_notifications(campaign_id);
-CREATE INDEX IF NOT EXISTS campaign_notifications_user_idx ON campaign_notifications(user_id);
-CREATE INDEX IF NOT EXISTS campaign_notifications_read_idx ON campaign_notifications(read);
+CREATE INDEX IF NOT EXISTS campaign_kpi_campaign_idx ON campaign_kpi_goals(campaign_id);
+CREATE INDEX IF NOT EXISTS campaign_kpi_category_idx ON campaign_kpi_goals(kpi_category);
 
 -- ===========================================
--- TABELAS DE INSIGHTS DE CAMPANHA
+-- TABELAS DE PREVISÕES E FORECASTS
 -- ===========================================
 
-CREATE TABLE IF NOT EXISTS campaign_insight_sessions (
+CREATE TABLE IF NOT EXISTS forecast_runs (
   id SERIAL PRIMARY KEY,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  description TEXT,
+  user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+  forecast_type TEXT NOT NULL,
+  parameters JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  ai_analysis JSONB,
   started_at TIMESTAMP,
   completed_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS high_impact_segments (
-  id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL REFERENCES campaign_insight_sessions(id) ON DELETE CASCADE,
-  segment_name TEXT NOT NULL,
-  segment_type TEXT NOT NULL,
-  description TEXT,
-  demographic_profile JSONB,
-  geographic_areas JSONB,
-  impact_score DECIMAL(5, 4),
-  conversion_potential DECIMAL(5, 4),
-  volatility_score DECIMAL(5, 4),
-  current_sentiment DECIMAL(5, 4),
-  recommended_actions JSONB,
-  ai_rationale TEXT,
+  error_message TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS message_strategies (
-  id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL REFERENCES campaign_insight_sessions(id) ON DELETE CASCADE,
-  segment_id INTEGER REFERENCES high_impact_segments(id) ON DELETE CASCADE,
-  strategy_name TEXT NOT NULL,
-  target_segment TEXT,
-  tone TEXT,
-  channels JSONB,
-  key_messages JSONB,
-  topics_to_emphasize JSONB,
-  topics_to_avoid JSONB,
-  timing_recommendations JSONB,
-  expected_response DECIMAL(5, 4),
-  ai_rationale TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
+CREATE INDEX IF NOT EXISTS forecast_runs_user_idx ON forecast_runs(user_id);
+CREATE INDEX IF NOT EXISTS forecast_runs_type_idx ON forecast_runs(forecast_type);
+CREATE INDEX IF NOT EXISTS forecast_runs_status_idx ON forecast_runs(status);
 
-CREATE TABLE IF NOT EXISTS campaign_impact_predictions (
+CREATE TABLE IF NOT EXISTS forecast_results (
   id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL REFERENCES campaign_insight_sessions(id) ON DELETE CASCADE,
-  prediction_type TEXT NOT NULL,
-  scenario_name TEXT NOT NULL,
-  investment_amount DECIMAL(14, 2),
-  expected_roi DECIMAL(8, 4),
-  predicted_vote_change DECIMAL(5, 4),
-  confidence_interval_low DECIMAL(5, 4),
-  confidence_interval_high DECIMAL(5, 4),
-  key_assumptions JSONB,
-  risk_factors JSONB,
-  timeline JSONB,
+  forecast_run_id INTEGER REFERENCES forecast_runs(id) ON DELETE CASCADE,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  entity_name TEXT,
+  predicted_value DECIMAL(14, 4),
+  confidence_low DECIMAL(14, 4),
+  confidence_high DECIMAL(14, 4),
+  confidence_level DECIMAL(5, 4) DEFAULT 0.95,
+  methodology TEXT,
+  factors JSONB DEFAULT '[]',
   ai_analysis TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS campaign_insight_reports (
+CREATE INDEX IF NOT EXISTS forecast_results_run_idx ON forecast_results(forecast_run_id);
+CREATE INDEX IF NOT EXISTS forecast_results_entity_idx ON forecast_results(entity_type, entity_id);
+
+CREATE TABLE IF NOT EXISTS forecast_swing_regions (
   id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL REFERENCES campaign_insight_sessions(id) ON DELETE CASCADE,
-  report_type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  executive_summary TEXT,
-  full_content JSONB,
-  visualizations JSONB,
-  recommendations JSONB,
-  file_path TEXT,
-  file_format TEXT,
+  forecast_run_id INTEGER REFERENCES forecast_runs(id) ON DELETE CASCADE,
+  region_code TEXT NOT NULL,
+  region_name TEXT NOT NULL,
+  region_type TEXT NOT NULL,
+  swing_score DECIMAL(5, 4),
+  historical_volatility DECIMAL(5, 4),
+  demographic_factors JSONB DEFAULT '{}',
+  ai_insights TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- ===========================================
--- TABELAS DE PREVISÕES AVANÇADAS
--- ===========================================
-
-CREATE TABLE IF NOT EXISTS candidate_comparisons (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  candidates JSONB NOT NULL DEFAULT '[]',
-  election_year INTEGER,
-  election_type TEXT,
-  position TEXT,
-  state TEXT,
-  city TEXT,
-  comparison_results JSONB,
-  ai_analysis TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS event_impact_predictions (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  event_type TEXT NOT NULL,
-  event_date TIMESTAMP,
-  affected_entities JSONB NOT NULL DEFAULT '[]',
-  before_prediction JSONB,
-  after_prediction JSONB,
-  impact_analysis JSONB,
-  ai_narrative TEXT,
-  status TEXT DEFAULT 'draft',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS prediction_scenarios (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  scenario_type TEXT NOT NULL DEFAULT 'what_if',
-  base_conditions JSONB NOT NULL DEFAULT '{}',
-  modified_conditions JSONB NOT NULL DEFAULT '{}',
-  affected_entities JSONB DEFAULT '[]',
-  prediction_results JSONB,
-  ai_analysis TEXT,
-  probability DECIMAL(5, 4),
-  impact_severity TEXT,
-  status TEXT DEFAULT 'draft',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
-);
+CREATE INDEX IF NOT EXISTS swing_regions_run_idx ON forecast_swing_regions(forecast_run_id);
+CREATE INDEX IF NOT EXISTS swing_regions_code_idx ON forecast_swing_regions(region_code);
 
 -- ===========================================
 -- TABELAS DE RELATÓRIOS AUTOMATIZADOS
@@ -673,160 +513,108 @@ CREATE TABLE IF NOT EXISTS report_templates (
   name TEXT NOT NULL,
   description TEXT,
   report_type TEXT NOT NULL,
-  columns JSONB NOT NULL DEFAULT '[]',
-  filters JSONB,
-  sort_config JSONB,
-  chart_config JSONB,
-  template_content JSONB,
-  format TEXT DEFAULT 'pdf',
-  active BOOLEAN DEFAULT true,
+  config JSONB NOT NULL,
+  output_format TEXT DEFAULT 'pdf',
+  created_by VARCHAR REFERENCES users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS report_templates_type_idx ON report_templates(report_type);
+CREATE INDEX IF NOT EXISTS report_templates_created_by_idx ON report_templates(created_by);
 
 CREATE TABLE IF NOT EXISTS report_schedules (
   id SERIAL PRIMARY KEY,
-  template_id INTEGER NOT NULL REFERENCES report_templates(id) ON DELETE CASCADE,
+  template_id INTEGER REFERENCES report_templates(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  frequency TEXT NOT NULL DEFAULT 'daily',
-  day_of_week INTEGER,
-  day_of_month INTEGER,
-  hour INTEGER DEFAULT 8,
-  minute INTEGER DEFAULT 0,
-  timezone TEXT DEFAULT 'America/Sao_Paulo',
-  filters JSONB,
-  active BOOLEAN DEFAULT true,
-  last_run_at TIMESTAMP,
+  frequency TEXT NOT NULL,
+  cron_expression TEXT,
   next_run_at TIMESTAMP,
+  last_run_at TIMESTAMP,
+  active BOOLEAN DEFAULT true,
+  parameters JSONB DEFAULT '{}',
+  created_by VARCHAR REFERENCES users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS report_recipients (
-  id SERIAL PRIMARY KEY,
-  schedule_id INTEGER NOT NULL REFERENCES report_schedules(id) ON DELETE CASCADE,
-  email TEXT NOT NULL,
-  name TEXT,
-  active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
+CREATE INDEX IF NOT EXISTS report_schedules_template_idx ON report_schedules(template_id);
+CREATE INDEX IF NOT EXISTS report_schedules_next_run_idx ON report_schedules(next_run_at);
 
 CREATE TABLE IF NOT EXISTS report_runs (
   id SERIAL PRIMARY KEY,
   schedule_id INTEGER REFERENCES report_schedules(id) ON DELETE SET NULL,
   template_id INTEGER REFERENCES report_templates(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  started_at TIMESTAMP,
-  completed_at TIMESTAMP,
-  file_path TEXT,
-  file_size INTEGER,
+  output_url TEXT,
+  output_size INTEGER,
   error_message TEXT,
-  recipients_notified INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  created_by VARCHAR REFERENCES users(id)
-);
-
--- ===========================================
--- TABELAS TSE ADICIONAIS
--- ===========================================
-
-CREATE TABLE IF NOT EXISTS tse_import_batches (
-  id SERIAL PRIMARY KEY,
-  import_job_id INTEGER NOT NULL REFERENCES tse_import_jobs(id) ON DELETE CASCADE,
-  batch_number INTEGER NOT NULL,
-  start_row INTEGER NOT NULL,
-  end_row INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
-  processed_rows INTEGER DEFAULT 0,
-  error_count INTEGER DEFAULT 0,
+  parameters JSONB DEFAULT '{}',
   started_at TIMESTAMP,
   completed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS tse_import_batches_job_idx ON tse_import_batches(import_job_id);
-CREATE INDEX IF NOT EXISTS tse_import_batches_status_idx ON tse_import_batches(status);
+CREATE INDEX IF NOT EXISTS report_runs_schedule_idx ON report_runs(schedule_id);
+CREATE INDEX IF NOT EXISTS report_runs_status_idx ON report_runs(status);
 
-CREATE TABLE IF NOT EXISTS tse_import_batch_rows (
+CREATE TABLE IF NOT EXISTS report_recipients (
   id SERIAL PRIMARY KEY,
-  batch_id INTEGER NOT NULL REFERENCES tse_import_batches(id) ON DELETE CASCADE,
-  row_number INTEGER NOT NULL,
-  raw_data TEXT,
-  parsed_data JSONB,
+  schedule_id INTEGER REFERENCES report_schedules(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  name TEXT,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS report_recipients_schedule_idx ON report_recipients(schedule_id);
+
+-- ===========================================
+-- TABELAS DE VALIDAÇÃO DE IMPORTAÇÃO
+-- ===========================================
+
+CREATE TABLE IF NOT EXISTS import_validation_runs (
+  id SERIAL PRIMARY KEY,
+  batch_id INTEGER,
+  validation_type TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  error_message TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS tse_import_batch_rows_batch_idx ON tse_import_batch_rows(batch_id);
-CREATE INDEX IF NOT EXISTS tse_import_batch_rows_status_idx ON tse_import_batch_rows(status);
-
-CREATE TABLE IF NOT EXISTS tse_party_votes (
-  id SERIAL PRIMARY KEY,
-  import_job_id INTEGER REFERENCES tse_import_jobs(id) ON DELETE CASCADE,
-  ano_eleicao INTEGER,
-  nr_turno INTEGER,
-  sg_uf TEXT,
-  cd_municipio INTEGER,
-  nm_municipio TEXT,
-  nr_zona INTEGER,
-  cd_cargo INTEGER,
-  ds_cargo TEXT,
-  nr_partido INTEGER,
-  sg_partido TEXT,
-  nm_partido TEXT,
-  qt_votos_legenda INTEGER,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS tse_party_votes_job_idx ON tse_party_votes(import_job_id);
-CREATE INDEX IF NOT EXISTS tse_party_votes_year_idx ON tse_party_votes(ano_eleicao);
-CREATE INDEX IF NOT EXISTS tse_party_votes_state_idx ON tse_party_votes(sg_uf);
-
-CREATE TABLE IF NOT EXISTS tse_electoral_statistics (
-  id SERIAL PRIMARY KEY,
-  import_job_id INTEGER REFERENCES tse_import_jobs(id) ON DELETE CASCADE,
-  ano_eleicao INTEGER,
-  nr_turno INTEGER,
-  sg_uf TEXT,
-  cd_municipio INTEGER,
-  nm_municipio TEXT,
-  cd_cargo INTEGER,
-  ds_cargo TEXT,
-  qt_aptos INTEGER,
-  qt_comparecimento INTEGER,
-  qt_abstencoes INTEGER,
-  qt_votos_nominais INTEGER,
-  qt_votos_legenda INTEGER,
-  qt_votos_brancos INTEGER,
-  qt_votos_nulos INTEGER,
-  qt_votos_validos INTEGER,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS tse_electoral_stats_job_idx ON tse_electoral_statistics(import_job_id);
-CREATE INDEX IF NOT EXISTS tse_electoral_stats_year_idx ON tse_electoral_statistics(ano_eleicao);
-
-CREATE TABLE IF NOT EXISTS scenario_simulations (
-  id SERIAL PRIMARY KEY,
-  scenario_id INTEGER NOT NULL REFERENCES scenarios(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  simulation_type TEXT NOT NULL DEFAULT 'basic',
-  parameters JSONB,
-  results JSONB,
+  total_records INTEGER DEFAULT 0,
+  valid_records INTEGER DEFAULT 0,
+  invalid_records INTEGER DEFAULT 0,
+  quality_score DECIMAL(5, 4),
   ai_analysis TEXT,
-  status TEXT DEFAULT 'pending',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  recommendations JSONB DEFAULT '[]',
+  started_at TIMESTAMP,
   completed_at TIMESTAMP,
-  created_by VARCHAR REFERENCES users(id)
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS scenario_simulations_scenario_idx ON scenario_simulations(scenario_id);
+CREATE INDEX IF NOT EXISTS validation_runs_batch_idx ON import_validation_runs(batch_id);
+CREATE INDEX IF NOT EXISTS validation_runs_status_idx ON import_validation_runs(status);
+
+CREATE TABLE IF NOT EXISTS import_validation_issues (
+  id SERIAL PRIMARY KEY,
+  validation_run_id INTEGER REFERENCES import_validation_runs(id) ON DELETE CASCADE,
+  severity TEXT NOT NULL DEFAULT 'warning',
+  issue_type TEXT NOT NULL,
+  field_name TEXT,
+  record_identifier TEXT,
+  expected_value TEXT,
+  actual_value TEXT,
+  message TEXT NOT NULL,
+  suggestion TEXT,
+  resolved BOOLEAN DEFAULT false,
+  resolved_at TIMESTAMP,
+  resolved_by VARCHAR REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS validation_issues_run_idx ON import_validation_issues(validation_run_id);
+CREATE INDEX IF NOT EXISTS validation_issues_severity_idx ON import_validation_issues(severity);
+CREATE INDEX IF NOT EXISTS validation_issues_resolved_idx ON import_validation_issues(resolved);
 
 -- ===========================================
 -- FIM DO SCRIPT DE MIGRAÇÃO
 -- ===========================================
 
-SELECT 'Migration January 2026 completed successfully!' AS status;
+SELECT 'Migration completed successfully!' AS status;

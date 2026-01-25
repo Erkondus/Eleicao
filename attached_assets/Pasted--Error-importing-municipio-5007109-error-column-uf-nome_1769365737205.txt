@@ -1,0 +1,92 @@
+ Error importing municipio 5007109: error: column "uf_nome" of relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async t.importMunicipios (/app/dist/index.cjs:749:2561)
+simulavoto  |     at async /app/dist/index.cjs:1231:35973 {
+simulavoto  |   length: 135,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '67',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_target.c',
+simulavoto  |   line: '1075',
+simulavoto  |   routine: 'checkInsertTargets'
+simulavoto  | }
+simulavoto  | Error importing municipio 3542800: error: column "uf_nome" of relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async t.importMunicipios (/app/dist/index.cjs:749:2561)
+simulavoto  |     at async /app/dist/index.cjs:1231:35973 {
+simulavoto  |   length: 135,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '67',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_target.c',
+simulavoto  |   line: '1075',
+simulavoto  |   routine: 'checkInsertTargets'
+simulavoto  | }
+simulavoto  | Error importing municipio 2926509: error: column "uf_nome" of relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async t.importMunicipios (/app/dist/index.cjs:749:2561)
+simulavoto  |     at async /app/dist/index.cjs:1231:35973 {
+simulavoto  |   length: 135,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '67',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_target.c',
+simulavoto  |   line: '1075',
+simulavoto  |   routine: 'checkInsertTargets'
+simulavoto  | }
+simulavoto  | Error importing municipio 2208874: error: column "uf_nome" of relation "ibge_municipios" does not exist
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async t.importMunicipios (/app/dist/index.cjs:749:2561)
+simulavoto  |     at async /app/dist/index.cjs:1231:35973 {
+simulavoto  |   length: 135,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '42703',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: '67',
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: 'parse_target.c',
+simulavoto  |   line: '1075',
+simulavoto  |   routine: 'checkInsertTargets'
+simulavoto  | }
