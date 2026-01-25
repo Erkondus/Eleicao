@@ -24,6 +24,7 @@ ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS historical_municipio TEXT;
 -- 3. REPORT_SCHEDULES - Corrigir estrutura completa
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS time_of_day TEXT DEFAULT '08:00';
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'America/Sao_Paulo';
+ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS recipients JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS email_subject TEXT;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS email_body TEXT;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS last_run_at TIMESTAMP;
@@ -32,6 +33,9 @@ ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS last_run_status TEXT;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS last_run_error TEXT;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS run_count INTEGER DEFAULT 0;
+
+-- 3.1 REPORT_RUNS - Adicionar coluna recipients
+ALTER TABLE report_runs ADD COLUMN IF NOT EXISTS recipients JSONB;
 
 -- 4. IBGE_MUNICIPIOS - Corrigir tipo e adicionar colunas
 ALTER TABLE ibge_municipios ADD COLUMN IF NOT EXISTS uf_nome TEXT;

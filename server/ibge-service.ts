@@ -218,7 +218,8 @@ export class IBGEService {
 
   async fetchPopulacaoEstimada(ano: number = 2024): Promise<SidraResponse[]> {
     const periodo = ano >= 2024 ? "last" : ano.toString();
-    const url = `${IBGE_SIDRA_API}/t/6579/n6/all/v/9324/p/${periodo}/f/n`;
+    // Full format (without /f/n) to include D1C (municipality code)
+    const url = `${IBGE_SIDRA_API}/t/6579/n6/all/v/9324/p/${periodo}`;
     
     const response = await fetch(url);
     if (!response.ok) {
@@ -229,7 +230,8 @@ export class IBGEService {
   }
 
   async fetchPopulacaoCenso2022(): Promise<SidraResponse[]> {
-    const url = `${IBGE_SIDRA_API}/t/9514/n6/all/v/93/p/last/f/n`;
+    // Full format (without /f/n) to include D1C (municipality code)
+    const url = `${IBGE_SIDRA_API}/t/9514/n6/all/v/93/p/last`;
     
     const response = await fetch(url);
     if (!response.ok) {
