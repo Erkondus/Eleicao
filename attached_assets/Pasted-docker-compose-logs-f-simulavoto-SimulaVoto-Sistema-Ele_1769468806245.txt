@@ -1,0 +1,157 @@
+docker compose logs -f
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test successful!
+simulavoto  | Registering routes...
+simulavoto  | Routes registered successfully!
+simulavoto  | WebSocket server initialized on /ws/imports
+simulavoto  | WebSocket server initialized
+simulavoto  | 11:05:28 PM [express] serving on port 5000
+simulavoto  | Report scheduler started (checking every 5 minutes)
+simulavoto  | 11:05:44 PM [express] GET /api/auth/me 401 in 3ms :: {"error":"Unauthorized"}
+simulavoto  | 11:05:46 PM [express] POST /api/auth/login 200 in 80ms :: {"id":"7ea108a0-4f20-4599-a083-8b2532963d15","username":"admin","name":"Administrador","email":"admin@simulavoto.gov.br","role":"admin","active":true,"createdAt":"2026-01-21T19:08:08.714Z"}
+simulavoto  | 11:05:46 PM [express] GET /api/imports/tse 304 in 8ms :: []
+simulavoto  | 11:05:46 PM [express] GET /api/notifications 304 in 9ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | 11:05:46 PM [express] GET /api/stats 304 in 9ms :: {"parties":0,"candidates":0,"scenarios":0,"simulations":0}
+simulavoto  | 11:05:46 PM [express] GET /api/simulations/recent 304 in 4ms :: []
+simulavoto  | 11:05:46 PM [express] GET /api/scenarios 304 in 18ms :: []
+simulavoto  | 11:05:46 PM [express] GET /api/sentiment/summary 304 in 4ms :: {"entities":[]}
+simulavoto  | 11:05:46 PM [express] GET /api/parties 304 in 5ms :: []
+simulavoto  | 11:05:46 PM [express] GET /api/sentiment/alerts/count 304 in 5ms :: {"unacknowledged":0}
+simulavoto  | WebSocket client connected (user: 7ea108a0-4f20-4599-a083-8b2532963d15). Total clients: 1
+simulavoto  | 11:05:49 PM [express] GET /api/imports/tse/queue/status 304 in 2ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 11:05:49 PM [express] GET /api/tse/stats 304 in 8ms :: {"totalRecords":0,"years":[],"ufs":[],"cargos":[]}
+simulavoto  | WebSocket client connected (user: 7ea108a0-4f20-4599-a083-8b2532963d15). Total clients: 2
+simulavoto  | 11:05:57 PM [express] POST /api/imports/tse/preview-files 200 in 2030ms :: {"hasBrasilFile":true,"brasilFile":"detalhe_votacao_munzona_2022_BRASIL.csv","files":[{"path":"detalhe_votacao_munzona_2022_BRASIL.csv","name":"detalhe_votacao_munzona_2022_BRASIL.csv","size":11364202,"isBrasil":true},{"path":"detalhe_votacao_munzona_2022_AC.csv","name":"detalhe_votacao_munzona_2022_AC.csv","size":26883,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_AL.csv","name":"detalhe_votacao_munzona_2022_AL.csv","size":154060,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_AM.csv","name":"detalhe_votacao_munzona_2022_AM.csv","size":106788,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_AP.csv","name":"detalhe_votacao_munzona_2022_AP.csv","size":20164,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_BA.csv","name":"detalhe_votacao_munzona_2022_BA.csv","size":639767,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_BR.csv","name":"detalhe_votacao_munzona_2022_BR.csv","size":3451986,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_CE.csv","name":"detalhe_votacao_munzona_2022_CE.csv","size":235273,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_DF.csv","name":"detalhe_votacao_munzona_2022_DF.csv","size":24206,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_ES.csv","name":"detalhe_votacao_munzona_2022_ES.csv","size":126100,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_GO.csv","name":"detalhe_votacao_munzona_2022_GO.csv","size":293217,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_MA.csv","name":"detalhe_votacao_munzona_2022_MA.csv","size":260048,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_MG.csv","name":"detalhe_votacao_munzona_2022_MG.csv","size":1044944,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_MS.csv","name":"detalhe_votacao_munzona_2022_MS.csv","size":131142,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_MT.csv","name":"detalhe_votacao_munzona_2022_MT.csv","size":170038,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_PA.csv","name":"detalhe_votacao_munzona_2022_PA.csv","size":183418,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_PB.csv","name":"detalhe_votacao_munzona_2022_PB.csv","size":325786,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_PE.csv","name":"detalhe_votacao_munzona_2022_PE.csv","size":304343,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_PI.csv","name":"detalhe_votacao_munzona_2022_PI.csv","size":261893,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_PR.csv","name":"detalhe_votacao_munzona_2022_PR.csv","size":478640,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_RJ.csv","name":"detalhe_votacao_munzona_2022_RJ.csv","size":224344,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_RN.csv","name":"detalhe_votacao_munzona_2022_RN.csv","size":204382,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_RO.csv","name":"detalhe_votacao_munzona_2022_RO.csv","size":81666,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_RR.csv","name":"detalhe_votacao_munzona_2022_RR.csv","size":18951,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_RS.csv","name":"detalhe_votacao_munzona_2022_RS.csv","size":765102,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_SC.csv","name":"detalhe_votacao_munzona_2022_SC.csv","size":454999,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_SE.csv","name":"detalhe_votacao_munzona_2022_SE.csv","size":111158,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_SP.csv","name":"detalhe_votacao_munzona_2022_SP.csv","size":1130292,"isBrasil":false},{"path":"detalhe_votacao_munzona_2022_TO.csv","name":"detalhe_votacao_munzona_2022_TO.csv","size":159857,"isBrasil":false}]}
+simulavoto  | [TSE Queue] Job 33 added to queue at position 1. Queue length: 1
+simulavoto  | 11:05:57 PM [express] POST /api/imports/tse/detalhe-votacao/url 200 in 11ms :: {"jobId":33,"message":"Electoral statistics import started"}
+simulavoto  | [TSE Queue] Starting job 33. Remaining in queue: 0
+simulavoto  | 11:05:57 PM [express] GET /api/imports/tse 200 in 3ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"downloading","stage":"downloading","downloadedBytes":0,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":null,"updatedAt":"2026-01-26T23:05:57.485Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [DETALHE] Found 29 CSV files, using: detalhe_votacao_munzona_2022_BRASIL.csv (arquivo BRASIL consolidado)
+simulavoto  | [DETALHE] Parsed 39966 rows, processing in batches...
+simulavoto  | [DETALHE] After cargo filter: 39966 rows to process (0 filtered)
+simulavoto  | 11:05:59 PM [express] GET /api/imports/tse 200 in 138ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"processing","stage":"processing","downloadedBytes":4409893,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":null,"updatedAt":"2026-01-26T23:05:59.656Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:00 PM [express] GET /api/imports/tse/queue/status 200 in 44ms :: {"isProcessing":true,"currentJob":33,"queueLength":0,"queue":[{"position":0,"jobId":33,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:02 PM [express] GET /api/imports/tse 200 in 262ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"processing","stage":"processing","downloadedBytes":4409893,"totalRows":0,"processedRows":0,"skippedRows":5000,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":null,"updatedAt":"2026-01-26T23:06:01.844Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:02 PM [express] GET /api/imports/tse/queue/status 304 in 167ms :: {"isProcessing":true,"currentJob":33,"queueLength":0,"queue":[{"position":0,"jobId":33,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:04 PM [express] GET /api/imports/tse/queue/status 304 in 28ms :: {"isProcessing":true,"currentJob":33,"queueLength":0,"queue":[{"position":0,"jobId":33,"type":"processing","isProcessing":true}]}
+simulavoto  | 11:06:04 PM [express] GET /api/imports/tse 200 in 32ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"processing","stage":"processing","downloadedBytes":4409893,"totalRows":0,"processedRows":0,"skippedRows":10000,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":null,"updatedAt":"2026-01-26T23:06:03.676Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:06 PM [express] GET /api/imports/tse/queue/status 304 in 107ms :: {"isProcessing":true,"currentJob":33,"queueLength":0,"queue":[{"position":0,"jobId":33,"type":"processing","isProcessing":true}]}
+simulavoto  | 11:06:06 PM [express] GET /api/imports/tse 200 in 26ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"processing","stage":"processing","downloadedBytes":4409893,"totalRows":0,"processedRows":0,"skippedRows":20000,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":null,"updatedAt":"2026-01-26T23:06:06.323Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:09 PM [express] GET /api/imports/tse/queue/status 304 in 34ms :: {"isProcessing":true,"currentJob":33,"queueLength":0,"queue":[{"position":0,"jobId":33,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:09 PM [express] GET /api/imports/tse 200 in 180ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"processing","stage":"processing","downloadedBytes":4409893,"totalRows":0,"processedRows":0,"skippedRows":30000,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":null,"updatedAt":"2026-01-26T23:06:08.700Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 0: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 1500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 2500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:11 PM [express] GET /api/imports/tse/queue/status 304 in 154ms :: {"isProcessing":true,"currentJob":33,"queueLength":0,"queue":[{"position":0,"jobId":33,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 3500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4000: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | 11:06:11 PM [express] GET /api/imports/tse 200 in 109ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"processing","stage":"processing","downloadedBytes":4409893,"totalRows":0,"processedRows":0,"skippedRows":35000,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":null,"updatedAt":"2026-01-26T23:06:10.379Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTseElectoralStatisticsBatch] Batch failed at 4500: column "nr_zona" of relation "tse_electoral_statistics" does not exist
+simulavoto  | [DETALHE] Batch 8/8: 0 inserted, 39966 duplicates
+simulavoto  | [DETALHE] Completed: 39966 total, 0 inserted, 39966 duplicates, 0 cargo-filtered, 0 errors
+simulavoto  | [TSE Queue] Job 33 finished. Processing next...
+simulavoto  | 11:06:13 PM [express] GET /api/imports/tse/queue/status 200 in 3ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 11:06:13 PM [express] GET /api/imports/tse 200 in 4ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"completed","stage":"completed","downloadedBytes":4409893,"totalRows":39966,"processedRows":0,"skippedRows":39966,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":"Dados já importados: 39.966 registros duplicados encontrados","validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":"2026-01-26T23:06:11.875Z","updatedAt":"2026-01-26T23:06:11.875Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 11:06:16 PM [express] GET /api/notifications 304 in 5ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | 11:06:23 PM [express] GET /api/imports/tse/queue/status 304 in 2ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 11:06:24 PM [express] GET /api/imports/tse 304 in 2ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"completed","stage":"completed","downloadedBytes":4409893,"totalRows":39966,"processedRows":0,"skippedRows":39966,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":"Dados já importados: 39.966 registros duplicados encontrados","validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":"2026-01-26T23:06:11.875Z","updatedAt":"2026-01-26T23:06:11.875Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 11:06:33 PM [express] GET /api/imports/tse/queue/status 304 in 2ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 11:06:34 PM [express] GET /api/imports/tse 304 in 3ms :: [{"id":33,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4409893,"status":"completed","stage":"completed","downloadedBytes":4409893,"totalRows":39966,"processedRows":0,"skippedRows":39966,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"pending","validationMessage":"Dados já importados: 39.966 registros duplicados encontrados","validatedAt":null,"startedAt":"2026-01-26T23:05:57.485Z","completedAt":"2026-01-26T23:06:11.875Z","updatedAt":"2026-01-26T23:06:11.875Z","createdAt":"2026-01-26T23:05:57.476Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]

@@ -339,12 +339,14 @@ export const tseCandidateVotes = pgTable("tse_candidate_votes", {
 }, (table) => ({
   uniqueVote: uniqueIndex("tse_candidate_votes_unique_idx").on(
     table.anoEleicao,
+    table.cdEleicao,
     table.nrTurno,
     table.sgUf,
     table.cdMunicipio,
     table.nrZona,
     table.cdCargo,
-    table.nrCandidato
+    table.nrCandidato,
+    table.stVotoEmTransito
   ),
 }));
 
@@ -491,11 +493,13 @@ export const tseElectoralStatistics = pgTable("tse_electoral_statistics", {
   index("tse_electoral_stats_municipio_idx").on(table.cdMunicipio),
   uniqueIndex("tse_electoral_stats_unique_idx").on(
     table.anoEleicao,
+    table.cdEleicao,
     table.nrTurno,
     table.sgUf,
     table.cdMunicipio,
     table.nrZona,
-    table.cdCargo
+    table.cdCargo,
+    table.stVotoEmTransito
   ),
 ]);
 
@@ -546,12 +550,14 @@ export const tsePartyVotes = pgTable("tse_party_votes", {
   index("tse_party_votes_municipio_idx").on(table.cdMunicipio),
   uniqueIndex("tse_party_votes_unique_idx").on(
     table.anoEleicao,
+    table.cdEleicao,
     table.nrTurno,
     table.sgUf,
     table.cdMunicipio,
     table.nrZona,
     table.cdCargo,
-    table.nrPartido
+    table.nrPartido,
+    table.stVotoEmTransito
   ),
 ]);
 

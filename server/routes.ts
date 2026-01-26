@@ -4776,14 +4776,49 @@ Analise o impacto dessa mudança hipotética e forneça:
       
       console.log(`[PARTIDO] After cargo filter: ${filteredRows.length} rows to process (${cargoFilteredCount} filtered)`);
       
-      // Calculate total batches
-      const totalBatches = Math.ceil(filteredRows.length / BATCH_SIZE);
+      // Deduplicate rows based on unique key fields before inserting
+      // Key: ano_eleicao + cd_eleicao + nr_turno + sg_uf + cd_municipio + nr_zona + cd_cargo + nr_partido + st_voto_em_transito
+      const seenKeys = new Set<string>();
+      const deduplicatedRows: { index: number; row: string[] }[] = [];
+      let csvDuplicateCount = 0;
+      
+      for (const item of filteredRows) {
+        const row = item.row;
+        const key = [
+          parseValue(row[2], true),   // anoEleicao
+          parseValue(row[6], true),   // cdEleicao
+          parseValue(row[5], true),   // nrTurno
+          parseValue(row[10], false), // sgUf
+          parseValue(row[13], true),  // cdMunicipio
+          parseValue(row[15], true),  // nrZona
+          parseValue(row[16], true),  // cdCargo
+          parseValue(row[19], true),  // nrPartido
+          parseValue(row[29], false), // stVotoEmTransito
+        ].join('|');
+        
+        if (seenKeys.has(key)) {
+          csvDuplicateCount++;
+        } else {
+          seenKeys.add(key);
+          deduplicatedRows.push(item);
+        }
+      }
+      
+      if (csvDuplicateCount > 0) {
+        console.log(`[PARTIDO] Found ${csvDuplicateCount} duplicate rows in CSV file (exact same unique key), keeping ${deduplicatedRows.length} unique rows`);
+      }
+      
+      // Replace filteredRows with deduplicated version
+      const rowsToProcess = deduplicatedRows;
+      
+      // Calculate total batches using deduplicated rows
+      const totalBatches = Math.ceil(rowsToProcess.length / BATCH_SIZE);
       
       // Process rows in batches with tracking
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const startIdx = batchIndex * BATCH_SIZE;
-        const endIdx = Math.min(startIdx + BATCH_SIZE, filteredRows.length);
-        const batchRows = filteredRows.slice(startIdx, endIdx);
+        const endIdx = Math.min(startIdx + BATCH_SIZE, rowsToProcess.length);
+        const batchRows = rowsToProcess.slice(startIdx, endIdx);
         
         // Use original file row indices for audit trail (add 2 for 1-based + header row)
         const originalRowStart = batchRows[0].index + 2;
@@ -4875,14 +4910,14 @@ Analise o impacto dessa mudança hipotética e forneça:
       const partiesResult = await storage.syncPartiesFromTseImport(jobId);
       console.log(`TSE Import ${jobId} [PARTIDO]: Synced parties - ${partiesResult.created} created, ${partiesResult.updated} updated, ${partiesResult.existing} existing`);
 
-      const totalSkipped = cargoFilteredCount + duplicateCount;
-      const validationMessage = insertedCount === 0 && duplicateCount > 0
-        ? `Dados já importados: ${duplicateCount.toLocaleString("pt-BR")} registros duplicados encontrados`
+      const totalSkipped = cargoFilteredCount + duplicateCount + csvDuplicateCount;
+      const validationMessage = insertedCount === 0 && (duplicateCount > 0 || csvDuplicateCount > 0)
+        ? `Dados já importados: ${(duplicateCount + csvDuplicateCount).toLocaleString("pt-BR")} registros duplicados encontrados`
         : insertedCount > 0
-          ? `Importação concluída: ${insertedCount.toLocaleString("pt-BR")} inseridos, ${duplicateCount.toLocaleString("pt-BR")} duplicados`
+          ? `Importação concluída: ${insertedCount.toLocaleString("pt-BR")} inseridos, ${csvDuplicateCount > 0 ? `${csvDuplicateCount.toLocaleString("pt-BR")} duplicados CSV + ` : ''}${duplicateCount.toLocaleString("pt-BR")} duplicados DB`
           : null;
 
-      console.log(`[PARTIDO] Completed: ${rowCount} total, ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} cargo-filtered, ${errorCount} errors`);
+      console.log(`[PARTIDO] Completed: ${allRows.length} total file rows, ${insertedCount} inserted, ${csvDuplicateCount} CSV duplicates removed, ${duplicateCount} DB duplicates, ${cargoFilteredCount} cargo-filtered, ${errorCount} errors`);
 
       await storage.updateTseImportJob(jobId, {
         status: "completed", stage: "completed", totalRows: rowCount,
