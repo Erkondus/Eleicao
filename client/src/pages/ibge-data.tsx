@@ -452,7 +452,14 @@ export default function IBGEDataPage() {
               <SelectValue placeholder="Ano" />
             </SelectTrigger>
             <SelectContent>
-              {["2024", "2023", "2022", "2021", "2020"].map(year => {
+              {/* 
+                Anos disponíveis na API SIDRA:
+                - 2025, 2024: Estimativas populacionais (tabela 6579)
+                - 2022: Censo IBGE (tabela 9514)
+                - 2021, 2020, 2019, etc: Estimativas populacionais (tabela 6579)
+                NOTA: 2023 NÃO está disponível - IBGE não publicou estimativas nesse ano
+              */}
+              {["2025", "2024", "2022", "2021", "2020", "2019"].map(year => {
                 const yearData = stats?.populacaoByYear?.find(p => p.ano === parseInt(year));
                 const hasData = !!yearData;
                 return (
