@@ -4057,7 +4057,7 @@ Analise o impacto dessa mudança hipotética e forneça:
     let filteredCount = 0;
     let insertedCount = 0;
     let errorCount = 0;
-    const BATCH_SIZE = 1000;
+    const BATCH_SIZE = 5000; // Increased for better bulk insert performance
 
     const fieldMap: { [key: number]: keyof InsertTseCandidateVote } = {
       0: "dtGeracao",
@@ -4421,7 +4421,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       let duplicateCount = 0;       // Rows that already exist in DB
       let insertedCount = 0;        // Actually inserted rows
       let errorCount = 0;
-      const BATCH_SIZE = 1000;
+      const BATCH_SIZE = 5000; // Increased for better bulk insert performance
 
       // Field mapping for DETALHE_VOTACAO_MUNZONA
       const fieldMap: { [key: number]: string } = {
@@ -4711,7 +4711,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       let duplicateCount = 0;       // Rows that already exist in DB
       let insertedCount = 0;        // Actually inserted rows
       let errorCount = 0;
-      const BATCH_SIZE = 1000;
+      const BATCH_SIZE = 5000; // Increased for better bulk insert performance
 
       // Field mapping for VOTACAO_PARTIDO_MUNZONA
       const fieldMap: { [key: number]: string } = {
@@ -4965,7 +4965,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       let rowCount = 0;
       let filteredCount = 0;
       let errorCount = 0;
-      const BATCH_SIZE = 1000;
+      const BATCH_SIZE = 5000; // Increased for better bulk insert performance
 
       const parser = createReadStream(filePath)
         .pipe(iconv.decodeStream("latin1"))

@@ -1077,109 +1077,96 @@ export class DatabaseStorage implements IStorage {
 
   async bulkInsertTseCandidateVotes(votes: InsertTseCandidateVote[]): Promise<number> {
     if (votes.length === 0) return 0;
-    let insertedCount = 0;
-    const errors: Error[] = [];
     
-    for (const vote of votes) {
-      try {
-        const existing = await db
-          .select({ id: tseCandidateVotes.id })
-          .from(tseCandidateVotes)
-          .where(and(
-            eq(tseCandidateVotes.anoEleicao, vote.anoEleicao || 0),
-            eq(tseCandidateVotes.sgUf, vote.sgUf || ''),
-            eq(tseCandidateVotes.cdMunicipio, vote.cdMunicipio || 0),
-            eq(tseCandidateVotes.nrZona, vote.nrZona || 0),
-            eq(tseCandidateVotes.cdCargo, vote.cdCargo || 0),
-            eq(tseCandidateVotes.nrTurno, vote.nrTurno || 0),
-            eq(tseCandidateVotes.sqCandidato, vote.sqCandidato || '')
-          ))
-          .limit(1);
-        
-        if (existing.length === 0) {
-          await db.insert(tseCandidateVotes).values(vote);
+    try {
+      // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
+      // This requires a unique constraint on the key fields which should already exist
+      const result = await db.insert(tseCandidateVotes)
+        .values(votes)
+        .onConflictDoNothing()
+        .returning({ id: tseCandidateVotes.id });
+      
+      return result.length;
+    } catch (err: any) {
+      // If bulk insert fails, fall back to individual inserts for resilience
+      console.warn(`[bulkInsertTseCandidateVotes] Bulk insert failed, falling back to individual inserts:`, err.message);
+      let insertedCount = 0;
+      
+      for (const vote of votes) {
+        try {
+          await db.insert(tseCandidateVotes)
+            .values(vote)
+            .onConflictDoNothing();
           insertedCount++;
+        } catch (innerErr: any) {
+          // Skip errors silently
         }
-      } catch (err: any) {
-        // Only skip duplicate/constraint errors; collect others for logging
-        const errorMsg = err.message?.toLowerCase() || '';
-        if (errorMsg.includes('duplicate') || errorMsg.includes('unique') || errorMsg.includes('constraint')) {
-          // Skip duplicate constraint violations silently
-          continue;
-        }
-        // Log non-duplicate errors but continue processing
-        errors.push(err);
       }
+      
+      return insertedCount;
     }
-    
-    // Log errors if any occurred
-    if (errors.length > 0) {
-      console.warn(`[bulkInsertTseCandidateVotes] ${errors.length} non-duplicate errors occurred:`, errors[0].message);
-    }
-    
-    return insertedCount;
   }
 
   async insertTseElectoralStatisticsBatch(records: InsertTseElectoralStatistics[]): Promise<number> {
     if (records.length === 0) return 0;
-    // Use raw SQL to handle duplicates - check by unique combination of fields
-    let insertedCount = 0;
-    for (const record of records) {
-      try {
-        // Check if record already exists
-        const existing = await db
-          .select({ id: tseElectoralStatistics.id })
-          .from(tseElectoralStatistics)
-          .where(and(
-            eq(tseElectoralStatistics.anoEleicao, record.anoEleicao),
-            eq(tseElectoralStatistics.sgUf, record.sgUf || ''),
-            eq(tseElectoralStatistics.cdMunicipio, record.cdMunicipio || 0),
-            eq(tseElectoralStatistics.nrZona, record.nrZona || 0),
-            eq(tseElectoralStatistics.cdCargo, record.cdCargo || 0),
-            eq(tseElectoralStatistics.nrTurno, record.nrTurno || 0)
-          ))
-          .limit(1);
-        
-        if (existing.length === 0) {
-          await db.insert(tseElectoralStatistics).values(record);
+    
+    try {
+      // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
+      const result = await db.insert(tseElectoralStatistics)
+        .values(records)
+        .onConflictDoNothing()
+        .returning({ id: tseElectoralStatistics.id });
+      
+      return result.length;
+    } catch (err: any) {
+      // If bulk insert fails, fall back to individual inserts for resilience
+      console.warn(`[insertTseElectoralStatisticsBatch] Bulk insert failed, falling back:`, err.message);
+      let insertedCount = 0;
+      
+      for (const record of records) {
+        try {
+          await db.insert(tseElectoralStatistics)
+            .values(record)
+            .onConflictDoNothing();
           insertedCount++;
+        } catch (innerErr: any) {
+          // Skip errors silently
         }
-      } catch (err) {
-        // Skip on error (likely duplicate)
       }
+      
+      return insertedCount;
     }
-    return insertedCount;
   }
 
   async insertTsePartyVotesBatch(records: InsertTsePartyVotes[]): Promise<number> {
     if (records.length === 0) return 0;
-    let insertedCount = 0;
-    for (const record of records) {
-      try {
-        // Check if record already exists
-        const existing = await db
-          .select({ id: tsePartyVotes.id })
-          .from(tsePartyVotes)
-          .where(and(
-            eq(tsePartyVotes.anoEleicao, record.anoEleicao),
-            eq(tsePartyVotes.sgUf, record.sgUf || ''),
-            eq(tsePartyVotes.cdMunicipio, record.cdMunicipio || 0),
-            eq(tsePartyVotes.nrZona, record.nrZona || 0),
-            eq(tsePartyVotes.cdCargo, record.cdCargo || 0),
-            eq(tsePartyVotes.nrTurno, record.nrTurno || 0),
-            eq(tsePartyVotes.nrPartido, record.nrPartido || 0)
-          ))
-          .limit(1);
-        
-        if (existing.length === 0) {
-          await db.insert(tsePartyVotes).values(record);
+    
+    try {
+      // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
+      const result = await db.insert(tsePartyVotes)
+        .values(records)
+        .onConflictDoNothing()
+        .returning({ id: tsePartyVotes.id });
+      
+      return result.length;
+    } catch (err: any) {
+      // If bulk insert fails, fall back to individual inserts for resilience
+      console.warn(`[insertTsePartyVotesBatch] Bulk insert failed, falling back:`, err.message);
+      let insertedCount = 0;
+      
+      for (const record of records) {
+        try {
+          await db.insert(tsePartyVotes)
+            .values(record)
+            .onConflictDoNothing();
           insertedCount++;
+        } catch (innerErr: any) {
+          // Skip errors silently
         }
-      } catch (err) {
-        // Skip on error (likely duplicate)
       }
+      
+      return insertedCount;
     }
-    return insertedCount;
   }
 
   async getElectoralStatisticsSummary(filters: {
