@@ -256,7 +256,16 @@ export class IBGEService {
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
-      const municipios = await this.fetchMunicipios();
+      const allMunicipios = await this.fetchMunicipios();
+      
+      // Filter out municipalities with incomplete data (null microrregiao)
+      // Brazil has 5570 official municipalities; IBGE API may return extra entries with incomplete data
+      const municipios = allMunicipios.filter(m => m.microrregiao !== null);
+      const skippedCount = allMunicipios.length - municipios.length;
+      
+      if (skippedCount > 0) {
+        console.log(`[IBGE] Filtered out ${skippedCount} municipalities with incomplete data`);
+      }
       
       await db.update(ibgeImportJobs)
         .set({ 
@@ -265,7 +274,8 @@ export class IBGEService {
             progress: { 
               phase: "import", 
               phaseDescription: `Importando ${municipios.length} municípios...`,
-              totalBatches: Math.ceil(municipios.length / 100)
+              totalBatches: Math.ceil(municipios.length / 100),
+              skippedIncomplete: skippedCount
             } 
           }
         })
