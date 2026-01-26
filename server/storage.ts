@@ -1080,7 +1080,6 @@ export class DatabaseStorage implements IStorage {
     
     try {
       // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
-<<<<<<< HEAD
       // The unique index on (anoEleicao, nrTurno, sgUf, cdMunicipio, nrZona, cdCargo, nrCandidato)
       // allows ON CONFLICT to work properly and skip duplicates
       await db.insert(tseCandidateVotes)
@@ -1111,32 +1110,6 @@ export class DatabaseStorage implements IStorage {
       }
       
       return totalInserted;
-=======
-      // This requires a unique constraint on the key fields which should already exist
-      const result = await db.insert(tseCandidateVotes)
-        .values(votes)
-        .onConflictDoNothing()
-        .returning({ id: tseCandidateVotes.id });
-      
-      return result.length;
-    } catch (err: any) {
-      // If bulk insert fails, fall back to individual inserts for resilience
-      console.warn(`[bulkInsertTseCandidateVotes] Bulk insert failed, falling back to individual inserts:`, err.message);
-      let insertedCount = 0;
-      
-      for (const vote of votes) {
-        try {
-          await db.insert(tseCandidateVotes)
-            .values(vote)
-            .onConflictDoNothing();
-          insertedCount++;
-        } catch (innerErr: any) {
-          // Skip errors silently
-        }
-      }
-      
-      return insertedCount;
->>>>>>> 8029c18476da6ebe68e26cd9ed1983033bb55723
     }
   }
 
@@ -1145,7 +1118,6 @@ export class DatabaseStorage implements IStorage {
     
     try {
       // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
-<<<<<<< HEAD
       await db.insert(tseElectoralStatistics)
         .values(records)
         .onConflictDoNothing();
@@ -1171,31 +1143,6 @@ export class DatabaseStorage implements IStorage {
       }
       
       return totalInserted;
-=======
-      const result = await db.insert(tseElectoralStatistics)
-        .values(records)
-        .onConflictDoNothing()
-        .returning({ id: tseElectoralStatistics.id });
-      
-      return result.length;
-    } catch (err: any) {
-      // If bulk insert fails, fall back to individual inserts for resilience
-      console.warn(`[insertTseElectoralStatisticsBatch] Bulk insert failed, falling back:`, err.message);
-      let insertedCount = 0;
-      
-      for (const record of records) {
-        try {
-          await db.insert(tseElectoralStatistics)
-            .values(record)
-            .onConflictDoNothing();
-          insertedCount++;
-        } catch (innerErr: any) {
-          // Skip errors silently
-        }
-      }
-      
-      return insertedCount;
->>>>>>> 8029c18476da6ebe68e26cd9ed1983033bb55723
     }
   }
 
@@ -1204,7 +1151,6 @@ export class DatabaseStorage implements IStorage {
     
     try {
       // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
-<<<<<<< HEAD
       await db.insert(tsePartyVotes)
         .values(records)
         .onConflictDoNothing();
@@ -1230,31 +1176,6 @@ export class DatabaseStorage implements IStorage {
       }
       
       return totalInserted;
-=======
-      const result = await db.insert(tsePartyVotes)
-        .values(records)
-        .onConflictDoNothing()
-        .returning({ id: tsePartyVotes.id });
-      
-      return result.length;
-    } catch (err: any) {
-      // If bulk insert fails, fall back to individual inserts for resilience
-      console.warn(`[insertTsePartyVotesBatch] Bulk insert failed, falling back:`, err.message);
-      let insertedCount = 0;
-      
-      for (const record of records) {
-        try {
-          await db.insert(tsePartyVotes)
-            .values(record)
-            .onConflictDoNothing();
-          insertedCount++;
-        } catch (innerErr: any) {
-          // Skip errors silently
-        }
-      }
-      
-      return insertedCount;
->>>>>>> 8029c18476da6ebe68e26cd9ed1983033bb55723
     }
   }
 
