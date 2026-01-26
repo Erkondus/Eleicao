@@ -26,7 +26,7 @@ import {
   emitJobFailed
 } from "./websocket";
 import { sql } from "drizzle-orm";
-import type { User, InsertTseCandidateVote } from "@shared/schema";
+import type { User, InsertTseCandidateVote, TseImportBatch } from "@shared/schema";
 import {
   users,
   parties,
@@ -102,6 +102,88 @@ const activeImportJobs = new Map<number, { cancelled: boolean; abortController?:
 function isJobCancelled(jobId: number): boolean {
   const job = activeImportJobs.get(jobId);
   return job?.cancelled ?? false;
+}
+
+// TSE Import Queue System - processes one job at a time
+interface TseQueueItem {
+  jobId: number;
+  type: "url" | "detalhe" | "partido";
+  url: string;
+  selectedFile?: string;
+  processor: () => Promise<void>;
+}
+
+const tseImportQueue: TseQueueItem[] = [];
+let isTseQueueProcessing = false;
+let currentTseJob: number | null = null;
+
+function getTseQueueStatus() {
+  return {
+    isProcessing: isTseQueueProcessing,
+    currentJob: currentTseJob,
+    queueLength: tseImportQueue.length,
+    queue: [
+      ...(currentTseJob !== null ? [{
+        position: 0,
+        jobId: currentTseJob,
+        type: "processing" as const,
+        isProcessing: true,
+      }] : []),
+      ...tseImportQueue.map((item, index) => ({
+        position: index + 1,
+        jobId: item.jobId,
+        type: item.type,
+        isProcessing: false,
+      })),
+    ],
+  };
+}
+
+async function addToTseQueue(item: TseQueueItem) {
+  const position = tseImportQueue.length + 1;
+  tseImportQueue.push(item);
+  console.log(`[TSE Queue] Job ${item.jobId} added to queue at position ${position}. Queue length: ${tseImportQueue.length}`);
+  
+  await storage.updateTseImportJob(item.jobId, {
+    stage: "queued",
+    updatedAt: new Date(),
+  });
+  
+  processNextTseJob();
+}
+
+async function removeFromTseQueue(jobId: number): Promise<boolean> {
+  const index = tseImportQueue.findIndex(item => item.jobId === jobId);
+  if (index !== -1) {
+    tseImportQueue.splice(index, 1);
+    console.log(`[TSE Queue] Job ${jobId} removed from queue. Queue length: ${tseImportQueue.length}`);
+    return true;
+  }
+  return false;
+}
+
+async function processNextTseJob() {
+  if (isTseQueueProcessing || tseImportQueue.length === 0) {
+    return;
+  }
+
+  const item = tseImportQueue.shift();
+  if (!item) return;
+
+  isTseQueueProcessing = true;
+  currentTseJob = item.jobId;
+  console.log(`[TSE Queue] Starting job ${item.jobId}. Remaining in queue: ${tseImportQueue.length}`);
+
+  try {
+    await item.processor();
+  } catch (error) {
+    console.error(`[TSE Queue] Job ${item.jobId} failed:`, error);
+  } finally {
+    isTseQueueProcessing = false;
+    currentTseJob = null;
+    console.log(`[TSE Queue] Job ${item.jobId} finished. Processing next...`);
+    processNextTseJob();
+  }
 }
 
 declare module "express-session" {
@@ -2064,6 +2146,15 @@ Responda em JSON:
     }
   });
 
+  app.get("/api/imports/tse/queue/status", requireAuth, requireRole("admin"), async (_req, res) => {
+    try {
+      const status = getTseQueueStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch queue status" });
+    }
+  });
+
   app.get("/api/imports/tse/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const job = await storage.getTseImportJob(parseInt(req.params.id));
@@ -2399,13 +2490,16 @@ Responda em JSON:
         return res.status(404).json({ error: "Import job not found" });
       }
 
-      const inProgressStatuses = ["pending", "downloading", "extracting", "processing"];
-      if (!inProgressStatuses.includes(job.status || "")) {
+      const inProgressStatuses = ["pending", "queued", "downloading", "extracting", "processing"];
+      if (!inProgressStatuses.includes(job.status || "") && job.stage !== "queued") {
         return res.status(400).json({ 
           error: "Só é possível cancelar importações em andamento",
           currentStatus: job.status
         });
       }
+
+      // Remove from queue if still pending
+      removeFromTseQueue(jobId);
 
       // Signal cancellation
       const activeJob = activeImportJobs.get(jobId);
@@ -3804,7 +3898,16 @@ Analise o impacto dessa mudança hipotética e forneça:
     }
   });
 
-  const processURLImport = async (jobId: number, url: string) => {
+  const processURLImport = (jobId: number, url: string) => {
+    addToTseQueue({ 
+      jobId, 
+      type: "url", 
+      url,
+      processor: () => processURLImportInternal(jobId, url)
+    });
+  };
+
+  const processURLImportInternal = async (jobId: number, url: string) => {
     const tmpDir = `/tmp/tse-import-${jobId}`;
     let csvPath: string | null = null;
 
@@ -3950,9 +4053,9 @@ Analise o impacto dessa mudança hipotética e forneça:
     const job = await storage.getTseImportJob(jobId);
     const cargoFilter = job?.cargoFilter;
     
-    const records: InsertTseCandidateVote[] = [];
     let rowCount = 0;
     let filteredCount = 0;
+    let insertedCount = 0;
     let errorCount = 0;
     const BATCH_SIZE = 1000;
 
@@ -4020,6 +4123,10 @@ Analise o impacto dessa mudança hipotética e forneça:
       return value;
     };
 
+    // Delete any previous batch records for this job
+    await storage.deleteBatchesByJob(jobId);
+
+    // Streaming batch processing with tracking
     const parser = createReadStream(filePath)
       .pipe(iconv.decodeStream("latin1"))
       .pipe(parse({
@@ -4031,9 +4138,105 @@ Analise o impacto dessa mudança hipotética e forneça:
         from_line: 2,
       }));
 
+    let records: InsertTseCandidateVote[] = [];
+    let batchIndex = 0;
+    let batchFirstOriginalRow = 1;
+    let batchLastOriginalRow = 1;
+    let currentBatchRecord: TseImportBatch | null = null;
+    let batchInserted = 0;
+    let batchSkipped = 0;
+    let batchErrors = 0;
+    let duplicateCount = 0;
+
+    const finalizeBatch = async () => {
+      if (records.length === 0 && !currentBatchRecord) return;
+      
+      if (records.length > 0) {
+        try {
+          const actualInserted = await storage.bulkInsertTseCandidateVotes(records);
+          batchInserted = actualInserted;
+          batchSkipped = records.length - actualInserted;
+          insertedCount += batchInserted;
+          duplicateCount += batchSkipped;
+        } catch (err: any) {
+          console.error(`[CANDIDATO] Batch ${batchIndex + 1} insert error:`, err);
+          batchErrors = records.length;
+          errorCount += batchErrors;
+        }
+      }
+
+      if (currentBatchRecord) {
+        await storage.updateImportBatch(currentBatchRecord.id, {
+          status: batchErrors > 0 ? "failed" : "completed",
+          rowEnd: batchLastOriginalRow, // Update with actual last row index
+          totalRows: records.length,
+          processedRows: records.length,
+          insertedRows: batchInserted,
+          skippedRows: batchSkipped,
+          errorCount: batchErrors,
+          errorSummary: batchErrors > 0 ? "Batch insert errors" : undefined,
+          completedAt: new Date(),
+        });
+      }
+
+      // Update job progress
+      const totalSkipped = filteredCount + duplicateCount;
+      await storage.updateTseImportJob(jobId, { 
+        processedRows: insertedCount,
+        skippedRows: totalSkipped,
+        errorCount,
+        updatedAt: new Date()
+      });
+
+      // Log progress
+      if ((batchIndex + 1) % 10 === 0) {
+        console.log(`[CANDIDATO] Batch ${batchIndex + 1}: ${insertedCount} inserted, ${duplicateCount} duplicates, ${filteredCount} filtered, ${errorCount} errors`);
+      }
+
+      records = [];
+      batchInserted = 0;
+      batchSkipped = 0;
+      batchErrors = 0;
+      batchIndex++;
+      batchFirstOriginalRow = 0;
+      batchLastOriginalRow = 0;
+      currentBatchRecord = null;
+    };
+
     for await (const row of parser) {
       try {
         rowCount++;
+        
+        // Check cargo filter first (before creating batch record)
+        const cdCargo = parseInt(row[16], 10) || null;
+        if (cargoFilter && cdCargo !== cargoFilter) {
+          filteredCount++;
+          continue;
+        }
+
+        // Track original row number for first row in batch
+        if (batchFirstOriginalRow === 0) {
+          batchFirstOriginalRow = rowCount;
+        }
+        batchLastOriginalRow = rowCount;
+
+        // Create batch record if needed
+        if (!currentBatchRecord) {
+          currentBatchRecord = await storage.createImportBatch({
+            importJobId: jobId,
+            batchIndex,
+            status: "processing",
+            rowStart: batchFirstOriginalRow,
+            rowEnd: batchFirstOriginalRow + BATCH_SIZE - 1,
+            totalRows: BATCH_SIZE,
+            processedRows: 0,
+            insertedRows: 0,
+            skippedRows: 0,
+            errorCount: 0,
+            startedAt: new Date(),
+          });
+        }
+
         const record: Partial<InsertTseCandidateVote> = {};
 
         for (const [index, field] of Object.entries(fieldMap)) {
@@ -4044,23 +4247,16 @@ Analise o impacto dessa mudança hipotética e forneça:
         }
 
         if (record.anoEleicao && record.nrCandidato) {
-          if (cargoFilter && record.cdCargo !== cargoFilter) {
-            filteredCount++;
-          } else {
-            record.importJobId = jobId;
-            records.push(record as InsertTseCandidateVote);
-          }
+          record.importJobId = jobId;
+          records.push(record as InsertTseCandidateVote);
         }
 
+        // Finalize batch when full
         if (records.length >= BATCH_SIZE) {
-          await storage.bulkInsertTseCandidateVotes(records);
-          await storage.updateTseImportJob(jobId, { 
-            processedRows: rowCount,
-            updatedAt: new Date()
-          });
-          records.length = 0;
+          await finalizeBatch();
         }
       } catch (err: any) {
+        batchErrors++;
         errorCount++;
         await storage.createTseImportError({
           importJobId: jobId,
@@ -4072,34 +4268,42 @@ Analise o impacto dessa mudança hipotética e forneça:
       }
     }
 
-    if (records.length > 0) {
-      await storage.bulkInsertTseCandidateVotes(records);
+    // Finalize last batch
+    if (records.length > 0 || currentBatchRecord) {
+      await finalizeBatch();
     }
+
+    console.log(`[CANDIDATO] Completed: ${rowCount} total rows, ${insertedCount} inserted, ${filteredCount} filtered, ${errorCount} errors`);
+    
+    // Set totalFileRows now that we know the count
+    await storage.updateTseImportJob(jobId, { 
+      totalFileRows: rowCount,
+      stage: "processing",
+      updatedAt: new Date()
+    });
 
     // Sync parties from imported data before marking as complete
     const partiesResult = await storage.syncPartiesFromTseImport(jobId);
     console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.updated} updated, ${partiesResult.existing} existing`);
-
-    // Calculate actual imported rows (total - skipped - errors)
-    const actualImported = rowCount - filteredCount - errorCount;
     
     // Validate import integrity
     const dbRowCount = await storage.countTseCandidateVotesByJob(jobId);
-    const isValid = dbRowCount === actualImported;
+    const isValid = dbRowCount === insertedCount;
     const validationMessage = isValid 
       ? `Validação OK: ${dbRowCount.toLocaleString("pt-BR")} registros importados corretamente`
-      : `Discrepância detectada: esperado ${actualImported.toLocaleString("pt-BR")}, encontrado ${dbRowCount.toLocaleString("pt-BR")} no banco`;
+      : `Discrepância detectada: esperado ${insertedCount.toLocaleString("pt-BR")}, encontrado ${dbRowCount.toLocaleString("pt-BR")} no banco`;
 
     console.log(`TSE Import ${jobId}: Validation - ${validationMessage}`);
 
+    const totalSkipped = filteredCount + duplicateCount;
     await storage.updateTseImportJob(jobId, {
       status: "completed",
       stage: "completed",
       completedAt: new Date(),
       updatedAt: new Date(),
       totalFileRows: rowCount,
-      processedRows: actualImported,
-      skippedRows: filteredCount,
+      processedRows: insertedCount,
+      skippedRows: totalSkipped,
       errorCount: errorCount,
       validationStatus: isValid ? "passed" : "failed",
       validationMessage: validationMessage,
@@ -4120,7 +4324,17 @@ Analise o impacto dessa mudança hipotética e forneça:
   };
 
   // Process Detalhe Votacao (Electoral Statistics) Import
-  const processDetalheVotacaoImport = async (jobId: number, url: string, selectedFile?: string) => {
+  const processDetalheVotacaoImport = (jobId: number, url: string, selectedFile?: string) => {
+    addToTseQueue({ 
+      jobId, 
+      type: "detalhe", 
+      url, 
+      selectedFile,
+      processor: () => processDetalheVotacaoImportInternal(jobId, url, selectedFile)
+    });
+  };
+
+  const processDetalheVotacaoImportInternal = async (jobId: number, url: string, selectedFile?: string) => {
     const tmpDir = `/tmp/tse-import-${jobId}`;
     activeImportJobs.set(jobId, { cancelled: false });
 
@@ -4258,65 +4472,116 @@ Analise o impacto dessa mudança hipotética e forneça:
         stage: "processing",
         updatedAt: new Date()
       });
+
+      // Delete any previous batch records for this job (in case of re-import)
+      await storage.deleteBatchesByJob(jobId);
       
-      // Process rows in batches
+      // Pre-filter rows by cargo and prepare batch chunks
+      const filteredRows: { index: number; row: string[] }[] = [];
       for (let i = 0; i < allRows.length; i++) {
         const row = allRows[i];
-        rowCount++;
-        
         const cdCargo = parseValue(row[16], true);
         if (cargoFilter && cdCargo !== cargoFilter) {
           cargoFilteredCount++;
           continue;
         }
-
-        const record: any = { importJobId: jobId };
-        for (const [index, field] of Object.entries(fieldMap)) {
-          const idx = parseInt(index);
-          if (idx < row.length) {
-            record[field] = parseValue(row[idx], numericFields.includes(idx));
-          }
-        }
-
-        records.push(record);
-
-        if (records.length >= BATCH_SIZE) {
-          try {
-            const batch = records.splice(0, BATCH_SIZE);
-            const batchInserted = await storage.insertTseElectoralStatisticsBatch(batch);
-            const batchDuplicates = batch.length - batchInserted;
-            insertedCount += batchInserted;
-            duplicateCount += batchDuplicates;
-            
-            const totalSkipped = cargoFilteredCount + duplicateCount;
-            await storage.updateTseImportJob(jobId, { 
-              processedRows: insertedCount,
-              skippedRows: totalSkipped,
-              updatedAt: new Date()
-            });
-            
-            // Log progress every 10 batches
-            if (rowCount % 10000 === 0) {
-              console.log(`[DETALHE] Progress: ${rowCount}/${allRows.length} rows, ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} cargo-filtered`);
-            }
-          } catch (err) {
-            console.error(`[DETALHE] Batch insert error:`, err);
-            errorCount++;
-          }
-        }
+        filteredRows.push({ index: i, row });
       }
-
-      // Insert remaining records
-      if (records.length > 0) {
+      
+      console.log(`[DETALHE] After cargo filter: ${filteredRows.length} rows to process (${cargoFilteredCount} filtered)`);
+      
+      // Calculate total batches
+      const totalBatches = Math.ceil(filteredRows.length / BATCH_SIZE);
+      
+      // Process rows in batches with tracking
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * BATCH_SIZE;
+        const endIdx = Math.min(startIdx + BATCH_SIZE, filteredRows.length);
+        const batchRows = filteredRows.slice(startIdx, endIdx);
+        
+        // Use original file row indices for audit trail (add 2 for 1-based + header row)
+        const originalRowStart = batchRows[0].index + 2;
+        const originalRowEnd = batchRows[batchRows.length - 1].index + 2;
+        
+        // Create batch record
+        const batchRecord = await storage.createImportBatch({
+          importJobId: jobId,
+          batchIndex,
+          status: "processing",
+          rowStart: originalRowStart,
+          rowEnd: originalRowEnd,
+          totalRows: batchRows.length,
+          processedRows: 0,
+          insertedRows: 0,
+          skippedRows: 0,
+          errorCount: 0,
+          startedAt: new Date(),
+        });
+        
+        let batchInserted = 0;
+        let batchSkipped = 0;
+        let batchErrors = 0;
+        let batchErrorSummary = "";
+        
         try {
-          const batchInserted = await storage.insertTseElectoralStatisticsBatch(records);
-          const batchDuplicates = records.length - batchInserted;
+          // Parse batch rows into records
+          const batchRecords: any[] = [];
+          for (const { row } of batchRows) {
+            rowCount++;
+            const record: any = { importJobId: jobId };
+            for (const [index, field] of Object.entries(fieldMap)) {
+              const idx = parseInt(index);
+              if (idx < row.length) {
+                record[field] = parseValue(row[idx], numericFields.includes(idx));
+              }
+            }
+            batchRecords.push(record);
+          }
+          
+          // Insert batch
+          const inserted = await storage.insertTseElectoralStatisticsBatch(batchRecords);
+          batchInserted = inserted;
+          batchSkipped = batchRecords.length - inserted;
           insertedCount += batchInserted;
-          duplicateCount += batchDuplicates;
-          console.log(`[DETALHE] Final batch: ${batchInserted} inserted, ${batchDuplicates} duplicates`);
-        } catch (err) {
-          console.error(`[DETALHE] Final batch insert error:`, err);
-          errorCount++;
+          duplicateCount += batchSkipped;
+          
+          // Update batch record as completed
+          await storage.updateImportBatch(batchRecord.id, {
+            status: "completed",
+            processedRows: batchRows.length,
+            insertedRows: batchInserted,
+            skippedRows: batchSkipped,
+            errorCount: 0,
+            completedAt: new Date(),
+          });
+        } catch (err: any) {
+          console.error(`[DETALHE] Batch ${batchIndex + 1} error:`, err);
+          batchErrors = batchRows.length;
+          batchErrorSummary = err.message || "Unknown error";
+          errorCount += batchErrors;
+          
+          // Update batch record as failed
+          await storage.updateImportBatch(batchRecord.id, {
+            status: "failed",
+            processedRows: 0,
+            errorCount: batchErrors,
+            errorSummary: batchErrorSummary,
+            completedAt: new Date(),
+          });
+        }
+        
+        // Update job progress
+        const totalSkipped = cargoFilteredCount + duplicateCount;
+        await storage.updateTseImportJob(jobId, { 
+          processedRows: insertedCount,
+          skippedRows: totalSkipped,
+          errorCount,
+          updatedAt: new Date()
+        });
+        
+        // Log progress every 10 batches
+        if ((batchIndex + 1) % 10 === 0 || batchIndex === totalBatches - 1) {
+          console.log(`[DETALHE] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
         }
       }
 
@@ -4357,7 +4622,17 @@ Analise o impacto dessa mudança hipotética e forneça:
   };
 
   // Process Partido Votacao (Party Votes) Import
-  const processPartidoVotacaoImport = async (jobId: number, url: string, selectedFile?: string) => {
+  const processPartidoVotacaoImport = (jobId: number, url: string, selectedFile?: string) => {
+    addToTseQueue({ 
+      jobId, 
+      type: "partido", 
+      url, 
+      selectedFile,
+      processor: () => processPartidoVotacaoImportInternal(jobId, url, selectedFile)
+    });
+  };
+
+  const processPartidoVotacaoImportInternal = async (jobId: number, url: string, selectedFile?: string) => {
     const tmpDir = `/tmp/tse-import-${jobId}`;
     activeImportJobs.set(jobId, { cancelled: false });
 
@@ -4483,65 +4758,116 @@ Analise o impacto dessa mudança hipotética e forneça:
         stage: "processing",
         updatedAt: new Date()
       });
+
+      // Delete any previous batch records for this job (in case of re-import)
+      await storage.deleteBatchesByJob(jobId);
       
-      // Process rows in batches
+      // Pre-filter rows by cargo and prepare batch chunks
+      const filteredRows: { index: number; row: string[] }[] = [];
       for (let i = 0; i < allRows.length; i++) {
         const row = allRows[i];
-        rowCount++;
-        
         const cdCargo = parseValue(row[16], true);
         if (cargoFilter && cdCargo !== cargoFilter) {
           cargoFilteredCount++;
           continue;
         }
-
-        const record: any = { importJobId: jobId };
-        for (const [index, field] of Object.entries(fieldMap)) {
-          const idx = parseInt(index);
-          if (idx < row.length) {
-            record[field] = parseValue(row[idx], numericFields.includes(idx));
-          }
-        }
-
-        records.push(record);
-
-        if (records.length >= BATCH_SIZE) {
-          try {
-            const batch = records.splice(0, BATCH_SIZE);
-            const batchInserted = await storage.insertTsePartyVotesBatch(batch);
-            const batchDuplicates = batch.length - batchInserted;
-            insertedCount += batchInserted;
-            duplicateCount += batchDuplicates;
-            
-            const totalSkipped = cargoFilteredCount + duplicateCount;
-            await storage.updateTseImportJob(jobId, { 
-              processedRows: insertedCount,
-              skippedRows: totalSkipped,
-              updatedAt: new Date()
-            });
-            
-            // Log progress every 10 batches
-            if (rowCount % 10000 === 0) {
-              console.log(`[PARTIDO] Progress: ${rowCount}/${allRows.length} rows, ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} cargo-filtered`);
-            }
-          } catch (err) {
-            console.error(`[PARTIDO] Batch insert error:`, err);
-            errorCount++;
-          }
-        }
+        filteredRows.push({ index: i, row });
       }
-
-      // Insert remaining records
-      if (records.length > 0) {
+      
+      console.log(`[PARTIDO] After cargo filter: ${filteredRows.length} rows to process (${cargoFilteredCount} filtered)`);
+      
+      // Calculate total batches
+      const totalBatches = Math.ceil(filteredRows.length / BATCH_SIZE);
+      
+      // Process rows in batches with tracking
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * BATCH_SIZE;
+        const endIdx = Math.min(startIdx + BATCH_SIZE, filteredRows.length);
+        const batchRows = filteredRows.slice(startIdx, endIdx);
+        
+        // Use original file row indices for audit trail (add 2 for 1-based + header row)
+        const originalRowStart = batchRows[0].index + 2;
+        const originalRowEnd = batchRows[batchRows.length - 1].index + 2;
+        
+        // Create batch record
+        const batchRecord = await storage.createImportBatch({
+          importJobId: jobId,
+          batchIndex,
+          status: "processing",
+          rowStart: originalRowStart,
+          rowEnd: originalRowEnd,
+          totalRows: batchRows.length,
+          processedRows: 0,
+          insertedRows: 0,
+          skippedRows: 0,
+          errorCount: 0,
+          startedAt: new Date(),
+        });
+        
+        let batchInserted = 0;
+        let batchSkipped = 0;
+        let batchErrors = 0;
+        let batchErrorSummary = "";
+        
         try {
-          const batchInserted = await storage.insertTsePartyVotesBatch(records);
-          const batchDuplicates = records.length - batchInserted;
+          // Parse batch rows into records
+          const batchRecords: any[] = [];
+          for (const { row } of batchRows) {
+            rowCount++;
+            const record: any = { importJobId: jobId };
+            for (const [index, field] of Object.entries(fieldMap)) {
+              const idx = parseInt(index);
+              if (idx < row.length) {
+                record[field] = parseValue(row[idx], numericFields.includes(idx));
+              }
+            }
+            batchRecords.push(record);
+          }
+          
+          // Insert batch
+          const inserted = await storage.insertTsePartyVotesBatch(batchRecords);
+          batchInserted = inserted;
+          batchSkipped = batchRecords.length - inserted;
           insertedCount += batchInserted;
-          duplicateCount += batchDuplicates;
-          console.log(`[PARTIDO] Final batch: ${batchInserted} inserted, ${batchDuplicates} duplicates`);
-        } catch (err) {
-          console.error(`[PARTIDO] Final batch insert error:`, err);
-          errorCount++;
+          duplicateCount += batchSkipped;
+          
+          // Update batch record as completed
+          await storage.updateImportBatch(batchRecord.id, {
+            status: "completed",
+            processedRows: batchRows.length,
+            insertedRows: batchInserted,
+            skippedRows: batchSkipped,
+            errorCount: 0,
+            completedAt: new Date(),
+          });
+        } catch (err: any) {
+          console.error(`[PARTIDO] Batch ${batchIndex + 1} error:`, err);
+          batchErrors = batchRows.length;
+          batchErrorSummary = err.message || "Unknown error";
+          errorCount += batchErrors;
+          
+          // Update batch record as failed
+          await storage.updateImportBatch(batchRecord.id, {
+            status: "failed",
+            processedRows: 0,
+            errorCount: batchErrors,
+            errorSummary: batchErrorSummary,
+            completedAt: new Date(),
+          });
+        }
+        
+        // Update job progress
+        const totalSkipped = cargoFilteredCount + duplicateCount;
+        await storage.updateTseImportJob(jobId, { 
+          processedRows: insertedCount,
+          skippedRows: totalSkipped,
+          errorCount,
+          updatedAt: new Date()
+        });
+        
+        // Log progress every 10 batches
+        if ((batchIndex + 1) % 10 === 0 || batchIndex === totalBatches - 1) {
+          console.log(`[PARTIDO] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
         }
       }
 

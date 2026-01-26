@@ -101,6 +101,18 @@ interface ValidationIssue {
   status: string;
 }
 
+interface QueueStatus {
+  isProcessing: boolean;
+  currentJob: number | null;
+  queueLength: number;
+  queue: Array<{
+    position: number;
+    jobId: number;
+    type: string;
+    isProcessing?: boolean;
+  }>;
+}
+
 const UFS = [
   "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
   "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO", "BR"
@@ -138,7 +150,7 @@ export default function TseImport() {
     refetchInterval: (query) => {
       const data = query.state.data as TseImportJob[] | undefined;
       const hasActive = data?.some(job => 
-        ["pending", "downloading", "extracting", "running", "processing"].includes(job.status)
+        ["pending", "queued", "downloading", "extracting", "running", "processing"].includes(job.status)
       );
       return hasActive ? 2000 : 10000;
     },
@@ -166,6 +178,14 @@ export default function TseImport() {
   const { data: validationIssues, isLoading: issuesLoading } = useQuery<ValidationIssue[]>({
     queryKey: ["/api/validation-runs", validationStatus?.runId, "issues"],
     enabled: !!validationStatus?.runId,
+  });
+
+  const { data: queueStatus } = useQuery<QueueStatus>({
+    queryKey: ["/api/imports/tse/queue/status"],
+    refetchInterval: (query) => {
+      const data = query.state.data as QueueStatus | undefined;
+      return data?.isProcessing || (data?.queueLength ?? 0) > 0 ? 2000 : 10000;
+    },
   });
 
   const [verifyingIntegrityJobId, setVerifyingIntegrityJobId] = useState<number | null>(null);
@@ -593,7 +613,7 @@ export default function TseImport() {
   });
 
   const isJobInProgress = (status: string) => {
-    return ["pending", "downloading", "extracting", "processing", "running"].includes(status);
+    return ["pending", "queued", "downloading", "extracting", "processing", "running"].includes(status);
   };
 
   const isJobRestartable = (status: string) => {
@@ -637,10 +657,33 @@ export default function TseImport() {
     uploadMutation.mutate(formData);
   };
 
-  const getStatusBadge = (status: string) => {
+  const getQueueInfo = (jobId: number): { position: number | null; isProcessing: boolean } => {
+    if (!queueStatus) return { position: null, isProcessing: false };
+    const item = queueStatus.queue.find(q => q.jobId === jobId);
+    if (!item) return { position: null, isProcessing: false };
+    return { 
+      position: item.position > 0 ? item.position : null, 
+      isProcessing: item.isProcessing ?? false 
+    };
+  };
+
+  const getStatusBadge = (status: string, jobId?: number) => {
+    const queueInfo = jobId ? getQueueInfo(jobId) : { position: null, isProcessing: false };
+    
     switch (status) {
       case "pending":
+        if (queueInfo.isProcessing) {
+          return <Badge variant="default"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Iniciando...</Badge>;
+        }
+        if (queueInfo.position !== null) {
+          return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Na fila ({queueInfo.position}º)</Badge>;
+        }
         return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>;
+      case "queued":
+        if (queueInfo.position !== null) {
+          return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Na fila ({queueInfo.position}º)</Badge>;
+        }
+        return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Na fila</Badge>;
       case "downloading":
         return <Badge variant="default"><Download className="h-3 w-3 mr-1 animate-pulse" />Baixando</Badge>;
       case "extracting":
@@ -1379,10 +1422,18 @@ export default function TseImport() {
                   Acompanhe o status das importações em andamento e concluídas
                 </CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={() => refetchJobs()} data-testid="button-refresh">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Atualizar
-              </Button>
+              <div className="flex items-center gap-2">
+                {queueStatus && (queueStatus.isProcessing || queueStatus.queueLength > 0) && (
+                  <Badge variant="outline" className="text-blue-600 border-blue-600">
+                    <Layers className="h-3 w-3 mr-1" />
+                    Fila: {queueStatus.queueLength} aguardando
+                  </Badge>
+                )}
+                <Button variant="outline" size="sm" onClick={() => refetchJobs()} data-testid="button-refresh">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Atualizar
+                </Button>
+              </div>
             </CardHeader>
         <CardContent>
           {jobsLoading ? (
@@ -1415,7 +1466,7 @@ export default function TseImport() {
                     <TableCell>{formatFileSize(job.fileSize)}</TableCell>
                     <TableCell>{job.electionYear || "-"}</TableCell>
                     <TableCell>{job.uf || "-"}</TableCell>
-                    <TableCell>{getStatusBadge(job.status)}</TableCell>
+                    <TableCell>{getStatusBadge(job.status, job.id)}</TableCell>
                     <TableCell>
                       {getProgressDisplay(job)}
                     </TableCell>

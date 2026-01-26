@@ -670,7 +670,7 @@ export class DatabaseStorage implements IStorage {
     const historicalResult = await db.select({
       year: tseCandidateVotes.anoEleicao,
       votes: sql<number>`coalesce(sum(qt_votos_nominais), 0)::int`,
-      seats: sql<number>`count(case when ${tseCandidateVotes.dsResultado} = 'ELEITO' then 1 end)::int`,
+      seats: sql<number>`count(case when ${tseCandidateVotes.dsSitTotTurno} = 'ELEITO' then 1 end)::int`,
     })
     .from(tseCandidateVotes)
     .where(eq(tseCandidateVotes.nrPartido, party.number))
@@ -822,7 +822,7 @@ export class DatabaseStorage implements IStorage {
       year: tseCandidateVotes.anoEleicao,
       votes: sql<number>`qt_votos_nominais`,
       position: tseCandidateVotes.dsCargo,
-      result: tseCandidateVotes.dsResultado,
+      result: tseCandidateVotes.dsSitTotTurno,
     })
     .from(tseCandidateVotes)
     .where(eq(tseCandidateVotes.nrCandidato, candidate.number))
@@ -1075,9 +1075,49 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async bulkInsertTseCandidateVotes(votes: InsertTseCandidateVote[]): Promise<void> {
-    if (votes.length === 0) return;
-    await db.insert(tseCandidateVotes).values(votes);
+  async bulkInsertTseCandidateVotes(votes: InsertTseCandidateVote[]): Promise<number> {
+    if (votes.length === 0) return 0;
+    let insertedCount = 0;
+    const errors: Error[] = [];
+    
+    for (const vote of votes) {
+      try {
+        const existing = await db
+          .select({ id: tseCandidateVotes.id })
+          .from(tseCandidateVotes)
+          .where(and(
+            eq(tseCandidateVotes.anoEleicao, vote.anoEleicao || 0),
+            eq(tseCandidateVotes.sgUf, vote.sgUf || ''),
+            eq(tseCandidateVotes.cdMunicipio, vote.cdMunicipio || 0),
+            eq(tseCandidateVotes.nrZona, vote.nrZona || 0),
+            eq(tseCandidateVotes.cdCargo, vote.cdCargo || 0),
+            eq(tseCandidateVotes.nrTurno, vote.nrTurno || 0),
+            eq(tseCandidateVotes.sqCandidato, vote.sqCandidato || '')
+          ))
+          .limit(1);
+        
+        if (existing.length === 0) {
+          await db.insert(tseCandidateVotes).values(vote);
+          insertedCount++;
+        }
+      } catch (err: any) {
+        // Only skip duplicate/constraint errors; collect others for logging
+        const errorMsg = err.message?.toLowerCase() || '';
+        if (errorMsg.includes('duplicate') || errorMsg.includes('unique') || errorMsg.includes('constraint')) {
+          // Skip duplicate constraint violations silently
+          continue;
+        }
+        // Log non-duplicate errors but continue processing
+        errors.push(err);
+      }
+    }
+    
+    // Log errors if any occurred
+    if (errors.length > 0) {
+      console.warn(`[bulkInsertTseCandidateVotes] ${errors.length} non-duplicate errors occurred:`, errors[0].message);
+    }
+    
+    return insertedCount;
   }
 
   async insertTseElectoralStatisticsBatch(records: InsertTseElectoralStatistics[]): Promise<number> {
@@ -1341,10 +1381,13 @@ export class DatabaseStorage implements IStorage {
     const ufsResult = await db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`);
     const cargosResult = await db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`);
 
+    // Filter out "ZZ" (exterior/abroad votes) from UF count - Brazil has 27 UFs
+    const validUfs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
+
     return {
       totalRecords: Number(countResult[0]?.count || 0),
       years: yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a),
-      ufs: ufsResult.map(r => r.uf!).filter(Boolean).sort(),
+      ufs: validUfs,
       cargos: cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! })),
     };
   }
@@ -1586,11 +1629,14 @@ export class DatabaseStorage implements IStorage {
     candidateCount: number;
     partyCount: number;
   }[]> {
-    const conditions: any[] = [];
+    const conditions: any[] = [
+      sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
+      sql`${tseCandidateVotes.sgUf} != 'ZZ'` // Exclude exterior votes
+    ];
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const whereClause = and(...conditions);
 
     const results = await db
       .select({
@@ -1612,37 +1658,48 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getVotesByMunicipality(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+  async getVotesByMunicipality(filters: { year?: number; uf?: string; electionType?: string; position?: string; party?: string; municipality?: string; limit?: number }): Promise<{
     municipality: string;
-    state: string | null;
+    municipalityCode: number;
+    state: string;
     votes: number;
     candidateCount: number;
+    partyCount: number;
   }[]> {
-    const conditions: any[] = [];
+    const conditions: SQL[] = [
+      sql`${tseCandidateVotes.sgUf} != 'ZZ'` // Exclude exterior votes
+    ];
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
     if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+    if (filters.party) conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
+    if (filters.municipality) conditions.push(eq(tseCandidateVotes.nmMunicipio, filters.municipality));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const results = await db
       .select({
         municipality: tseCandidateVotes.nmMunicipio,
+        municipalityCode: tseCandidateVotes.cdMunicipio,
         state: tseCandidateVotes.sgUf,
-        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
-        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})`,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)::int`,
+        candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})::int`,
+        partyCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})::int`,
       })
       .from(tseCandidateVotes)
       .where(whereClause)
-      .groupBy(tseCandidateVotes.nmMunicipio, tseCandidateVotes.sgUf)
-      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .groupBy(tseCandidateVotes.nmMunicipio, tseCandidateVotes.cdMunicipio, tseCandidateVotes.sgUf)
+      .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0) DESC`)
       .limit(filters.limit ?? 50);
 
     return results.map((r) => ({
       municipality: r.municipality || "N/A",
-      state: r.state,
-      votes: Number(r.votes),
-      candidateCount: Number(r.candidateCount),
+      municipalityCode: r.municipalityCode || 0,
+      state: r.state || "N/A",
+      votes: r.votes,
+      candidateCount: r.candidateCount,
+      partyCount: r.partyCount,
     }));
   }
 
@@ -1657,7 +1714,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAvailableStates(year?: number): Promise<string[]> {
-    const conditions: any[] = [sql`${tseCandidateVotes.sgUf} IS NOT NULL`];
+    const conditions: any[] = [
+      sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
+      sql`${tseCandidateVotes.sgUf} != 'ZZ'` // Exclude exterior votes
+    ];
     if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
 
     const results = await db
@@ -2786,42 +2846,6 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getVotesByMunicipality(filters: { year?: number; uf?: string; position?: string; party?: string; municipality?: string }): Promise<{
-    municipality: string;
-    municipalityCode: number;
-    state: string;
-    votes: number;
-    candidateCount: number;
-    partyCount: number;
-  }[]> {
-    const conditions: SQL[] = [];
-    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
-    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
-    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
-    if (filters.party) conditions.push(eq(tseCandidateVotes.sgPartido, filters.party));
-    if (filters.municipality) conditions.push(eq(tseCandidateVotes.nmMunicipio, filters.municipality));
-
-    const result = await db.select({
-      municipality: tseCandidateVotes.nmMunicipio,
-      municipalityCode: tseCandidateVotes.cdMunicipio,
-      state: tseCandidateVotes.sgUf,
-      votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0)::int`,
-      candidateCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sqCandidato})::int`,
-      partyCount: sql<number>`COUNT(DISTINCT ${tseCandidateVotes.sgPartido})::int`,
-    }).from(tseCandidateVotes)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .groupBy(tseCandidateVotes.nmMunicipio, tseCandidateVotes.cdMunicipio, tseCandidateVotes.sgUf)
-      .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0) DESC`);
-
-    return result.map(r => ({
-      municipality: r.municipality || "N/A",
-      municipalityCode: r.municipalityCode || 0,
-      state: r.state || "N/A",
-      votes: r.votes,
-      candidateCount: r.candidateCount,
-      partyCount: r.partyCount,
-    }));
-  }
 
   async getPositions(filters?: { year?: number; uf?: string }): Promise<{ code: number; name: string; votes: number }[]> {
     const conditions: SQL[] = [];
@@ -2831,11 +2855,11 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select({
       code: tseCandidateVotes.cdCargo,
       name: tseCandidateVotes.dsCargo,
-      votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0)::int`,
+      votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)::int`,
     }).from(tseCandidateVotes)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .groupBy(tseCandidateVotes.cdCargo, tseCandidateVotes.dsCargo)
-      .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotos}), 0) DESC`);
+      .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0) DESC`);
 
     return result.map(r => ({
       code: r.code || 0,

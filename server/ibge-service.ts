@@ -918,6 +918,8 @@ export class IBGEService {
       avgIdh: number | null;
       avgRenda: number | null;
       avgTaxaAlfabetizacao: number | null;
+      anoPopulacao: number | null;
+      anoIndicadores: number | null;
     };
   }> {
     let municipiosQuery = db.select({
@@ -958,6 +960,21 @@ export class IBGEService {
 
     const municipios = await municipiosQuery.orderBy(ibgeMunicipios.nome).limit(100);
 
+    // Get the most recent year of population data
+    const [latestPopYear] = await db.select({
+      maxAno: sql<number>`MAX(${ibgePopulacao.ano})`,
+    }).from(ibgePopulacao);
+    
+    const popYearToUse = latestPopYear?.maxAno || new Date().getFullYear();
+
+    // Get the most recent year of indicators data
+    const [latestIndYear] = await db.select({
+      maxAno: sql<number>`MAX(${ibgeIndicadores.ano})`,
+    }).from(ibgeIndicadores);
+    
+    const indYearToUse = latestIndYear?.maxAno || new Date().getFullYear();
+
+    // Aggregate using only the most recent year's data for each table
     const [aggregated] = await db.select({
       totalPopulacao: sql<number>`COALESCE(SUM(${ibgePopulacao.populacao}), 0)::bigint`,
       avgIdh: sql<number>`AVG(${ibgeIndicadores.idhm})`,
@@ -965,8 +982,14 @@ export class IBGEService {
       avgTaxaAlfabetizacao: sql<number>`AVG(${ibgeIndicadores.taxaAlfabetizacao})`,
     })
     .from(ibgeMunicipios)
-    .leftJoin(ibgePopulacao, eq(ibgeMunicipios.codigoIbge, ibgePopulacao.codigoIbge))
-    .leftJoin(ibgeIndicadores, eq(ibgeMunicipios.codigoIbge, ibgeIndicadores.codigoIbge));
+    .leftJoin(ibgePopulacao, and(
+      eq(ibgeMunicipios.codigoIbge, ibgePopulacao.codigoIbge),
+      eq(ibgePopulacao.ano, popYearToUse)
+    ))
+    .leftJoin(ibgeIndicadores, and(
+      eq(ibgeMunicipios.codigoIbge, ibgeIndicadores.codigoIbge),
+      eq(ibgeIndicadores.ano, indYearToUse)
+    ));
 
     return {
       municipios,
@@ -975,6 +998,8 @@ export class IBGEService {
         avgIdh: aggregated.avgIdh ? Number(aggregated.avgIdh) : null,
         avgRenda: aggregated.avgRenda ? Number(aggregated.avgRenda) : null,
         avgTaxaAlfabetizacao: aggregated.avgTaxaAlfabetizacao ? Number(aggregated.avgTaxaAlfabetizacao) : null,
+        anoPopulacao: popYearToUse || null,
+        anoIndicadores: indYearToUse || null,
       },
     };
   }

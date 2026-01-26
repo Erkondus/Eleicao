@@ -147,6 +147,8 @@ export default function IBGEDataPage() {
       avgIdh: number | null;
       avgRenda: number | null;
       avgTaxaAlfabetizacao: number | null;
+      anoPopulacao: number | null;
+      anoIndicadores: number | null;
     };
   }>({
     queryKey: ["/api/ibge/demographic-data", { search: debouncedSearch }],
@@ -446,15 +448,24 @@ export default function IBGEDataPage() {
         
         <div className="flex items-center gap-2">
           <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-[120px]" data-testid="select-year">
+            <SelectTrigger className="w-[160px]" data-testid="select-year">
               <SelectValue placeholder="Ano" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2024">2024</SelectItem>
-              <SelectItem value="2023">2023</SelectItem>
-              <SelectItem value="2022">2022 (Censo)</SelectItem>
-              <SelectItem value="2021">2021</SelectItem>
-              <SelectItem value="2020">2020</SelectItem>
+              {["2024", "2023", "2022", "2021", "2020"].map(year => {
+                const yearData = stats?.populacaoByYear?.find(p => p.ano === parseInt(year));
+                const hasData = !!yearData;
+                return (
+                  <SelectItem key={year} value={year}>
+                    <span className="flex items-center gap-2">
+                      {year}{year === "2022" ? " (Censo)" : ""}
+                      {hasData && (
+                        <CheckCircle2 className="h-3 w-3 text-green-500" />
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           
@@ -564,12 +575,22 @@ export default function IBGEDataPage() {
                 </CardTitle>
                 <CardDescription>
                   Resumo dos dados demográficos disponíveis para análise
+                  {demographicData?.aggregatedData?.anoPopulacao && (
+                    <span className="ml-1">
+                      (Ano base: {demographicData.aggregatedData.anoPopulacao})
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">População Total</span>
+                    <span className="text-sm text-muted-foreground">
+                      População Total
+                      {demographicData?.aggregatedData?.anoPopulacao && (
+                        <span className="text-xs ml-1">({demographicData.aggregatedData.anoPopulacao})</span>
+                      )}
+                    </span>
                     <span className="font-medium">
                       {demographicData?.aggregatedData?.totalPopulacao
                         ? formatNumber(demographicData.aggregatedData.totalPopulacao)
@@ -577,13 +598,23 @@ export default function IBGEDataPage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">IDH Médio</span>
+                    <span className="text-sm text-muted-foreground">
+                      IDH Médio
+                      {demographicData?.aggregatedData?.anoIndicadores && (
+                        <span className="text-xs ml-1">({demographicData.aggregatedData.anoIndicadores})</span>
+                      )}
+                    </span>
                     <span className="font-medium">
                       {demographicData?.aggregatedData?.avgIdh?.toFixed(3) || "—"}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Renda Média Domiciliar</span>
+                    <span className="text-sm text-muted-foreground">
+                      Renda Média Domiciliar
+                      {demographicData?.aggregatedData?.anoIndicadores && (
+                        <span className="text-xs ml-1">({demographicData.aggregatedData.anoIndicadores})</span>
+                      )}
+                    </span>
                     <span className="font-medium">
                       {demographicData?.aggregatedData?.avgRenda
                         ? `R$ ${formatNumber(Math.round(demographicData.aggregatedData.avgRenda))}`
@@ -591,7 +622,12 @@ export default function IBGEDataPage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Taxa de Alfabetização</span>
+                    <span className="text-sm text-muted-foreground">
+                      Taxa de Alfabetização
+                      {demographicData?.aggregatedData?.anoIndicadores && (
+                        <span className="text-xs ml-1">({demographicData.aggregatedData.anoIndicadores})</span>
+                      )}
+                    </span>
                     <span className="font-medium">
                       {demographicData?.aggregatedData?.avgTaxaAlfabetizacao
                         ? `${demographicData.aggregatedData.avgTaxaAlfabetizacao.toFixed(1)}%`
@@ -627,19 +663,27 @@ export default function IBGEDataPage() {
                     )}
                     Municípios
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => importPopulacaoMutation.mutate(parseInt(selectedYear))}
-                    disabled={hasActiveImport || importPopulacaoMutation.isPending}
-                    data-testid="button-import-populacao"
-                  >
-                    {importPopulacaoMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Users className="h-4 w-4 mr-2" />
-                    )}
-                    População ({selectedYear})
-                  </Button>
+                  {(() => {
+                    const yearHasData = stats?.populacaoByYear?.some(p => p.ano === parseInt(selectedYear));
+                    return (
+                      <Button
+                        variant={yearHasData ? "secondary" : "outline"}
+                        onClick={() => importPopulacaoMutation.mutate(parseInt(selectedYear))}
+                        disabled={hasActiveImport || importPopulacaoMutation.isPending}
+                        data-testid="button-import-populacao"
+                        title={yearHasData ? `Ano ${selectedYear} já possui dados importados` : undefined}
+                      >
+                        {importPopulacaoMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : yearHasData ? (
+                          <CheckCircle2 className="h-4 w-4 mr-2 text-green-500" />
+                        ) : (
+                          <Users className="h-4 w-4 mr-2" />
+                        )}
+                        População ({selectedYear})
+                      </Button>
+                    );
+                  })()}
                   <Button
                     variant="outline"
                     onClick={() => importIndicadoresMutation.mutate()}
