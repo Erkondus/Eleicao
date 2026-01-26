@@ -256,7 +256,16 @@ export class IBGEService {
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
-      const municipios = await this.fetchMunicipios();
+      const allMunicipios = await this.fetchMunicipios();
+      
+      // Filter out municipalities with incomplete data (null microrregiao)
+      // Brazil has 5570 official municipalities; IBGE API may return extra entries with incomplete data
+      const municipios = allMunicipios.filter(m => m.microrregiao !== null);
+      const skippedCount = allMunicipios.length - municipios.length;
+      
+      if (skippedCount > 0) {
+        console.log(`[IBGE] Filtered out ${skippedCount} municipalities with incomplete data`);
+      }
       
       await db.update(ibgeImportJobs)
         .set({ 
@@ -265,7 +274,8 @@ export class IBGEService {
             progress: { 
               phase: "import", 
               phaseDescription: `Importando ${municipios.length} municípios...`,
-              totalBatches: Math.ceil(municipios.length / 100)
+              totalBatches: Math.ceil(municipios.length / 100),
+              skippedIncomplete: skippedCount
             } 
           }
         })
@@ -426,9 +436,14 @@ export class IBGEService {
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
-      const populationData = ano && ano <= 2022 
+      // Anos disponíveis na API SIDRA:
+      // - 2022: Censo IBGE (tabela 9514) - único ano com dados censitários
+      // - 2025, 2024, 2021, 2020, 2019, etc: Estimativas populacionais (tabela 6579)
+      // - 2023: NÃO disponível (IBGE não publicou estimativas nesse ano)
+      const targetYear = ano || 2024;
+      const populationData = targetYear === 2022
         ? await this.fetchPopulacaoCenso2022()
-        : await this.fetchPopulacaoEstimada(ano || 2024);
+        : await this.fetchPopulacaoEstimada(targetYear);
       
       await db.update(ibgeImportJobs)
         .set({ 
@@ -446,23 +461,36 @@ export class IBGEService {
       const allMunicipios = await db.select().from(ibgeMunicipios);
       allMunicipios.forEach(m => municipiosMap.set(m.codigoIbge, m.id));
 
+      // Filter population data to only include valid municipalities (those that exist in ibge_municipios)
+      // This ensures we only import population for the 5570 official municipalities
+      const validPopulationData = populationData.filter(record => {
+        const codigoIbge = record.D1C?.padStart(7, '0');
+        return codigoIbge && municipiosMap.has(codigoIbge);
+      });
+      
+      const skippedCount = populationData.length - validPopulationData.length;
+      if (skippedCount > 0) {
+        console.log(`[IBGE Population] Filtered out ${skippedCount} records for invalid/missing municipalities`);
+      }
+
       await db.update(ibgeImportJobs)
         .set({ 
+          totalRecords: validPopulationData.length,
           errorDetails: { 
             progress: { 
               phase: "import", 
-              phaseDescription: `Importando ${populationData.length} registros de população...`,
-              totalBatches: Math.ceil(populationData.length / 100)
+              phaseDescription: `Importando ${validPopulationData.length} registros de população...`,
+              totalBatches: Math.ceil(validPopulationData.length / 100),
+              skippedInvalidMunicipios: skippedCount
             } 
           }
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
-      const targetAno = ano || 2024;
       const batchSize = 100;
       
-      for (let i = 0; i < populationData.length; i += batchSize) {
-        const batch = populationData.slice(i, i + batchSize);
+      for (let i = 0; i < validPopulationData.length; i += batchSize) {
+        const batch = validPopulationData.slice(i, i + batchSize);
         
         for (const record of batch) {
           // Check if job was cancelled
@@ -513,17 +541,17 @@ export class IBGEService {
             const insertData: InsertIbgePopulacao = {
               municipioId: municipioId || null,
               codigoIbge,
-              ano: targetAno,
+              ano: targetYear,
               populacao,
               fonte: "IBGE/SIDRA",
-              tabelaSidra: ano && ano <= 2022 ? "9514" : "6579",
+              tabelaSidra: targetYear === 2022 ? "9514" : "6579",
             };
 
             const existing = await db.select()
               .from(ibgePopulacao)
               .where(and(
                 eq(ibgePopulacao.codigoIbge, codigoIbge),
-                eq(ibgePopulacao.ano, targetAno)
+                eq(ibgePopulacao.ano, targetYear)
               ))
               .limit(1);
 
@@ -555,10 +583,10 @@ export class IBGEService {
         await this.updateProgress(
           jobId, 
           "import",
-          `Importando população... (${imported + errors}/${populationData.length})`,
+          `Importando população... (${imported + errors}/${validPopulationData.length})`,
           imported,
           errors,
-          populationData.length,
+          validPopulationData.length,
           startTime,
           batch[batch.length - 1]?.D1N || "",
           errorList
@@ -585,7 +613,7 @@ export class IBGEService {
               duration: this.formatDuration(duration),
               totalProcessed: imported + errors,
               successRate: ((imported / (imported + errors)) * 100).toFixed(1) + "%",
-              ano: targetAno,
+              ano: targetYear,
             }
           }
         })
@@ -918,6 +946,8 @@ export class IBGEService {
       avgIdh: number | null;
       avgRenda: number | null;
       avgTaxaAlfabetizacao: number | null;
+      anoPopulacao: number | null;
+      anoIndicadores: number | null;
     };
   }> {
     let municipiosQuery = db.select({
@@ -958,6 +988,21 @@ export class IBGEService {
 
     const municipios = await municipiosQuery.orderBy(ibgeMunicipios.nome).limit(100);
 
+    // Get the most recent year of population data
+    const [latestPopYear] = await db.select({
+      maxAno: sql<number>`MAX(${ibgePopulacao.ano})`,
+    }).from(ibgePopulacao);
+    
+    const popYearToUse = latestPopYear?.maxAno || new Date().getFullYear();
+
+    // Get the most recent year of indicators data
+    const [latestIndYear] = await db.select({
+      maxAno: sql<number>`MAX(${ibgeIndicadores.ano})`,
+    }).from(ibgeIndicadores);
+    
+    const indYearToUse = latestIndYear?.maxAno || new Date().getFullYear();
+
+    // Aggregate using only the most recent year's data for each table
     const [aggregated] = await db.select({
       totalPopulacao: sql<number>`COALESCE(SUM(${ibgePopulacao.populacao}), 0)::bigint`,
       avgIdh: sql<number>`AVG(${ibgeIndicadores.idhm})`,
@@ -965,8 +1010,14 @@ export class IBGEService {
       avgTaxaAlfabetizacao: sql<number>`AVG(${ibgeIndicadores.taxaAlfabetizacao})`,
     })
     .from(ibgeMunicipios)
-    .leftJoin(ibgePopulacao, eq(ibgeMunicipios.codigoIbge, ibgePopulacao.codigoIbge))
-    .leftJoin(ibgeIndicadores, eq(ibgeMunicipios.codigoIbge, ibgeIndicadores.codigoIbge));
+    .leftJoin(ibgePopulacao, and(
+      eq(ibgeMunicipios.codigoIbge, ibgePopulacao.codigoIbge),
+      eq(ibgePopulacao.ano, popYearToUse)
+    ))
+    .leftJoin(ibgeIndicadores, and(
+      eq(ibgeMunicipios.codigoIbge, ibgeIndicadores.codigoIbge),
+      eq(ibgeIndicadores.ano, indYearToUse)
+    ));
 
     return {
       municipios,
@@ -975,6 +1026,8 @@ export class IBGEService {
         avgIdh: aggregated.avgIdh ? Number(aggregated.avgIdh) : null,
         avgRenda: aggregated.avgRenda ? Number(aggregated.avgRenda) : null,
         avgTaxaAlfabetizacao: aggregated.avgTaxaAlfabetizacao ? Number(aggregated.avgTaxaAlfabetizacao) : null,
+        anoPopulacao: popYearToUse || null,
+        anoIndicadores: indYearToUse || null,
       },
     };
   }

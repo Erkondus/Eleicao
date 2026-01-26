@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb, bigint, index, vector } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, decimal, boolean, jsonb, bigint, index, vector, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -336,7 +336,17 @@ export const tseCandidateVotes = pgTable("tse_candidate_votes", {
   qtVotosNominaisValidos: integer("qt_votos_nominais_validos"),
   cdSitTotTurno: integer("cd_sit_tot_turno"),
   dsSitTotTurno: text("ds_sit_tot_turno"),
-});
+}, (table) => ({
+  uniqueVote: uniqueIndex("tse_candidate_votes_unique_idx").on(
+    table.anoEleicao,
+    table.nrTurno,
+    table.sgUf,
+    table.cdMunicipio,
+    table.nrZona,
+    table.cdCargo,
+    table.nrCandidato
+  ),
+}));
 
 export const tseImportErrors = pgTable("tse_import_errors", {
   id: serial("id").primaryKey(),
@@ -479,6 +489,14 @@ export const tseElectoralStatistics = pgTable("tse_electoral_statistics", {
 }, (table) => [
   index("tse_electoral_stats_year_uf_cargo_idx").on(table.anoEleicao, table.sgUf, table.cdCargo),
   index("tse_electoral_stats_municipio_idx").on(table.cdMunicipio),
+  uniqueIndex("tse_electoral_stats_unique_idx").on(
+    table.anoEleicao,
+    table.nrTurno,
+    table.sgUf,
+    table.cdMunicipio,
+    table.nrZona,
+    table.cdCargo
+  ),
 ]);
 
 // TSE Party Votes (VOTACAO_PARTIDO_MUNZONA) - party-level votes for proportional calculation
@@ -526,6 +544,15 @@ export const tsePartyVotes = pgTable("tse_party_votes", {
   index("tse_party_votes_year_uf_cargo_idx").on(table.anoEleicao, table.sgUf, table.cdCargo),
   index("tse_party_votes_party_idx").on(table.nrPartido),
   index("tse_party_votes_municipio_idx").on(table.cdMunicipio),
+  uniqueIndex("tse_party_votes_unique_idx").on(
+    table.anoEleicao,
+    table.nrTurno,
+    table.sgUf,
+    table.cdMunicipio,
+    table.nrZona,
+    table.cdCargo,
+    table.nrPartido
+  ),
 ]);
 
 export const tseElectoralStatisticsRelations = relations(tseElectoralStatistics, ({ one }) => ({
