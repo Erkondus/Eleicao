@@ -1,0 +1,87 @@
+docker compose up -d --build
+[+] Building 29.3s (11/21)
+ => [internal] load local bake definitions                                                                      0.0s 
+ => => reading from stdin 504B                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                            0.1s
+ => => transferring dockerfile: 1.09kB                                                                          0.0s 
+ => [internal] load metadata for docker.io/library/node:20-alpine                                               0.0s 
+ => [internal] load .dockerignore                                                                               0.0s
+ => => transferring context: 150B                                                                               0.0s 
+ => [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081  0.0s 
+ => => resolve docker.io/library/node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081d2f60fd7  0.0s 
+ => [internal] load build context                                                                               0.1s 
+ => => transferring context: 1.23MB                                                                             0.1s
+ => CACHED [builder 2/6] WORKDIR /app                                                                           0.0s
+ => CACHED [builder 3/6] COPY package*.json ./                                                                  0.0s 
+ => CACHED [builder 4/6] RUN npm ci                                                                             0.0s 
+ => [builder 5/6] COPY . .                                                                                      1.2s 
+ => ERROR [builder 6/6] RUN npm run build                                                                      27.4s 
+------
+ > [builder 6/6] RUN npm run build:
+1.422
+1.422 > rest-express@1.0.0 build
+1.422 > tsx script/build.ts
+1.422
+5.119 building client...
+5.474 vite v7.3.0 building client environment for production...
+7.379 transforming...
+10.66
+10.66 A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+22.75 ✓ 2657 modules transformed.
+24.41 rendering chunks...
+26.39 computing gzip size...
+26.50 ../dist/public/index.html                              2.01 kB │ gzip:   0.77 kB
+26.50 ../dist/public/assets/index-OgBwjN5p.css             109.89 kB │ gzip:  16.68 kB
+26.50 ../dist/public/assets/purify.es-Bzr520pe.js           22.45 kB │ gzip:   8.63 kB
+26.50 ../dist/public/assets/index.es-CeRHVVwF.js           158.55 kB │ gzip:  52.90 kB
+26.50 ../dist/public/assets/html2canvas.esm-DXEQVQnt.js    201.04 kB │ gzip:  47.43 kB
+26.50 ../dist/public/assets/index-CNNpvrZr.js            1,976.04 kB │ gzip: 530.92 kB
+26.50
+26.50 (!) Some chunks are larger than 500 kB after minification. Consider:
+26.50 - Using dynamic import() to code-split the application
+26.50 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+26.50 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+26.50 ✓ built in 19.17s
+26.50 building server...
+26.55 ✘ [ERROR] Unexpected "<<"
+26.55
+26.55     server/storage.ts:1083:0:
+26.55       1083 │ <<<<<<< HEAD
+26.55            ╵ ~~
+26.55
+27.12 1 error
+27.14 Error: Build failed with 1 error:
+27.14 server/storage.ts:1083:0: ERROR: Unexpected "<<"
+27.14     at failureErrorWithLog (/app/node_modules/esbuild/lib/main.js:1467:15)
+27.14     at /app/node_modules/esbuild/lib/main.js:926:25
+27.14     at /app/node_modules/esbuild/lib/main.js:878:52
+27.14     at buildResponseToResult (/app/node_modules/esbuild/lib/main.js:924:7)
+27.14     at /app/node_modules/esbuild/lib/main.js:951:16
+27.14     at responseCallbacks.<computed> (/app/node_modules/esbuild/lib/main.js:603:9)
+27.14     at handleIncomingPacket (/app/node_modules/esbuild/lib/main.js:658:12)
+27.14     at Socket.readFromStdout (/app/node_modules/esbuild/lib/main.js:581:7)
+27.14     at Socket.emit (node:events:524:28)
+27.14     at addChunk (node:internal/streams/readable:561:12) {
+27.14   errors: [Getter/Setter],
+27.14   warnings: [Getter/Setter]
+27.14 }
+------
+[+] up 0/1
+ ⠙ Image simulavoto-simulavoto Building                                                                         29.4s
+Dockerfile:9
+
+--------------------
+
+   7 |
+
+   8 |     COPY . .
+
+   9 | >>> RUN npm run build
+
+  10 |
+
+  11 |     FROM node:20-alpine AS runner
+
+--------------------
+
+failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1

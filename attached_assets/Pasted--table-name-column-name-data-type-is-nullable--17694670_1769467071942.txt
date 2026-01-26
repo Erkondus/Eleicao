@@ -1,0 +1,47 @@
+| table_name            | column_name        | data_type                   | is_nullable |
+| --------------------- | ------------------ | --------------------------- | ----------- |
+| tse_import_batch_rows | id                 | integer                     | NO          |
+| tse_import_batch_rows | batch_id           | integer                     | NO          |
+| tse_import_batch_rows | row_number         | integer                     | NO          |
+| tse_import_batch_rows | raw_data           | text                        | YES         |
+| tse_import_batch_rows | parsed_data        | jsonb                       | YES         |
+| tse_import_batch_rows | status             | text                        | NO          |
+| tse_import_batch_rows | error_message      | text                        | YES         |
+| tse_import_batch_rows | created_at         | timestamp without time zone | NO          |
+| tse_import_batches    | id                 | integer                     | NO          |
+| tse_import_batches    | import_job_id      | integer                     | NO          |
+| tse_import_batches    | batch_number       | integer                     | NO          |
+| tse_import_batches    | start_row          | integer                     | NO          |
+| tse_import_batches    | end_row            | integer                     | NO          |
+| tse_import_batches    | status             | text                        | NO          |
+| tse_import_batches    | processed_rows     | integer                     | YES         |
+| tse_import_batches    | error_count        | integer                     | YES         |
+| tse_import_batches    | started_at         | timestamp without time zone | YES         |
+| tse_import_batches    | completed_at       | timestamp without time zone | YES         |
+| tse_import_batches    | created_at         | timestamp without time zone | NO          |
+| tse_import_batches    | batch_index        | integer                     | NO          |
+| tse_import_jobs       | id                 | integer                     | NO          |
+| tse_import_jobs       | filename           | text                        | NO          |
+| tse_import_jobs       | file_size          | bigint                      | NO          |
+| tse_import_jobs       | status             | text                        | NO          |
+| tse_import_jobs       | stage              | text                        | YES         |
+| tse_import_jobs       | downloaded_bytes   | bigint                      | YES         |
+| tse_import_jobs       | total_rows         | integer                     | YES         |
+| tse_import_jobs       | processed_rows     | integer                     | YES         |
+| tse_import_jobs       | error_count        | integer                     | YES         |
+| tse_import_jobs       | error_message      | text                        | YES         |
+| tse_import_jobs       | election_year      | integer                     | YES         |
+| tse_import_jobs       | election_type      | text                        | YES         |
+| tse_import_jobs       | uf                 | text                        | YES         |
+| tse_import_jobs       | cargo_filter       | integer                     | YES         |
+| tse_import_jobs       | started_at         | timestamp without time zone | YES         |
+| tse_import_jobs       | completed_at       | timestamp without time zone | YES         |
+| tse_import_jobs       | updated_at         | timestamp without time zone | YES         |
+| tse_import_jobs       | created_at         | timestamp without time zone | NO          |
+| tse_import_jobs       | created_by         | character varying           | YES         |
+| tse_import_jobs       | skipped_rows       | integer                     | YES         |
+| tse_import_jobs       | total_file_rows    | integer                     | YES         |
+| tse_import_jobs       | validation_status  | text                        | YES         |
+| tse_import_jobs       | validation_message | text                        | YES         |
+| tse_import_jobs       | validated_at       | timestamp without time zone | YES         |
+| tse_import_jobs       | source_url         | text                        | YES         |

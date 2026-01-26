@@ -1079,31 +1079,46 @@ export class DatabaseStorage implements IStorage {
     if (votes.length === 0) return 0;
     
     try {
+      // Count records before insert to calculate actual insertions
+      const beforeCount = await db.select({ count: sql<number>`count(*)::int` })
+        .from(tseCandidateVotes)
+        .then(r => r[0]?.count ?? 0);
+      
       // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
-      // The unique index on (anoEleicao, nrTurno, sgUf, cdMunicipio, nrZona, cdCargo, nrCandidato)
-      // allows ON CONFLICT to work properly and skip duplicates
       await db.insert(tseCandidateVotes)
         .values(votes)
         .onConflictDoNothing();
       
-      // Return estimated count (we can't know exact inserts without .returning() which is slow)
-      // The actual count will be lower if there were duplicates
-      return votes.length;
+      // Count after insert to get actual insertions
+      const afterCount = await db.select({ count: sql<number>`count(*)::int` })
+        .from(tseCandidateVotes)
+        .then(r => r[0]?.count ?? 0);
+      
+      return afterCount - beforeCount;
     } catch (err: any) {
       // If bulk insert fails, fall back to smaller batches
       console.warn(`[bulkInsertTseCandidateVotes] Bulk insert failed:`, err.message);
       
-      // Try smaller batch sizes
+      // Try smaller batch sizes with count-based tracking
       const MINI_BATCH = 500;
       let totalInserted = 0;
       
       for (let i = 0; i < votes.length; i += MINI_BATCH) {
         const batch = votes.slice(i, i + MINI_BATCH);
         try {
+          const beforeCount = await db.select({ count: sql<number>`count(*)::int` })
+            .from(tseCandidateVotes)
+            .then(r => r[0]?.count ?? 0);
+          
           await db.insert(tseCandidateVotes)
             .values(batch)
             .onConflictDoNothing();
-          totalInserted += batch.length;
+          
+          const afterCount = await db.select({ count: sql<number>`count(*)::int` })
+            .from(tseCandidateVotes)
+            .then(r => r[0]?.count ?? 0);
+          
+          totalInserted += (afterCount - beforeCount);
         } catch (innerErr: any) {
           console.warn(`[bulkInsertTseCandidateVotes] Mini-batch failed at ${i}:`, innerErr.message);
         }
@@ -1117,26 +1132,45 @@ export class DatabaseStorage implements IStorage {
     if (records.length === 0) return 0;
     
     try {
+      // Count records before insert to calculate actual insertions
+      const beforeCount = await db.select({ count: sql<number>`count(*)::int` })
+        .from(tseElectoralStatistics)
+        .then(r => r[0]?.count ?? 0);
+      
       // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
       await db.insert(tseElectoralStatistics)
         .values(records)
         .onConflictDoNothing();
       
-      return records.length;
+      // Count after insert to get actual insertions
+      const afterCount = await db.select({ count: sql<number>`count(*)::int` })
+        .from(tseElectoralStatistics)
+        .then(r => r[0]?.count ?? 0);
+      
+      return afterCount - beforeCount;
     } catch (err: any) {
       console.warn(`[insertTseElectoralStatisticsBatch] Bulk insert failed:`, err.message);
       
-      // Try smaller batches
+      // Try smaller batches with count-based tracking
       const MINI_BATCH = 500;
       let totalInserted = 0;
       
       for (let i = 0; i < records.length; i += MINI_BATCH) {
         const batch = records.slice(i, i + MINI_BATCH);
         try {
+          const beforeCount = await db.select({ count: sql<number>`count(*)::int` })
+            .from(tseElectoralStatistics)
+            .then(r => r[0]?.count ?? 0);
+          
           await db.insert(tseElectoralStatistics)
             .values(batch)
             .onConflictDoNothing();
-          totalInserted += batch.length;
+          
+          const afterCount = await db.select({ count: sql<number>`count(*)::int` })
+            .from(tseElectoralStatistics)
+            .then(r => r[0]?.count ?? 0);
+          
+          totalInserted += (afterCount - beforeCount);
         } catch (innerErr: any) {
           console.warn(`[insertTseElectoralStatisticsBatch] Mini-batch failed at ${i}:`, innerErr.message);
         }
@@ -1150,12 +1184,22 @@ export class DatabaseStorage implements IStorage {
     if (records.length === 0) return 0;
     
     try {
+      // Count records before insert to calculate actual insertions
+      const beforeCount = await db.select({ count: sql<number>`count(*)::int` })
+        .from(tsePartyVotes)
+        .then(r => r[0]?.count ?? 0);
+      
       // Use true bulk insert with ON CONFLICT DO NOTHING for maximum performance
       await db.insert(tsePartyVotes)
         .values(records)
         .onConflictDoNothing();
       
-      return records.length;
+      // Count after insert to get actual insertions
+      const afterCount = await db.select({ count: sql<number>`count(*)::int` })
+        .from(tsePartyVotes)
+        .then(r => r[0]?.count ?? 0);
+      
+      return afterCount - beforeCount;
     } catch (err: any) {
       console.warn(`[insertTsePartyVotesBatch] Bulk insert failed:`, err.message);
       
@@ -1166,10 +1210,19 @@ export class DatabaseStorage implements IStorage {
       for (let i = 0; i < records.length; i += MINI_BATCH) {
         const batch = records.slice(i, i + MINI_BATCH);
         try {
+          const beforeCount = await db.select({ count: sql<number>`count(*)::int` })
+            .from(tsePartyVotes)
+            .then(r => r[0]?.count ?? 0);
+          
           await db.insert(tsePartyVotes)
             .values(batch)
             .onConflictDoNothing();
-          totalInserted += batch.length;
+          
+          const afterCount = await db.select({ count: sql<number>`count(*)::int` })
+            .from(tsePartyVotes)
+            .then(r => r[0]?.count ?? 0);
+          
+          totalInserted += (afterCount - beforeCount);
         } catch (innerErr: any) {
           console.warn(`[insertTsePartyVotesBatch] Mini-batch failed at ${i}:`, innerErr.message);
         }
