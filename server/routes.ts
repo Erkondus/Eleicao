@@ -4745,18 +4745,73 @@ Analise o impacto dessa mudança hipotética e forneça:
       let errorCount = 0;
       const BATCH_SIZE = 5000; // Increased for better bulk insert performance
 
-      // Field mapping for VOTACAO_PARTIDO_MUNZONA
-      const fieldMap: { [key: number]: string } = {
-        0: "dtGeracao", 1: "hhGeracao", 2: "anoEleicao", 3: "cdTipoEleicao", 4: "nmTipoEleicao",
-        5: "nrTurno", 6: "cdEleicao", 7: "dsEleicao", 8: "dtEleicao", 9: "tpAbrangencia",
-        10: "sgUf", 11: "sgUe", 12: "nmUe", 13: "cdMunicipio", 14: "nmMunicipio",
-        15: "nrZona", 16: "cdCargo", 17: "dsCargo", 18: "tpAgremiacao", 19: "nrPartido",
-        20: "sgPartido", 21: "nmPartido", 22: "nrFederacao", 23: "nmFederacao", 24: "sgFederacao",
-        25: "dsComposicaoFederacao", 26: "sqColigacao", 27: "nmColigacao", 28: "dsComposicaoColigacao",
-        29: "stVotoEmTransito", 30: "qtVotosLegendaValidos", 31: "qtVotosNomConvrLegValidos",
-        32: "qtTotalVotosLegValidos", 33: "qtVotosNominaisValidos", 34: "qtVotosLegendaAnulSubjud",
-        35: "qtVotosNominaisAnulSubjud", 36: "qtVotosLegendaAnulados", 37: "qtVotosNominaisAnulados"
+      // Read first row to detect CSV structure (column count varies by year)
+      const firstRowPromise = new Promise<string[]>((resolve, reject) => {
+        const parser = createReadStream(csvPath, { encoding: "latin1" })
+          .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2, to_line: 2 }));
+        parser.on("data", (row: string[]) => resolve(row));
+        parser.on("error", reject);
+        parser.on("end", () => resolve([]));
+      });
+      const firstRow = await firstRowPromise;
+      const columnCount = firstRow.length;
+      console.log(`[PARTIDO] Detected ${columnCount} columns in CSV file`);
+
+      // Field mappings vary by TSE file format version
+      // 2014-2018: ~23 columns (no federation, simpler coligacao)
+      // 2022+: 38 columns (with federation, detailed coligacao)
+      let fieldMap: { [key: number]: string };
+      let numericFields: number[];
+
+      if (columnCount <= 25) {
+        // Legacy format (2014-2018): 23 columns
+        // DT_GERACAO;HH_GERACAO;ANO_ELEICAO;CD_TIPO_ELEICAO;NM_TIPO_ELEICAO;NR_TURNO;CD_ELEICAO;DS_ELEICAO;DT_ELEICAO;TP_ABRANGENCIA;
+        // SG_UF;SG_UE;NM_UE;CD_MUNICIPIO;NM_MUNICIPIO;NR_ZONA;CD_CARGO;DS_CARGO;
+        // NR_PARTIDO;SG_PARTIDO;NM_PARTIDO;QT_VOTOS_NOMINAIS;QT_VOTOS_LEGENDA
+        fieldMap = {
+          0: "dtGeracao", 1: "hhGeracao", 2: "anoEleicao", 3: "cdTipoEleicao", 4: "nmTipoEleicao",
+          5: "nrTurno", 6: "cdEleicao", 7: "dsEleicao", 8: "dtEleicao", 9: "tpAbrangencia",
+          10: "sgUf", 11: "sgUe", 12: "nmUe", 13: "cdMunicipio", 14: "nmMunicipio",
+          15: "nrZona", 16: "cdCargo", 17: "dsCargo",
+          18: "nrPartido", 19: "sgPartido", 20: "nmPartido",
+          21: "qtVotosNominaisValidos", 22: "qtVotosLegendaValidos"
+        };
+        numericFields = [2, 3, 5, 6, 13, 15, 16, 18, 21, 22];
+        console.log(`[PARTIDO] Using legacy format (2014-2018) field mapping`);
+      } else {
+        // Modern format (2022+): 38 columns with federation and detailed coligacao
+        fieldMap = {
+          0: "dtGeracao", 1: "hhGeracao", 2: "anoEleicao", 3: "cdTipoEleicao", 4: "nmTipoEleicao",
+          5: "nrTurno", 6: "cdEleicao", 7: "dsEleicao", 8: "dtEleicao", 9: "tpAbrangencia",
+          10: "sgUf", 11: "sgUe", 12: "nmUe", 13: "cdMunicipio", 14: "nmMunicipio",
+          15: "nrZona", 16: "cdCargo", 17: "dsCargo", 18: "tpAgremiacao", 19: "nrPartido",
+          20: "sgPartido", 21: "nmPartido", 22: "nrFederacao", 23: "nmFederacao", 24: "sgFederacao",
+          25: "dsComposicaoFederacao", 26: "sqColigacao", 27: "nmColigacao", 28: "dsComposicaoColigacao",
+          29: "stVotoEmTransito", 30: "qtVotosLegendaValidos", 31: "qtVotosNomConvrLegValidos",
+          32: "qtTotalVotosLegValidos", 33: "qtVotosNominaisValidos", 34: "qtVotosLegendaAnulSubjud",
+          35: "qtVotosNominaisAnulSubjud", 36: "qtVotosLegendaAnulados", 37: "qtVotosNominaisAnulados"
+        };
+        numericFields = [2, 3, 5, 6, 13, 15, 16, 19, 22, 30, 31, 32, 33, 34, 35, 36, 37];
+        console.log(`[PARTIDO] Using modern format (2022+) field mapping`);
+      }
+
+      // Get column indices for key fields based on format
+      const getFieldIndex = (fieldName: string): number => {
+        for (const [idx, name] of Object.entries(fieldMap)) {
+          if (name === fieldName) return parseInt(idx);
+        }
+        return -1;
       };
+      
+      const idxAnoEleicao = getFieldIndex("anoEleicao");
+      const idxCdEleicao = getFieldIndex("cdEleicao");
+      const idxNrTurno = getFieldIndex("nrTurno");
+      const idxSgUf = getFieldIndex("sgUf");
+      const idxCdMunicipio = getFieldIndex("cdMunicipio");
+      const idxNrZona = getFieldIndex("nrZona");
+      const idxCdCargo = getFieldIndex("cdCargo");
+      const idxNrPartido = getFieldIndex("nrPartido");
+      const idxStVotoEmTransito = getFieldIndex("stVotoEmTransito");
 
       const parseValue = (value: string | undefined, isNumeric: boolean = false): any => {
         if (!value || value === "#NULO" || value === "#NE") return isNumeric ? 0 : null;
@@ -4766,8 +4821,6 @@ Analise o impacto dessa mudança hipotética e forneça:
         }
         return value.replace(/"/g, "").trim();
       };
-
-      const numericFields = [2, 3, 5, 6, 13, 15, 16, 19, 22, 30, 31, 32, 33, 34, 35, 36, 37];
 
       // Collect all rows first (synchronously), then process in batches
       const allRows: string[][] = [];
@@ -4798,7 +4851,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       const filteredRows: { index: number; row: string[] }[] = [];
       for (let i = 0; i < allRows.length; i++) {
         const row = allRows[i];
-        const cdCargo = parseValue(row[16], true);
+        const cdCargo = parseValue(row[idxCdCargo], true);
         if (cargoFilter && cdCargo !== cargoFilter) {
           cargoFilteredCount++;
           continue;
@@ -4817,15 +4870,15 @@ Analise o impacto dessa mudança hipotética e forneça:
       for (const item of filteredRows) {
         const row = item.row;
         const key = [
-          parseValue(row[2], true),   // anoEleicao
-          parseValue(row[6], true),   // cdEleicao
-          parseValue(row[5], true),   // nrTurno
-          parseValue(row[10], false), // sgUf
-          parseValue(row[13], true),  // cdMunicipio
-          parseValue(row[15], true),  // nrZona
-          parseValue(row[16], true),  // cdCargo
-          parseValue(row[19], true),  // nrPartido
-          parseValue(row[29], false), // stVotoEmTransito
+          parseValue(row[idxAnoEleicao], true),   // anoEleicao
+          parseValue(row[idxCdEleicao], true),    // cdEleicao
+          parseValue(row[idxNrTurno], true),      // nrTurno
+          parseValue(row[idxSgUf], false),        // sgUf
+          parseValue(row[idxCdMunicipio], true),  // cdMunicipio
+          parseValue(row[idxNrZona], true),       // nrZona
+          parseValue(row[idxCdCargo], true),      // cdCargo
+          parseValue(row[idxNrPartido], true),    // nrPartido
+          idxStVotoEmTransito >= 0 ? parseValue(row[idxStVotoEmTransito], false) : "N", // stVotoEmTransito (may not exist in legacy format)
         ].join('|');
         
         if (seenKeys.has(key)) {

@@ -1,0 +1,530 @@
+docker compose logs -f
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: supabase-db
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved supabase-db to: 172.18.0.14
+simulavoto  | Resolved host: 172.18.0.14
+simulavoto  | Creating database pool...
+simulavoto  | SSL disabled for local/internal database
+simulavoto  | Pool config SSL: disabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test successful!
+simulavoto  | Registering routes...
+simulavoto  | Routes registered successfully!
+simulavoto  | WebSocket server initialized on /ws/imports
+simulavoto  | WebSocket server initialized
+simulavoto  | 2:36:26 PM [express] serving on port 5000
+simulavoto  | Report scheduler started (checking every 5 minutes)
+simulavoto  | 2:36:43 PM [express] GET /api/auth/me 401 in 4ms :: {"error":"Unauthorized"}
+simulavoto  | 2:36:44 PM [express] POST /api/auth/login 200 in 79ms :: {"id":"7ea108a0-4f20-4599-a083-8b2532963d15","username":"admin","name":"Administrador","email":"admin@simulavoto.gov.br","role":"admin","active":true,"createdAt":"2026-01-21T19:08:08.714Z"}
+simulavoto  | 2:36:45 PM [express] GET /api/notifications 304 in 14ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | 2:36:45 PM [express] GET /api/stats 304 in 15ms :: {"parties":0,"candidates":0,"scenarios":0,"simulations":0}
+simulavoto  | 2:36:45 PM [express] GET /api/imports/tse 304 in 36ms :: []
+simulavoto  | 2:36:45 PM [express] GET /api/parties 304 in 45ms :: []
+simulavoto  | 2:36:45 PM [express] GET /api/sentiment/summary 304 in 22ms :: {"entities":[]}
+simulavoto  | 2:36:45 PM [express] GET /api/scenarios 304 in 44ms :: []
+simulavoto  | 2:36:45 PM [express] GET /api/simulations/recent 304 in 52ms :: []
+simulavoto  | 2:36:45 PM [express] GET /api/sentiment/alerts/count 304 in 44ms :: {"unacknowledged":0}
+simulavoto  | 2:36:45 PM [express] GET /api/activity-trend 304 in 40ms :: [{"day":"Qua","simulacoes":0,"cenarios":0},{"day":"Qui","simulacoes":0,"cenarios":0},{"day":"Sex","simulacoes":0,"cenarios":0},{"day":"Sáb","simulacoes":0,"cenarios":0},{"day":"Dom","simulacoes":0,"cenarios":0},{"day":"Seg","simulacoes":0,"cenarios":0},{"day":"Ter","simulacoes":0,"cenarios":0}]
+simulavoto  | WebSocket client connected (user: 7ea108a0-4f20-4599-a083-8b2532963d15). Total clients: 1
+simulavoto  | 2:36:48 PM [express] GET /api/imports/tse/queue/status 200 in 8ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | WebSocket client connected (user: 7ea108a0-4f20-4599-a083-8b2532963d15). Total clients: 2
+simulavoto  | 2:36:50 PM [express] GET /api/analytics/votes-by-party 304 in 4920ms :: []
+simulavoto  | 2:36:58 PM [express] GET /api/imports/tse 304 in 9ms :: []
+simulavoto  | 2:36:58 PM [express] GET /api/imports/tse/queue/status 304 in 2ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | WebSocket client disconnected. Total clients: 1
+simulavoto  | WebSocket client disconnected. Total clients: 0
+simulavoto  | 2:37:08 PM [express] GET /api/tse/stats 200 in 20154ms :: {"totalRecords":0,"years":[],"ufs":[],"cargos":[]}
+simulavoto  | 5:00:25 PM [express] GET /api/auth/me 200 in 8ms :: {"id":"7ea108a0-4f20-4599-a083-8b2532963d15","username":"admin","name":"Administrador","email":"admin@simulavoto.gov.br","role":"admin","active":true,"createdAt":"2026-01-21T19:08:08.714Z"}
+simulavoto  | 5:00:25 PM [express] GET /api/notifications 304 in 20ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | 5:00:25 PM [express] GET /api/tse/stats 200 in 19ms :: {"totalRecords":0,"years":[],"ufs":[],"cargos":[]}
+simulavoto  | 5:00:25 PM [express] GET /api/imports/tse/queue/status 304 in 20ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 5:00:25 PM [express] GET /api/imports/tse 304 in 25ms :: []
+simulavoto  | WebSocket client connected (user: 7ea108a0-4f20-4599-a083-8b2532963d15). Total clients: 1
+simulavoto  | WebSocket client connected (user: 7ea108a0-4f20-4599-a083-8b2532963d15). Total clients: 2
+simulavoto  | 5:00:35 PM [express] GET /api/imports/tse/queue/status 304 in 26ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 5:00:35 PM [express] GET /api/imports/tse 304 in 37ms :: []
+simulavoto  | 5:02:37 PM [express] GET /api/imports/tse 304 in 28ms :: []
+simulavoto  | 5:02:46 PM [express] GET /api/imports/tse/queue/status 304 in 2ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 5:02:47 PM [express] GET /api/imports/tse 304 in 6ms :: []
+simulavoto  | 5:02:56 PM [express] GET /api/imports/tse/queue/status 304 in 2ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 5:02:57 PM [express] GET /api/imports/tse 304 in 4ms :: []
+simulavoto  | 5:03:06 PM [express] GET /api/imports/tse/queue/status 304 in 3ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 5:03:07 PM [express] POST /api/imports/tse/preview-files 200 in 3708ms :: {"hasBrasilFile":true,"brasilFile":"votacao_partido_munzona_2014_BRASIL.csv","files":[{"path":"votacao_partido_munzona_2014_BRASIL.csv","name":"votacao_partido_munzona_2014_BRASIL.csv","size":163233513,"isBrasil":true},{"path":"votacao_partido_munzona_2014_AC.csv","name":"votacao_partido_munzona_2014_AC.csv","size":493476,"isBrasil":false},{"path":"votacao_partido_munzona_2014_AL.csv","name":"votacao_partido_munzona_2014_AL.csv","size":2415492,"isBrasil":false},{"path":"votacao_partido_munzona_2014_AM.csv","name":"votacao_partido_munzona_2014_AM.csv","size":1976436,"isBrasil":false},{"path":"votacao_partido_munzona_2014_AP.csv","name":"votacao_partido_munzona_2014_AP.csv","size":369586,"isBrasil":false},{"path":"votacao_partido_munzona_2014_BA.csv","name":"votacao_partido_munzona_2014_BA.csv","size":9237164,"isBrasil":false},{"path":"votacao_partido_munzona_2014_BR.csv","name":"votacao_partido_munzona_2014_BR.csv","size":22713221,"isBrasil":false},{"path":"votacao_partido_munzona_2014_CE.csv","name":"votacao_partido_munzona_2014_CE.csv","size":4472861,"isBrasil":false},{"path":"votacao_partido_munzona_2014_DF.csv","name":"votacao_partido_munzona_2014_DF.csv","size":497204,"isBrasil":false},{"path":"votacao_partido_munzona_2014_ES.csv","name":"votacao_partido_munzona_2014_ES.csv","size":1887221,"isBrasil":false},{"path":"votacao_partido_munzona_2014_GO.csv","name":"votacao_partido_munzona_2014_GO.csv","size":5477156,"isBrasil":false},{"path":"votacao_partido_munzona_2014_MA.csv","name":"votacao_partido_munzona_2014_MA.csv","size":5218078,"isBrasil":false},{"path":"votacao_partido_munzona_2014_MG.csv","name":"votacao_partido_munzona_2014_MG.csv","size":20043218,"isBrasil":false},{"path":"votacao_partido_munzona_2014_MS.csv","name":"votacao_partido_munzona_2014_MS.csv","size":2032301,"isBrasil":false},{"path":"votacao_partido_munzona_2014_MT.csv","name":"votacao_partido_munzona_2014_MT.csv","size":2756554,"isBrasil":false},{"path":"votacao_partido_munzona_2014_PA.csv","name":"votacao_partido_munzona_2014_PA.csv","size":3461419,"isBrasil":false},{"path":"votacao_partido_munzona_2014_PB.csv","name":"votacao_partido_munzona_2014_PB.csv","size":5463839,"isBrasil":false},{"path":"votacao_partido_munzona_2014_PE.csv","name":"votacao_partido_munzona_2014_PE.csv","size":5023068,"isBrasil":false},{"path":"votacao_partido_munzona_2014_PI.csv","name":"votacao_partido_munzona_2014_PI.csv","size":5320074,"isBrasil":false},{"path":"votacao_partido_munzona_2014_PR.csv","name":"votacao_partido_munzona_2014_PR.csv","size":9885553,"isBrasil":false},{"path":"votacao_partido_munzona_2014_RJ.csv","name":"votacao_partido_munzona_2014_RJ.csv","size":6033905,"isBrasil":false},{"path":"votacao_partido_munzona_2014_RN.csv","name":"votacao_partido_munzona_2014_RN.csv","size":3822216,"isBrasil":false},{"path":"votacao_partido_munzona_2014_RO.csv","name":"votacao_partido_munzona_2014_RO.csv","size":1368421,"isBrasil":false},{"path":"votacao_partido_munzona_2014_RR.csv","name":"votacao_partido_munzona_2014_RR.csv","size":340729,"isBrasil":false},{"path":"votacao_partido_munzona_2014_RS.csv","name":"votacao_partido_munzona_2014_RS.csv","size":11981695,"isBrasil":false},{"path":"votacao_partido_munzona_2014_SC.csv","name":"votacao_partido_munzona_2014_SC.csv","size":7746489,"isBrasil":false},{"path":"votacao_partido_munzona_2014_SE.csv","name":"votacao_partido_munzona_2014_SE.csv","size":1717106,"isBrasil":false},{"path":"votacao_partido_munzona_2014_SP.csv","name":"votacao_partido_munzona_2014_SP.csv","size":17982927,"isBrasil":false},{"path":"votacao_partido_munzona_2014_TO.csv","name":"votacao_partido_munzona_2014_TO.csv","size":3506958,"isBrasil":false}]}
+simulavoto  | [TSE Queue] Job 57 added to queue at position 1. Queue length: 1
+simulavoto  | 5:03:07 PM [express] POST /api/imports/tse/partido/url 200 in 33ms :: {"jobId":57,"message":"Party votes import started"}
+simulavoto  | [TSE Queue] Starting job 57. Remaining in queue: 0
+simulavoto  | 5:03:07 PM [express] GET /api/imports/tse 200 in 5ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"downloading","stage":"downloading","downloadedBytes":0,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:07.854Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:08 PM [express] GET /api/imports/tse 304 in 3ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"downloading","stage":"downloading","downloadedBytes":0,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:07.854Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:10 PM [express] GET /api/imports/tse 304 in 3ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"downloading","stage":"downloading","downloadedBytes":0,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:07.854Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [PARTIDO] Found 29 CSV files, using: votacao_partido_munzona_2014_BRASIL.csv (arquivo BRASIL consolidado)
+simulavoto  | 5:03:12 PM [express] GET /api/imports/tse 200 in 4ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"extracting","stage":"extracting","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:11.408Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:14 PM [express] GET /api/imports/tse 200 in 14ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:13.188Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:16 PM [express] GET /api/imports/tse 304 in 9ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:13.188Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:16 PM [express] GET /api/imports/tse/queue/status 200 in 15ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:18 PM [express] GET /api/imports/tse 304 in 13ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:13.188Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:18 PM [express] GET /api/imports/tse/queue/status 304 in 8ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:20 PM [express] GET /api/imports/tse 304 in 20ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:13.188Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:21 PM [express] GET /api/imports/tse/queue/status 304 in 24ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:22 PM [express] GET /api/imports/tse 304 in 30ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:13.188Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:23 PM [express] GET /api/imports/tse/queue/status 304 in 8ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:25 PM [express] GET /api/imports/tse 304 in 13ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:13.188Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:25 PM [express] GET /api/imports/tse/queue/status 304 in 5ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:25 PM [express] GET /api/notifications 304 in 13ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | 5:03:27 PM [express] GET /api/imports/tse 304 in 21ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":null,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:13.188Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:27 PM [express] GET /api/imports/tse/queue/status 304 in 8ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [PARTIDO] Parsed 547738 rows, processing in batches...
+simulavoto  | [PARTIDO] After cargo filter: 547738 rows to process (0 filtered)
+simulavoto  | [PARTIDO] Found 1090 duplicate rows in CSV file (exact same unique key), keeping 546648 unique rows
+simulavoto  | 5:03:31 PM [express] GET /api/imports/tse 200 in 485ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:28.624Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:31 PM [express] GET /api/imports/tse/queue/status 304 in 491ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "280000000082" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "10000000036" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "10000000027" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "10000000026" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "20000000003" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "20000000003" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "20000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "20000000015" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "20000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "20000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "20000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "20000000002" is out of range for type integer
+simulavoto  | 5:03:33 PM [express] GET /api/imports/tse/queue/status 304 in 24ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:33 PM [express] GET /api/imports/tse 200 in 33ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":5000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:32.481Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "20000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "20000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "20000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "40000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "40000000050" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "40000000043" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "40000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "40000000052" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "40000000788" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "40000000022" is out of range for type integer
+simulavoto  | 5:03:35 PM [express] GET /api/imports/tse 200 in 15ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":10000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:34.121Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:35 PM [express] GET /api/imports/tse/queue/status 304 in 17ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "40000000054" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "40000000048" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "280000000063" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "40000000022" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "40000000056" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "40000000059" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "30000000019" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "30000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "280000000083" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "50000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "50000000008" is out of range for type integer
+simulavoto  | 5:03:37 PM [express] GET /api/imports/tse/queue/status 304 in 37ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:37 PM [express] GET /api/imports/tse 200 in 50ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":20000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:37.304Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "280000000064" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "50000000012" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "50000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "50000000006" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "50000000012" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "50000000003" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "50000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "50000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "280000000003" is out of range for type integer
+simulavoto  | 5:03:40 PM [express] GET /api/imports/tse 200 in 29ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":25000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:39.196Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:40 PM [express] GET /api/imports/tse/queue/status 304 in 32ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "50000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "50000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "50000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "50000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "50000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "50000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "280000000061" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "280000000064" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "50000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "50000000013" is out of range for type integer
+simulavoto  | 5:03:42 PM [express] GET /api/imports/tse 200 in 26ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":30000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:41.347Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:42 PM [express] GET /api/imports/tse/queue/status 304 in 28ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "50000000012" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "50000000006" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "50000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "50000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "50000000012" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "280000000061" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "50000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "50000000012" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "50000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "50000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "50000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "50000000013" is out of range for type integer
+simulavoto  | 5:03:44 PM [express] GET /api/imports/tse 200 in 41ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":35000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:42.601Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:44 PM [express] GET /api/imports/tse/queue/status 304 in 38ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "50000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "50000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "50000000003" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "280000000041" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "50000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "50000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "280000000063" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "50000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "50000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "50000000005" is out of range for type integer
+simulavoto  | 5:03:46 PM [express] GET /api/imports/tse/queue/status 304 in 141ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:46 PM [express] GET /api/imports/tse 200 in 147ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":45000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:46.300Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "50000000006" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "50000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "50000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "50000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "280000000064" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "50000000012" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "50000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "50000000007" is out of range for type integer
+simulavoto  | [PARTIDO] Batch 10/110: 0 inserted, 50000 duplicates
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "50000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "50000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "280000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "50000000007" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "50000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "50000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "50000000008" is out of range for type integer
+simulavoto  | 5:03:48 PM [express] GET /api/imports/tse/queue/status 304 in 35ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:48 PM [express] GET /api/imports/tse 200 in 36ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":50000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:47.710Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "60000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "60000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "60000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "60000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "60000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "60000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "60000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "280000000064" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "60000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "60000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "60000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "60000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "60000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "60000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "280000000042" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "60000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "60000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "60000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "60000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "60000000017" is out of range for type integer
+simulavoto  | 5:03:51 PM [express] GET /api/imports/tse/queue/status 304 in 19ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:51 PM [express] GET /api/imports/tse 200 in 22ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":60000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:49.955Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "60000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "60000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "60000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "60000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "60000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "60000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "60000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "60000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "60000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "60000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "280000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "60000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "70000000036" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "70000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "70000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "70000000029" is out of range for type integer
+simulavoto  | 5:03:53 PM [express] GET /api/imports/tse/queue/status 304 in 92ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:53 PM [express] GET /api/imports/tse 200 in 93ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":70000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:52.647Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "80000000006" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "80000000012" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "80000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "80000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "80000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "80000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "80000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "80000000006" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "80000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "80000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "280000000082" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "80000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "80000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "80000000010" is out of range for type integer
+simulavoto  | 5:03:55 PM [express] GET /api/imports/tse/queue/status 304 in 22ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | 5:03:55 PM [express] GET /api/imports/tse 200 in 25ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":75000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:54.038Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:55 PM [express] GET /api/notifications 304 in 19ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "90000000034" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "90000000024" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "90000000033" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "90000000027" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "90000000025" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "90000000025" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "90000000028" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "90000000034" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "280000000083" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "90000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "90000000022" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "280000000062" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "90000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "90000000025" is out of range for type integer
+simulavoto  | 5:03:57 PM [express] GET /api/imports/tse 200 in 40ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":85000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:57.143Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:03:57 PM [express] GET /api/imports/tse/queue/status 304 in 43ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "90000000027" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "90000000029" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "90000000024" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "90000000025" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "90000000033" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "90000000025" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "280000000083" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "90000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "90000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "280000000082" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "90000000026" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "90000000029" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "90000000028" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "90000000029" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "90000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "90000000018" is out of range for type integer
+simulavoto  | 5:04:00 PM [express] GET /api/imports/tse 200 in 121ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":90000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:03:58.756Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "90000000032" is out of range for type integer
+simulavoto  | 5:04:00 PM [express] GET /api/imports/tse/queue/status 304 in 349ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "90000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "90000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "90000000032" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "90000000029" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "90000000032" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "280000000063" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "90000000025" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "90000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "90000000021" is out of range for type integer
+simulavoto  | 5:04:02 PM [express] GET /api/imports/tse 200 in 210ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":95000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:00.243Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "90000000025" is out of range for type integer
+simulavoto  | [PARTIDO] Batch 20/110: 0 inserted, 100000 duplicates
+simulavoto  | 5:04:02 PM [express] GET /api/imports/tse/queue/status 304 in 61ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "90000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "100000000035" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "100000000030" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "100000000034" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "100000000035" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "100000000030" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "100000000036" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "280000000062" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "280000000082" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "100000000042" is out of range for type integer
+simulavoto  | 5:04:04 PM [express] GET /api/imports/tse 200 in 160ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":105000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:04.732Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:04:05 PM [express] GET /api/imports/tse/queue/status 304 in 4ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "100000000035" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "100000000041" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "100000000041" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "100000000030" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "100000000033" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "100000000026" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "280000000083" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "100000000034" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "100000000034" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "100000000024" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "100000000034" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "100000000035" is out of range for type integer
+simulavoto  | 5:04:07 PM [express] GET /api/imports/tse 200 in 45ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":110000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:06.565Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "100000000030" is out of range for type integer
+simulavoto  | 5:04:07 PM [express] GET /api/imports/tse/queue/status 304 in 124ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "100000000043" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "280000000041" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "280000000082" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "100000000037" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "100000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "100000000033" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "100000000026" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "100000000031" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "100000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "100000000026" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "280000000062" is out of range for type integer
+simulavoto  | 5:04:09 PM [express] GET /api/imports/tse 200 in 19ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":115000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:08.221Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "100000000034" is out of range for type integer
+simulavoto  | 5:04:09 PM [express] GET /api/imports/tse/queue/status 304 in 37ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "100000000035" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "100000000024" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "100000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "100000000035" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "280000000081" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "280000000081" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000019" is out of range for type integer
+simulavoto  | 5:04:11 PM [express] GET /api/imports/tse 200 in 36ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":120000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:10.061Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000013" is out of range for type integer
+simulavoto  | 5:04:11 PM [express] GET /api/imports/tse/queue/status 304 in 31ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000023" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "280000000064" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000022" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000021" is out of range for type integer
+simulavoto  | 5:04:13 PM [express] GET /api/imports/tse 200 in 29ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":130000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:13.286Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "280000000041" is out of range for type integer
+simulavoto  | 5:04:13 PM [express] GET /api/imports/tse/queue/status 304 in 11ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "280000000061" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000003" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000011" is out of range for type integer
+simulavoto  | 5:04:15 PM [express] GET /api/imports/tse 200 in 31ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":135000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:14.851Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000018" is out of range for type integer
+simulavoto  | 5:04:16 PM [express] GET /api/imports/tse/queue/status 304 in 91ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000011" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000019" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "280000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000023" is out of range for type integer
+simulavoto  | 5:04:18 PM [express] GET /api/imports/tse 200 in 206ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"processing","stage":"processing","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":145000,"errorCount":0,"errorMessage":null,"electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":null,"updatedAt":"2026-01-27T17:04:17.859Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | 5:04:18 PM [express] GET /api/imports/tse/queue/status 304 in 46ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "280000000081" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000022" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "280000000083" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000007" is out of range for type integer
+simulavoto  | 5:04:19 PM [express] POST /api/imports/tse/57/cancel 200 in 155ms :: {"success":true,"message":"Importação cancelada com sucesso"}
+simulavoto  | [PARTIDO] Batch 30/110: 0 inserted, 150000 duplicates
+simulavoto  | 5:04:19 PM [express] GET /api/imports/tse 200 in 4ms :: [{"id":57,"filename":"[PARTIDO] votacao_partido_munzona_2014.zip","fileSize":12141261,"status":"cancelled","stage":"cancelled","downloadedBytes":12141261,"totalRows":0,"processedRows":0,"skippedRows":150000,"errorCount":0,"errorMessage":"Importação cancelada pelo usuário","electionYear":2014,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2014.zip","totalFileRows":547738,"validationStatus":"pending","validationMessage":null,"validatedAt":null,"startedAt":"2026-01-27T17:03:07.854Z","completedAt":"2026-01-27T17:04:19.162Z","updatedAt":"2026-01-27T17:04:19.287Z","createdAt":"2026-01-27T17:03:07.818Z","createdBy":"7ea108a0-4f20-4599-a083-8b2532963d15"}]
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "280000000003" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000003" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000020" is out of range for type integer
+simulavoto  | 5:04:20 PM [express] GET /api/imports/tse/queue/status 304 in 18ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000015" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000002" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000023" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000019" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000021" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000019" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000004" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "280000000061" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000001" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000009" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000019" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "280000000062" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000018" is out of range for type integer
+simulavoto  | 5:04:22 PM [express] GET /api/imports/tse/queue/status 304 in 23ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000016" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000019" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000018" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000020" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000014" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000019" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "280000000082" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000005" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000022" is out of range for type integer
+simulavoto  | [DELETE] Deleted party votes for job 57
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 0: value "130000000015" is out of range for type integer
+simulavoto  | 5:04:24 PM [express] DELETE /api/imports/tse/57 200 in 193ms :: {"success":true,"message":"Importação excluída com sucesso"}
+simulavoto  | 5:04:24 PM [express] GET /api/imports/tse/queue/status 304 in 18ms :: {"isProcessing":true,"currentJob":57,"queueLength":0,"queue":[{"position":0,"jobId":57,"type":"processing","isProcessing":true}]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 500: value "130000000018" is out of range for type integer
+simulavoto  | 5:04:25 PM [express] GET /api/imports/tse 200 in 4ms :: []
+simulavoto  | 5:04:25 PM [express] GET /api/tse/stats 304 in 14ms :: {"totalRecords":0,"years":[],"ufs":[],"cargos":[]}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1000: value "130000000023" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 1500: value "130000000010" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2000: value "130000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 2500: value "130000000013" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3000: value "130000000017" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 3500: value "130000000014" is out of range for type integer
+simulavoto  | 5:04:25 PM [express] GET /api/notifications 304 in 147ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4000: value "130000000008" is out of range for type integer
+simulavoto  | [insertTsePartyVotesBatch] Batch failed at 4500: value "130000000008" is out of range for type integer
+simulavoto  | Partido votacao import error: error: insert or update on table "tse_import_batches" violates foreign key constraint "tse_import_batches_import_job_id_fkey"
+simulavoto  |     at /app/dist/index.cjs:83:13356
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async /app/dist/index.cjs:89:38065
+simulavoto  |     at async PS.createImportBatch (/app/dist/index.cjs:89:149804)
+simulavoto  |     at async A (/app/dist/index.cjs:1200:25540)
+simulavoto  |     at async $U (/app/dist/index.cjs:937:3013) {
+simulavoto  |   length: 323,
+simulavoto  |   severity: 'ERROR',
+simulavoto  |   code: '23503',
+simulavoto  |   detail: 'Key (import_job_id)=(57) is not present in table "tse_import_jobs".',
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: 'public',
+simulavoto  |   table: 'tse_import_batches',
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: 'tse_import_batches_import_job_id_fkey',
+simulavoto  |   file: 'ri_triggers.c',
+simulavoto  |   line: '2596',
+simulavoto  |   routine: 'ri_ReportViolation'
+simulavoto  | }
+simulavoto  | [TSE Queue] Job 57 finished. Processing next...
+simulavoto  | 5:04:26 PM [express] GET /api/imports/tse/queue/status 200 in 16ms :: {"isProcessing":false,"currentJob":null,"queueLength":0,"queue":[]}
+simulavoto  | 5:04:35 PM [express] GET /api/imports/tse 304 in 5ms :: []
