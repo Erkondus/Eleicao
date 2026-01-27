@@ -16,6 +16,15 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
 **Key Features and Implementations:**
 - **Electoral Calculation:** Implements the Brazilian proportional electoral system, including electoral quotient, party quotient, initial seat distribution, and D'Hondt method. Supports Federations and Coalitions.
 - **Data Import System:** Robust CSV import from TSE URLs with streaming, real-time progress updates via WebSockets, and re-processing of failed batches. Batch tracking with original file row indices for accurate audit trails. All three import types (PARTIDO, DETALHE, CANDIDATO) use consistent duplicate checking and row tracking. Includes an enhanced IBGE import system with detailed error reporting, real-time progress, and cancel/restart capabilities.
+  - **Dynamic CSV Format Detection:** The TSE changed CSV formats across election years. The system auto-detects column count and applies appropriate field mappings:
+    - **PARTIDO (votacao_partido_munzona):**
+      - Legacy (≤23 cols): 2010 and earlier
+      - Intermediate (24-30 cols): 2014-2018 - has coligação but NO federation (28 cols)
+      - Modern (>30 cols): 2022+ - has federation and detailed coligação (38 cols)
+    - **CANDIDATO (votacao_candidato_munzona):**
+      - Intermediate (≤46 cols): 2014-2018 - has coligação but NO federation
+      - Modern (>46 cols): 2022+ - has federation fields (50 cols)
+    - **DETALHE (detalhe_votacao_munzona):** Consistent 47-column format across all years (2014-2022)
 - **AI-Powered Data Validation:** Integrates GPT-4o for quality scoring, risk assessment, and recommendations on imported data, alongside deterministic checks.
 - **Automated Reporting:** System for creating, scheduling, and generating reports (CSV/PDF) with various frequencies and types, supporting email delivery.
 - **Electoral Predictions & AI Insights:** Utilizes Monte Carlo simulations, historical trend analysis, and AI-generated narratives. Includes advanced predictive analytics for voter turnout, candidate success, and party performance, with new prediction types like Candidate Comparison, Event Impact, and What-If Scenarios.

@@ -4087,58 +4087,133 @@ Analise o impacto dessa mudança hipotética e forneça:
     let errorCount = 0;
     const BATCH_SIZE = 5000; // Increased for better bulk insert performance
 
-    const fieldMap: { [key: number]: keyof InsertTseCandidateVote } = {
-      0: "dtGeracao",
-      1: "hhGeracao",
-      2: "anoEleicao",
-      3: "cdTipoEleicao",
-      4: "nmTipoEleicao",
-      5: "nrTurno",
-      6: "cdEleicao",
-      7: "dsEleicao",
-      8: "dtEleicao",
-      9: "tpAbrangencia",
-      10: "sgUf",
-      11: "sgUe",
-      12: "nmUe",
-      13: "cdMunicipio",
-      14: "nmMunicipio",
-      15: "nrZona",
-      16: "cdCargo",
-      17: "dsCargo",
-      18: "sqCandidato",
-      19: "nrCandidato",
-      20: "nmCandidato",
-      21: "nmUrnaCandidato",
-      22: "nmSocialCandidato",
-      23: "cdSituacaoCandidatura",
-      24: "dsSituacaoCandidatura",
-      25: "cdDetalheSituacaoCand",
-      26: "dsDetalheSituacaoCand",
-      27: "cdSituacaoJulgamento",
-      28: "dsSituacaoJulgamento",
-      29: "cdSituacaoCassacao",
-      30: "dsSituacaoCassacao",
-      31: "cdSituacaoDconstDiploma",
-      32: "dsSituacaoDconstDiploma",
-      33: "tpAgremiacao",
-      34: "nrPartido",
-      35: "sgPartido",
-      36: "nmPartido",
-      37: "nrFederacao",
-      38: "nmFederacao",
-      39: "sgFederacao",
-      40: "dsComposicaoFederacao",
-      41: "sqColigacao",
-      42: "nmColigacao",
-      43: "dsComposicaoColigacao",
-      44: "stVotoEmTransito",
-      45: "qtVotosNominais",
-      46: "nmTipoDestinacaoVotos",
-      47: "qtVotosNominaisValidos",
-      48: "cdSitTotTurno",
-      49: "dsSitTotTurno",
-    };
+    // Read first row to detect CSV structure (column count varies by year)
+    const firstRowPromise = new Promise<string[]>((resolve, reject) => {
+      const parser = createReadStream(filePath)
+        .pipe(iconv.decodeStream("latin1"))
+        .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2, to_line: 2 }));
+      parser.on("data", (row: string[]) => resolve(row));
+      parser.on("error", reject);
+      parser.on("end", () => resolve([]));
+    });
+    const firstRow = await firstRowPromise;
+    const columnCount = firstRow.length;
+    console.log(`[CANDIDATO] Detected ${columnCount} columns in CSV file`);
+
+    // Field mappings vary by TSE file format version
+    // - Intermediate (≤46 cols): 2014-2018 - has coligacao but NO federation fields
+    // - Modern (>46 cols): 2022+ - has federation and detailed fields (50 columns)
+    let fieldMap: { [key: number]: keyof InsertTseCandidateVote };
+
+    if (columnCount <= 46) {
+      // Intermediate format (2014-2018): ~46 columns without federation
+      // Has SQ_COLIGACAO but NO NR_FEDERACAO fields
+      fieldMap = {
+        0: "dtGeracao",
+        1: "hhGeracao",
+        2: "anoEleicao",
+        3: "cdTipoEleicao",
+        4: "nmTipoEleicao",
+        5: "nrTurno",
+        6: "cdEleicao",
+        7: "dsEleicao",
+        8: "dtEleicao",
+        9: "tpAbrangencia",
+        10: "sgUf",
+        11: "sgUe",
+        12: "nmUe",
+        13: "cdMunicipio",
+        14: "nmMunicipio",
+        15: "nrZona",
+        16: "cdCargo",
+        17: "dsCargo",
+        18: "sqCandidato",
+        19: "nrCandidato",
+        20: "nmCandidato",
+        21: "nmUrnaCandidato",
+        22: "nmSocialCandidato",
+        23: "cdSituacaoCandidatura",
+        24: "dsSituacaoCandidatura",
+        25: "cdDetalheSituacaoCand",
+        26: "dsDetalheSituacaoCand",
+        27: "cdSituacaoJulgamento",
+        28: "dsSituacaoJulgamento",
+        29: "cdSituacaoCassacao",
+        30: "dsSituacaoCassacao",
+        31: "cdSituacaoDconstDiploma",
+        32: "dsSituacaoDconstDiploma",
+        33: "tpAgremiacao",
+        34: "nrPartido",
+        35: "sgPartido",
+        36: "nmPartido",
+        // NO federation fields in 2014-2018 (37-40 in modern format)
+        37: "sqColigacao",
+        38: "nmColigacao",
+        39: "dsComposicaoColigacao",
+        40: "stVotoEmTransito",
+        41: "qtVotosNominais",
+        42: "nmTipoDestinacaoVotos",
+        43: "qtVotosNominaisValidos",
+        44: "cdSitTotTurno",
+        45: "dsSitTotTurno",
+      };
+      console.log(`[CANDIDATO] Using intermediate format (2014-2018) field mapping - ${columnCount} columns`);
+    } else {
+      // Modern format (2022+): 50 columns with federation and detailed coligacao
+      fieldMap = {
+        0: "dtGeracao",
+        1: "hhGeracao",
+        2: "anoEleicao",
+        3: "cdTipoEleicao",
+        4: "nmTipoEleicao",
+        5: "nrTurno",
+        6: "cdEleicao",
+        7: "dsEleicao",
+        8: "dtEleicao",
+        9: "tpAbrangencia",
+        10: "sgUf",
+        11: "sgUe",
+        12: "nmUe",
+        13: "cdMunicipio",
+        14: "nmMunicipio",
+        15: "nrZona",
+        16: "cdCargo",
+        17: "dsCargo",
+        18: "sqCandidato",
+        19: "nrCandidato",
+        20: "nmCandidato",
+        21: "nmUrnaCandidato",
+        22: "nmSocialCandidato",
+        23: "cdSituacaoCandidatura",
+        24: "dsSituacaoCandidatura",
+        25: "cdDetalheSituacaoCand",
+        26: "dsDetalheSituacaoCand",
+        27: "cdSituacaoJulgamento",
+        28: "dsSituacaoJulgamento",
+        29: "cdSituacaoCassacao",
+        30: "dsSituacaoCassacao",
+        31: "cdSituacaoDconstDiploma",
+        32: "dsSituacaoDconstDiploma",
+        33: "tpAgremiacao",
+        34: "nrPartido",
+        35: "sgPartido",
+        36: "nmPartido",
+        37: "nrFederacao",
+        38: "nmFederacao",
+        39: "sgFederacao",
+        40: "dsComposicaoFederacao",
+        41: "sqColigacao",
+        42: "nmColigacao",
+        43: "dsComposicaoColigacao",
+        44: "stVotoEmTransito",
+        45: "qtVotosNominais",
+        46: "nmTipoDestinacaoVotos",
+        47: "qtVotosNominaisValidos",
+        48: "cdSitTotTurno",
+        49: "dsSitTotTurno",
+      };
+      console.log(`[CANDIDATO] Using modern format (2022+) field mapping - ${columnCount} columns`);
+    }
 
     const parseValue = (value: string, field: string): any => {
       if (value === "#NULO" || value === "#NE" || value === "") {
