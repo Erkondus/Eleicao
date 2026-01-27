@@ -4758,13 +4758,15 @@ Analise o impacto dessa mudança hipotética e forneça:
       console.log(`[PARTIDO] Detected ${columnCount} columns in CSV file`);
 
       // Field mappings vary by TSE file format version
-      // 2014-2018: ~23 columns (no federation, simpler coligacao)
-      // 2022+: 38 columns (with federation, detailed coligacao)
+      // TSE has three main formats:
+      // - Legacy (≤23 cols): 2010 and earlier - no coligacao details
+      // - Intermediate (24-30 cols): 2014-2018 - has coligacao but no federation
+      // - Modern (>30 cols): 2022+ - has federation and detailed coligacao
       let fieldMap: { [key: number]: string };
       let numericFields: number[];
 
-      if (columnCount <= 25) {
-        // Legacy format (2014-2018): 23 columns
+      if (columnCount <= 23) {
+        // Legacy format (2010 and earlier): ~23 columns, minimal structure
         // DT_GERACAO;HH_GERACAO;ANO_ELEICAO;CD_TIPO_ELEICAO;NM_TIPO_ELEICAO;NR_TURNO;CD_ELEICAO;DS_ELEICAO;DT_ELEICAO;TP_ABRANGENCIA;
         // SG_UF;SG_UE;NM_UE;CD_MUNICIPIO;NM_MUNICIPIO;NR_ZONA;CD_CARGO;DS_CARGO;
         // NR_PARTIDO;SG_PARTIDO;NM_PARTIDO;QT_VOTOS_NOMINAIS;QT_VOTOS_LEGENDA
@@ -4777,7 +4779,26 @@ Analise o impacto dessa mudança hipotética e forneça:
           21: "qtVotosNominaisValidos", 22: "qtVotosLegendaValidos"
         };
         numericFields = [2, 3, 5, 6, 13, 15, 16, 18, 21, 22];
-        console.log(`[PARTIDO] Using legacy format (2014-2018) field mapping`);
+        console.log(`[PARTIDO] Using legacy format (≤2010) field mapping - ${columnCount} columns`);
+      } else if (columnCount <= 30) {
+        // Intermediate format (2014-2018): 28 columns
+        // Has TP_AGREMIACAO and SQ_COLIGACAO but NO federation fields
+        // DT_GERACAO;HH_GERACAO;ANO_ELEICAO;CD_TIPO_ELEICAO;NM_TIPO_ELEICAO;NR_TURNO;CD_ELEICAO;DS_ELEICAO;DT_ELEICAO;TP_ABRANGENCIA;
+        // SG_UF;SG_UE;NM_UE;CD_MUNICIPIO;NM_MUNICIPIO;NR_ZONA;CD_CARGO;DS_CARGO;
+        // TP_AGREMIACAO;NR_PARTIDO;SG_PARTIDO;NM_PARTIDO;SQ_COLIGACAO;NM_COLIGACAO;DS_COMPOSICAO_COLIGACAO;
+        // ST_VOTO_EM_TRANSITO;QT_VOTOS_NOMINAIS;QT_VOTOS_LEGENDA
+        fieldMap = {
+          0: "dtGeracao", 1: "hhGeracao", 2: "anoEleicao", 3: "cdTipoEleicao", 4: "nmTipoEleicao",
+          5: "nrTurno", 6: "cdEleicao", 7: "dsEleicao", 8: "dtEleicao", 9: "tpAbrangencia",
+          10: "sgUf", 11: "sgUe", 12: "nmUe", 13: "cdMunicipio", 14: "nmMunicipio",
+          15: "nrZona", 16: "cdCargo", 17: "dsCargo", 18: "tpAgremiacao",
+          19: "nrPartido", 20: "sgPartido", 21: "nmPartido",
+          22: "sqColigacao", 23: "nmColigacao", 24: "dsComposicaoColigacao",
+          25: "stVotoEmTransito", 26: "qtVotosNominaisValidos", 27: "qtVotosLegendaValidos"
+        };
+        // Note: sqColigacao (22) is TEXT, not numeric - excluded from numericFields
+        numericFields = [2, 3, 5, 6, 13, 15, 16, 19, 26, 27];
+        console.log(`[PARTIDO] Using intermediate format (2014-2018) field mapping - ${columnCount} columns`);
       } else {
         // Modern format (2022+): 38 columns with federation and detailed coligacao
         fieldMap = {
@@ -4791,8 +4812,9 @@ Analise o impacto dessa mudança hipotética e forneça:
           32: "qtTotalVotosLegValidos", 33: "qtVotosNominaisValidos", 34: "qtVotosLegendaAnulSubjud",
           35: "qtVotosNominaisAnulSubjud", 36: "qtVotosLegendaAnulados", 37: "qtVotosNominaisAnulados"
         };
+        // Note: sqColigacao (26) is TEXT, not numeric - excluded from numericFields
         numericFields = [2, 3, 5, 6, 13, 15, 16, 19, 22, 30, 31, 32, 33, 34, 35, 36, 37];
-        console.log(`[PARTIDO] Using modern format (2022+) field mapping`);
+        console.log(`[PARTIDO] Using modern format (2022+) field mapping - ${columnCount} columns`);
       }
 
       // Get column indices for key fields based on format
