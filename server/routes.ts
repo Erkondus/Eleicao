@@ -2644,8 +2644,22 @@ Responda em JSON:
         });
       }
 
-      // Delete votes associated with this job
-      await storage.deleteTseCandidateVotesByJob(jobId);
+      // Delete data associated with this job based on import type
+      const filename = job.filename || "";
+      if (filename.includes("[PARTIDO]")) {
+        await storage.deleteTsePartyVotesByJob(jobId);
+        console.log(`[DELETE] Deleted party votes for job ${jobId}`);
+      } else if (filename.includes("[DETALHE]")) {
+        await storage.deleteTseElectoralStatisticsByJob(jobId);
+        console.log(`[DELETE] Deleted electoral statistics for job ${jobId}`);
+      } else {
+        // Default: candidate votes
+        await storage.deleteTseCandidateVotesByJob(jobId);
+        console.log(`[DELETE] Deleted candidate votes for job ${jobId}`);
+      }
+      
+      // Delete batches associated with this job
+      await storage.deleteBatchesByJob(jobId);
       
       // Delete errors associated with this job
       await storage.deleteTseImportErrorsByJob(jobId);

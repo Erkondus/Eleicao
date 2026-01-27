@@ -1362,6 +1362,14 @@ export class DatabaseStorage implements IStorage {
     await db.delete(tseCandidateVotes).where(eq(tseCandidateVotes.importJobId, jobId));
   }
 
+  async deleteTsePartyVotesByJob(jobId: number): Promise<void> {
+    await db.delete(tsePartyVotes).where(eq(tsePartyVotes.importJobId, jobId));
+  }
+
+  async deleteTseElectoralStatisticsByJob(jobId: number): Promise<void> {
+    await db.delete(tseElectoralStatistics).where(eq(tseElectoralStatistics.importJobId, jobId));
+  }
+
   async deleteTseImportErrorsByJob(jobId: number): Promise<void> {
     await db.delete(tseImportErrors).where(eq(tseImportErrors.importJobId, jobId));
   }
