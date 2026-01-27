@@ -145,6 +145,17 @@ export default function Dashboard() {
     queryKey: ["/api/parties"],
   });
 
+  // Fetch real party votes data from TSE imports
+  const { data: partyVotes } = useQuery<{
+    party: string;
+    partyNumber: number | null;
+    votes: number;
+    candidateCount: number;
+  }[]>({
+    queryKey: ["/api/analytics/votes-by-party"],
+    refetchInterval: 60000,
+  });
+
   const { data: sentimentData } = useQuery<{ entities: SentimentEntity[] }>({
     queryKey: ["/api/sentiment/summary"],
     refetchInterval: 60000,
@@ -153,6 +164,12 @@ export default function Dashboard() {
   const { data: crisisAlerts } = useQuery<{ unacknowledged: number }>({
     queryKey: ["/api/sentiment/alerts/count"],
     refetchInterval: 30000,
+  });
+
+  // Fetch real activity trend data (scenarios and simulations per day)
+  const { data: activityTrend } = useQuery<{ day: string; simulacoes: number; cenarios: number }[]>({
+    queryKey: ["/api/activity-trend"],
+    refetchInterval: 60000,
   });
 
   const handleRefresh = async () => {
@@ -165,6 +182,8 @@ export default function Dashboard() {
           key === '/api/scenarios' ||
           key === '/api/simulations/recent' ||
           key === '/api/parties' ||
+          key === '/api/analytics/votes-by-party' ||
+          key === '/api/activity-trend' ||
           key === '/api/sentiment/summary' ||
           key === '/api/sentiment/alerts/count'
         );
@@ -185,17 +204,19 @@ export default function Dashboard() {
     "hsl(320, 70%, 50%)",
   ];
 
-  const partyChartData = parties?.slice(0, 8).map((party, i) => ({
-    name: party.abbreviation,
-    value: Math.floor(Math.random() * 50000) + 10000,
-    color: party.color || chartColors[i % chartColors.length],
-  })) || [];
+  // Use real party votes data from TSE imports
+  const partyChartData = partyVotes?.slice(0, 8).map((pv, i) => {
+    // Try to find matching party for color
+    const matchingParty = parties?.find(p => p.abbreviation === pv.party || p.number === pv.partyNumber);
+    return {
+      name: pv.party,
+      value: pv.votes,
+      color: matchingParty?.color || chartColors[i % chartColors.length],
+    };
+  }) || [];
 
-  const trendData = Array.from({ length: 7 }, (_, i) => ({
-    day: ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][i],
-    simulacoes: Math.floor(Math.random() * 20) + 5,
-    cenarios: Math.floor(Math.random() * 10) + 2,
-  }));
+  // Use real activity trend data from API
+  const trendData = activityTrend || [];
 
   const aiFeatures = [
     {
@@ -416,14 +437,14 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <div>
-                  <MetricTooltip content="Distribuição de votos por partido com base nos dados cadastrados. Valores são exemplificativos para demonstração do sistema.">
+                  <MetricTooltip content="Distribuição de votos por partido com base nos dados importados do TSE. Valores reais das eleições.">
                     <CardTitle className="text-lg">Distribuição de Votos por Partido</CardTitle>
                   </MetricTooltip>
-                  <CardDescription>Visualização exemplo dos votos</CardDescription>
+                  <CardDescription>Dados reais importados do TSE</CardDescription>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <UpdateBadge label="Dados de exemplo" />
+                <UpdateBadge label="Dados TSE" />
                 <TrendingUp className="h-5 w-5 text-muted-foreground" />
               </div>
             </CardHeader>
@@ -512,45 +533,51 @@ export default function Dashboard() {
           <Card data-testid="chart-activity">
             <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
               <div>
-                <MetricTooltip content="Tendência de atividade no sistema nos últimos 7 dias, mostrando o volume de simulações e cenários criados por dia.">
+                <MetricTooltip content="Tendência de atividade no sistema nos últimos 7 dias, mostrando o volume de simulações e cenários criados por dia. Dados reais do banco de dados.">
                   <CardTitle className="text-lg">Atividade Recente</CardTitle>
                 </MetricTooltip>
                 <CardDescription>Simulações e cenários nos últimos 7 dias</CardDescription>
               </div>
-              <UpdateBadge label="Tempo real" isNew={true} timestamp={lastRefresh} />
+              <UpdateBadge label="Dados reais" isNew={false} timestamp={lastRefresh} />
             </CardHeader>
             <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData}>
-                    <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <RechartsTooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "var(--radius)",
-                      }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="simulacoes" 
-                      stroke="hsl(210, 100%, 40%)" 
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(210, 100%, 40%)" }}
-                      name="Simulações"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="cenarios" 
-                      stroke="hsl(45, 100%, 45%)" 
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(45, 100%, 45%)" }}
-                      name="Cenários"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              {trendData.length > 0 ? (
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trendData}>
+                      <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "var(--radius)",
+                        }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="simulacoes" 
+                        stroke="hsl(210, 100%, 40%)" 
+                        strokeWidth={2}
+                        dot={{ fill: "hsl(210, 100%, 40%)" }}
+                        name="Simulações"
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="cenarios" 
+                        stroke="hsl(45, 100%, 45%)" 
+                        strokeWidth={2}
+                        dot={{ fill: "hsl(45, 100%, 45%)" }}
+                        name="Cenários"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  Carregando dados de atividade...
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

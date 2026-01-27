@@ -919,6 +919,46 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async getActivityTrend(days: number = 7): Promise<{ day: string; simulacoes: number; cenarios: number }[]> {
+    const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const result: { day: string; simulacoes: number; cenarios: number }[] = [];
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      // Count scenarios created on this day
+      const [scenariosOnDay] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(scenarios)
+        .where(and(
+          sql`${scenarios.createdAt} >= ${date.toISOString()}`,
+          sql`${scenarios.createdAt} < ${nextDate.toISOString()}`
+        ));
+      
+      // Count simulations created on this day
+      const [simulationsOnDay] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(simulations)
+        .where(and(
+          sql`${simulations.createdAt} >= ${date.toISOString()}`,
+          sql`${simulations.createdAt} < ${nextDate.toISOString()}`
+        ));
+      
+      result.push({
+        day: dayNames[date.getDay()],
+        simulacoes: simulationsOnDay?.count || 0,
+        cenarios: scenariosOnDay?.count || 0,
+      });
+    }
+    
+    return result;
+  }
+
   async getScenarioVotes(scenarioId: number): Promise<ScenarioVote[]> {
     return db.select().from(scenarioVotes).where(eq(scenarioVotes.scenarioId, scenarioId));
   }

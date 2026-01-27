@@ -397,6 +397,17 @@ export async function registerRoutes(
     }
   });
 
+  // Activity trend for the last 7 days - real data from scenarios and simulations
+  app.get("/api/activity-trend", requireAuth, async (req, res) => {
+    try {
+      const activityData = await storage.getActivityTrend(7);
+      res.json(activityData);
+    } catch (error) {
+      console.error("Failed to fetch activity trend:", error);
+      res.status(500).json({ error: "Failed to fetch activity trend" });
+    }
+  });
+
   app.get("/api/users", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const users = await storage.getUsers();
@@ -4116,7 +4127,11 @@ Analise o impacto dessa mudança hipotética e forneça:
       if (value === "#NULO" || value === "#NE" || value === "") {
         return null;
       }
-      if (field.startsWith("qt") || field.startsWith("nr") || field.startsWith("cd") || field.startsWith("sq")) {
+      // sq* fields (sqCandidato, sqColigacao) are text because they can exceed integer limits
+      if (field.startsWith("sq")) {
+        return value;
+      }
+      if (field.startsWith("qt") || field.startsWith("nr") || field.startsWith("cd")) {
         const num = parseInt(value, 10);
         return isNaN(num) ? null : num;
       }
@@ -6588,7 +6603,7 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
     }
   });
 
-  // Electoral data by state endpoint for interactive map
+  // Electoral data by state endpoint for interactive map - uses real TSE data
   app.get("/api/electoral-data/state/:stateCode", requireAuth, async (req, res) => {
     try {
       const stateCode = req.params.stateCode?.toUpperCase();
@@ -6596,48 +6611,55 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
         return res.status(400).json({ error: "Invalid state code" });
       }
 
-      const allCandidates = await storage.getCandidates();
+      // Fetch real data from TSE imports filtered by state
+      const topCandidates = await storage.getTopCandidates({
+        uf: stateCode,
+        limit: 10,
+      });
+
+      const votesByParty = await storage.getVotesByParty({
+        uf: stateCode,
+        limit: 10,
+      });
+
+      // Get parties for color mapping
       const parties = await storage.getParties();
-      const partyMap = new Map(parties.map(p => [p.id, p]));
-      
-      // Filter by position matching state (using position field as proxy for state context)
-      const candidatesWithParties = allCandidates.map(c => ({
-        ...c,
-        partyAbbr: partyMap.get(c.partyId)?.abbreviation || "N/A",
+      const partyAbbrMap = new Map(parties.map(p => [p.abbreviation, p]));
+
+      const topParties = votesByParty.map(pv => ({
+        name: partyAbbrMap.get(pv.party)?.name || pv.party,
+        abbreviation: pv.party,
+        votes: pv.votes,
+        color: partyAbbrMap.get(pv.party)?.color || null,
       }));
 
-      const candidatesWithVotes = candidatesWithParties.map(c => ({
+      const candidatesWithVotes = topCandidates.map(c => ({
         name: c.name,
-        party: c.partyAbbr,
-        votes: Math.floor(Math.random() * 100000) + 10000,
-      })).sort((a, b) => b.votes - a.votes);
+        party: c.party || "N/A",
+        votes: c.votes,
+      }));
 
-      const partyVotes: Record<string, number> = {};
-      const partyAbbrMap = new Map(parties.map(p => [p.abbreviation, p]));
-      for (const c of candidatesWithVotes) {
-        if (!partyVotes[c.party]) partyVotes[c.party] = 0;
-        partyVotes[c.party] += c.votes;
-      }
+      const totalVotes = votesByParty.reduce((sum, pv) => sum + pv.votes, 0);
+      const totalCandidates = topCandidates.length;
 
-      const topParties = Object.entries(partyVotes)
-        .map(([abbr, votes]) => ({
-          name: partyAbbrMap.get(abbr)?.name || abbr,
-          abbreviation: abbr,
-          votes,
-          color: partyAbbrMap.get(abbr)?.color || null,
-        }))
-        .sort((a, b) => b.votes - a.votes)
-        .slice(0, 8);
-
-      const totalVotes = candidatesWithVotes.reduce((sum, c) => sum + c.votes, 0);
+      // Map of state codes to names
+      const stateNames: Record<string, string> = {
+        AC: "Acre", AL: "Alagoas", AP: "Amapá", AM: "Amazonas",
+        BA: "Bahia", CE: "Ceará", DF: "Distrito Federal", ES: "Espírito Santo",
+        GO: "Goiás", MA: "Maranhão", MT: "Mato Grosso", MS: "Mato Grosso do Sul",
+        MG: "Minas Gerais", PA: "Pará", PB: "Paraíba", PR: "Paraná",
+        PE: "Pernambuco", PI: "Piauí", RJ: "Rio de Janeiro", RN: "Rio Grande do Norte",
+        RS: "Rio Grande do Sul", RO: "Rondônia", RR: "Roraima", SC: "Santa Catarina",
+        SP: "São Paulo", SE: "Sergipe", TO: "Tocantins", ZZ: "Exterior"
+      };
 
       res.json({
         code: stateCode,
-        name: stateCode,
+        name: stateNames[stateCode] || stateCode,
         topCandidates: candidatesWithVotes.slice(0, 5),
         topParties,
         totalVotes,
-        totalCandidates: allCandidates.length,
+        totalCandidates,
       });
     } catch (error) {
       console.error("Failed to fetch state electoral data:", error);
