@@ -1374,6 +1374,20 @@ export class DatabaseStorage implements IStorage {
     await db.delete(tseImportErrors).where(eq(tseImportErrors.importJobId, jobId));
   }
 
+  async deleteValidationRunsByJob(jobId: number): Promise<void> {
+    // First delete validation issues for all runs of this job
+    const runs = await db.select({ id: importValidationRuns.id })
+      .from(importValidationRuns)
+      .where(eq(importValidationRuns.jobId, jobId));
+    
+    for (const run of runs) {
+      await db.delete(importValidationIssues).where(eq(importValidationIssues.runId, run.id));
+    }
+    
+    // Then delete the validation runs themselves
+    await db.delete(importValidationRuns).where(eq(importValidationRuns.jobId, jobId));
+  }
+
   async deleteTseImportJob(jobId: number): Promise<void> {
     await db.delete(tseImportJobs).where(eq(tseImportJobs.id, jobId));
   }

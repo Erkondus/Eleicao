@@ -2664,6 +2664,9 @@ Responda em JSON:
       // Delete errors associated with this job
       await storage.deleteTseImportErrorsByJob(jobId);
 
+      // Delete validation runs and issues associated with this job
+      await storage.deleteValidationRunsByJob(jobId);
+
       // Delete the job itself
       await storage.deleteTseImportJob(jobId);
 
