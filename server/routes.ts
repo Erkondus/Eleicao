@@ -4101,13 +4101,18 @@ Analise o impacto dessa mudança hipotética e forneça:
     console.log(`[CANDIDATO] Detected ${columnCount} columns in CSV file`);
 
     // Field mappings vary by TSE file format version
-    // - Intermediate (≤46 cols): 2014-2018 - has coligacao but NO federation fields
-    // - Modern (>46 cols): 2022+ - has federation and detailed fields (50 columns)
+    // - Legacy (≤38 cols): 2002-2014 - simpler structure without julgamento/cassacao fields (38 cols)
+    // - Modern (>38 cols): 2018-2022+ - has julgamento/cassacao and federation fields (50 cols)
     let fieldMap: { [key: number]: keyof InsertTseCandidateVote };
 
-    if (columnCount <= 46) {
-      // Intermediate format (2014-2018): ~46 columns without federation
-      // Has SQ_COLIGACAO but NO NR_FEDERACAO fields
+    if (columnCount <= 38) {
+      // Legacy format (2014): 38 columns - NO julgamento/cassacao fields, NO federation
+      // Structure: DT_GERACAO, HH_GERACAO, ANO_ELEICAO, ..., SQ_CANDIDATO(18), NR_CANDIDATO(19), 
+      // ... NM_SOCIAL_CANDIDATO(22), CD_SITUACAO_CANDIDATURA(23), DS_SITUACAO_CANDIDATURA(24),
+      // CD_DETALHE_SITUACAO_CAND(25), DS_DETALHE_SITUACAO_CAND(26), TP_AGREMIACAO(27),
+      // NR_PARTIDO(28), SG_PARTIDO(29), NM_PARTIDO(30), SQ_COLIGACAO(31), NM_COLIGACAO(32),
+      // DS_COMPOSICAO_COLIGACAO(33), CD_SIT_TOT_TURNO(34), DS_SIT_TOT_TURNO(35),
+      // ST_VOTO_EM_TRANSITO(36), QT_VOTOS_NOMINAIS(37)
       fieldMap = {
         0: "dtGeracao",
         1: "hhGeracao",
@@ -4136,30 +4141,22 @@ Analise o impacto dessa mudança hipotética e forneça:
         24: "dsSituacaoCandidatura",
         25: "cdDetalheSituacaoCand",
         26: "dsDetalheSituacaoCand",
-        27: "cdSituacaoJulgamento",
-        28: "dsSituacaoJulgamento",
-        29: "cdSituacaoCassacao",
-        30: "dsSituacaoCassacao",
-        31: "cdSituacaoDconstDiploma",
-        32: "dsSituacaoDconstDiploma",
-        33: "tpAgremiacao",
-        34: "nrPartido",
-        35: "sgPartido",
-        36: "nmPartido",
-        // NO federation fields in 2014-2018 (37-40 in modern format)
-        37: "sqColigacao",
-        38: "nmColigacao",
-        39: "dsComposicaoColigacao",
-        40: "stVotoEmTransito",
-        41: "qtVotosNominais",
-        42: "nmTipoDestinacaoVotos",
-        43: "qtVotosNominaisValidos",
-        44: "cdSitTotTurno",
-        45: "dsSitTotTurno",
+        // NO julgamento/cassacao fields in 2014 (positions 27-32 in newer formats)
+        27: "tpAgremiacao",
+        28: "nrPartido",
+        29: "sgPartido",
+        30: "nmPartido",
+        31: "sqColigacao",
+        32: "nmColigacao",
+        33: "dsComposicaoColigacao",
+        34: "cdSitTotTurno",
+        35: "dsSitTotTurno",
+        36: "stVotoEmTransito",
+        37: "qtVotosNominais",
       };
-      console.log(`[CANDIDATO] Using intermediate format (2014-2018) field mapping - ${columnCount} columns`);
+      console.log(`[CANDIDATO] Using legacy format (2002-2014) field mapping - ${columnCount} columns`);
     } else {
-      // Modern format (2022+): 50 columns with federation and detailed coligacao
+      // Modern format (2018-2022+): 50 columns with julgamento/cassacao, federation and detailed coligacao
       fieldMap = {
         0: "dtGeracao",
         1: "hhGeracao",
