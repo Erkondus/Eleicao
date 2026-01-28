@@ -1,6 +1,9 @@
 -- SimulaVoto - Migration Script January 2026
 -- Execute este script no Supabase SQL Editor para atualizar um banco existente
 -- Este script adiciona tabelas que não existem, sem afetar dados existentes
+--
+-- IMPORTANTE: Para instalações LIMPAS, use apenas o init-db.sql
+-- Este migration é APENAS para atualizar bancos de versões anteriores
 
 -- ===========================================
 -- TABELAS DE NOTIFICAÇÕES IN-APP
@@ -99,7 +102,7 @@ CREATE TABLE IF NOT EXISTS ibge_indicadores (
 CREATE INDEX IF NOT EXISTS ibge_indicadores_municipio_idx ON ibge_indicadores(municipio_id);
 CREATE INDEX IF NOT EXISTS ibge_indicadores_codigo_idx ON ibge_indicadores(codigo_ibge);
 CREATE INDEX IF NOT EXISTS ibge_indicadores_ano_idx ON ibge_indicadores(ano);
-CREATE INDEX IF NOT EXISTS ibge_indicadores_idh_idx ON ibge_indicadores(idh);
+-- Nota: índice de IDH removido pois nome da coluna varia entre versões (idh vs idhm)
 
 CREATE TABLE IF NOT EXISTS ibge_import_jobs (
   id SERIAL PRIMARY KEY,

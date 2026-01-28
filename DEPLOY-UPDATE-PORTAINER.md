@@ -247,10 +247,19 @@ docker exec simulavoto npm run db:push
 ```
 
 **Opção 2: Via SQL no Supabase**
-1. Acesse o Supabase Dashboard
-2. Vá em **SQL Editor**
-3. Cole e execute o conteúdo de `scripts/migration-2026-01.sql`
-4. **Se houver erros de colunas**, execute também `scripts/fix-columns-2026-01.sql`
+
+⚠️ **IMPORTANTE**: Para **instalações LIMPAS**, use APENAS `scripts/init-db.sql`.  
+O migration abaixo é **SOMENTE** para atualizar bancos de versões anteriores.
+
+**Para instalação limpa:**
+1. Acesse o Supabase Dashboard → **SQL Editor**
+2. Execute `scripts/init-db.sql` (contém todas as 68 tabelas)
+3. Pronto! Não execute o migration.
+
+**Para atualização de banco existente:**
+1. Acesse o Supabase Dashboard → **SQL Editor**
+2. Execute `scripts/migration-2026-01.sql`
+3. **Se houver erros de colunas**, execute também `scripts/fix-columns-2026-01.sql`
 
 **Opção 3: Correção COMPLETA de colunas faltantes (IMPORTANTE!)**
 
