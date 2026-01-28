@@ -39,6 +39,22 @@ interface SimulationState {
 }
 
 const activeSimulations = new Map<string, SimulationState>();
+const MAX_ACTIVE_SIMULATIONS = 5;
+const SIMULATION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max
+
+function cleanupStaleSimulations(): void {
+  const now = Date.now();
+  const entries = Array.from(activeSimulations.entries());
+  for (const [id, sim] of entries) {
+    const elapsed = now - sim.startedAt.getTime();
+    if (elapsed > SIMULATION_TIMEOUT_MS) {
+      console.log(`[Simulation] Auto-cleanup stale simulation ${id} after ${Math.round(elapsed / 1000)}s`);
+      if (sim.updateInterval) clearInterval(sim.updateInterval);
+      if (sim.projectionInterval) clearInterval(sim.projectionInterval);
+      activeSimulations.delete(id);
+    }
+  }
+}
 
 export async function startElectionSimulation(options: {
   year: number;
@@ -46,6 +62,12 @@ export async function startElectionSimulation(options: {
   position?: string;
   speed?: number;
 }): Promise<{ simulationId: string; message: string }> {
+  cleanupStaleSimulations();
+  
+  if (activeSimulations.size >= MAX_ACTIVE_SIMULATIONS) {
+    throw new Error(`Maximum of ${MAX_ACTIVE_SIMULATIONS} concurrent simulations allowed. Please wait for existing simulations to complete.`);
+  }
+  
   const simulationId = randomUUID();
   const speed = options.speed || 1;
 

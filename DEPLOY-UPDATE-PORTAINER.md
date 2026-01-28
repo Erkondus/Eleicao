@@ -141,7 +141,7 @@ docker compose logs -f
 
 ## Novas Variáveis de Ambiente
 
-### Versão Janeiro 2026 (Módulo de Campanhas Avançado)
+### Versão Janeiro 2026 (Atualização de Segurança e Performance)
 
 Nenhuma nova variável obrigatória foi adicionada. As variáveis existentes continuam funcionando:
 
@@ -162,9 +162,56 @@ Nenhuma nova variável obrigatória foi adicionada. As variáveis existentes con
 
 ---
 
-## Novos Recursos (Janeiro 2026)
+## Novos Recursos e Correções (Janeiro 2026)
 
-Esta atualização inclui:
+Esta atualização inclui correções críticas de segurança, performance e bugs:
+
+### Atualizações de Segurança
+
+| Pacote | Versão Anterior | Versão Nova | Correção |
+|--------|-----------------|-------------|----------|
+| `express` | 4.21.2 | 4.21.3+ | Vulnerabilidade em body-parser/qs |
+| `qs` | < 6.14.1 | 6.14.1+ | DoS via memory exhaustion |
+| `body-parser` | 1.x | 2.2.2 | Vulnerabilidades de parsing |
+
+**Status**: Vulnerabilidades reduzidas de 4 para 1 (apenas lodash moderada restante - dependência indireta)
+
+### Otimizações de Performance (CPU)
+
+Correções para prevenir crashes do servidor sob carga:
+
+1. **Simulações Eleitorais** (`server/election-simulation.ts`)
+   - Limite de 5 simulações simultâneas (MAX_ACTIVE_SIMULATIONS)
+   - Timeout de 10 minutos por simulação
+   - Limpeza automática de intervalos órfãos
+
+2. **Busca Semântica** (`server/semantic-search.ts`)
+   - Eliminação de queries N+1
+   - Consultas em batch usando `ANY(voteIds)`
+   - Mapa O(1) para lookups
+
+3. **Processamento CSV** (`server/routes.ts`)
+   - Yield points para event loop após cada batch
+   - Evita bloqueio do servidor durante imports grandes
+
+### Correção de Bug Crítico - Import 2014
+
+**Problema**: Imports de CANDIDATO 2014 falhavam com erro `INTEGER overflow`
+
+**Causa**: Campo `SQ_COLIGACAO` na posição 31 contém valores grandes (IDs de 15+ dígitos) que excediam o limite INTEGER
+
+**Solução**: Mapeamento correto das colunas do CSV Legacy (38 colunas) vs Modern (50 colunas)
+
+### Formatos CSV TSE Suportados
+
+| Tipo | Formato | Anos | Colunas |
+|------|---------|------|---------|
+| CANDIDATO | Legacy | 2002-2014 | 38 |
+| CANDIDATO | Modern | 2018-2022+ | 50 |
+| PARTIDO | Legacy | ≤2010 | ≤23 |
+| PARTIDO | Intermediate | 2002-2014 | 28 |
+| PARTIDO | Modern | 2018-2022+ | 36-38 |
+| DETALHE | Universal | Todos | 47 |
 
 ### Módulo de Gerenciamento de Campanhas
 
@@ -390,6 +437,21 @@ crontab -e
 ---
 
 ## Checklist de Atualização
+
+### Atualização Janeiro 2026 (Segurança + Performance)
+
+- [ ] Backup do banco realizado
+- [ ] Espaço em disco verificado (>2GB)
+- [ ] `git pull` executado
+- [ ] `docker compose up -d --build` executado
+- [ ] Verificar se pacotes foram atualizados (logs devem mostrar rebuild)
+- [ ] Health check passando (`curl localhost:5000/api/health`)
+- [ ] Testar import TSE 2014 (CANDIDATO) - deve funcionar sem erro overflow
+- [ ] Monitorar CPU durante imports grandes (deve permanecer estável)
+- [ ] Login funcionando
+- [ ] Funcionalidades de IA operacionais (se OPENAI_API_KEY configurada)
+
+### Checklist Geral
 
 - [ ] Backup do banco realizado
 - [ ] Espaço em disco verificado (>2GB)

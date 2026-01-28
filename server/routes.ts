@@ -4305,6 +4305,9 @@ Analise o impacto dessa mudança hipotética e forneça:
       batchFirstOriginalRow = 0;
       batchLastOriginalRow = 0;
       currentBatchRecord = null;
+      
+      // Yield to event loop to prevent CPU blocking
+      await new Promise(resolve => setImmediate(resolve));
     };
 
     for await (const row of parser) {
@@ -4687,6 +4690,9 @@ Analise o impacto dessa mudança hipotética e forneça:
         if ((batchIndex + 1) % 10 === 0 || batchIndex === totalBatches - 1) {
           console.log(`[DETALHE] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
         }
+        
+        // Yield to event loop to prevent CPU blocking
+        await new Promise(resolve => setImmediate(resolve));
       }
 
       const totalSkipped = cargoFilteredCount + duplicateCount;
@@ -5083,6 +5089,9 @@ Analise o impacto dessa mudança hipotética e forneça:
         if ((batchIndex + 1) % 10 === 0 || batchIndex === totalBatches - 1) {
           console.log(`[PARTIDO] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
         }
+        
+        // Yield to event loop to prevent CPU blocking
+        await new Promise(resolve => setImmediate(resolve));
       }
 
       // Sync parties from imported party votes data

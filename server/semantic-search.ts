@@ -262,6 +262,26 @@ export async function generateEmbeddingsForImportJob(importJobId: number): Promi
     
     if (votes.length === 0) break;
     
+    // Batch lookup: get all existing documents for this batch in ONE query
+    const voteIds = votes.map(v => v.id);
+    const existingDocs = await db
+      .select({ id: semanticDocuments.id, sourceId: semanticDocuments.sourceId, contentHash: semanticDocuments.contentHash })
+      .from(semanticDocuments)
+      .where(
+        and(
+          eq(semanticDocuments.sourceType, "tse_candidate"),
+          sql`${semanticDocuments.sourceId} = ANY(${voteIds})`
+        )
+      );
+    
+    // Create lookup map for O(1) access
+    const existingMap = new Map<number, { id: number; contentHash: string | null }>();
+    for (const doc of existingDocs) {
+      if (doc.sourceId !== null) {
+        existingMap.set(doc.sourceId, { id: doc.id, contentHash: doc.contentHash });
+      }
+    }
+    
     const documents: {
       content: string;
       contentHash: string;
@@ -273,24 +293,16 @@ export async function generateEmbeddingsForImportJob(importJobId: number): Promi
       position: string | null;
       partyAbbreviation: string | null;
       metadata: any;
+      existingId?: number;
     }[] = [];
     
     for (const vote of votes) {
       const { content, metadata } = createCandidateDocument(vote);
       const contentHash = hashContent(content);
       
-      const existing = await db
-        .select({ id: semanticDocuments.id, contentHash: semanticDocuments.contentHash })
-        .from(semanticDocuments)
-        .where(
-          and(
-            eq(semanticDocuments.sourceType, "tse_candidate"),
-            eq(semanticDocuments.sourceId, vote.id)
-          )
-        )
-        .limit(1);
+      const existing = existingMap.get(vote.id);
       
-      if (existing.length > 0 && existing[0].contentHash === contentHash) {
+      if (existing && existing.contentHash === contentHash) {
         skipped++;
         continue;
       }
@@ -306,6 +318,7 @@ export async function generateEmbeddingsForImportJob(importJobId: number): Promi
         position: vote.dsCargo,
         partyAbbreviation: vote.sgPartido,
         metadata,
+        existingId: existing?.id,
       });
     }
     
@@ -318,18 +331,7 @@ export async function generateEmbeddingsForImportJob(importJobId: number): Promi
           const doc = documents[i];
           const embedding = embeddings[i];
           
-          const existing = await db
-            .select({ id: semanticDocuments.id })
-            .from(semanticDocuments)
-            .where(
-              and(
-                eq(semanticDocuments.sourceType, "tse_candidate"),
-                eq(semanticDocuments.sourceId, doc.sourceId)
-              )
-            )
-            .limit(1);
-          
-          if (existing.length > 0) {
+          if (doc.existingId) {
             await db.execute(sql`
               UPDATE semantic_documents 
               SET content = ${doc.content},
@@ -341,7 +343,7 @@ export async function generateEmbeddingsForImportJob(importJobId: number): Promi
                   party_abbreviation = ${doc.partyAbbreviation},
                   metadata = ${JSON.stringify(doc.metadata)}::jsonb,
                   embedding = ${`[${embedding.join(",")}]`}::vector
-              WHERE id = ${existing[0].id}
+              WHERE id = ${doc.existingId}
             `);
           } else {
             await db.execute(sql`
@@ -370,6 +372,9 @@ export async function generateEmbeddingsForImportJob(importJobId: number): Promi
         errors += documents.length;
       }
     }
+    
+    // Yield to event loop to prevent CPU blocking
+    await new Promise(resolve => setImmediate(resolve));
     
     offset += batchSize;
   }
