@@ -1,0 +1,49 @@
+docker compose up -d --build
+[+] Building 302.5s (23/23) FINISHED                                                                                    
+ => [internal] load local bake definitions                                                                         0.0s
+ => => reading from stdin 504B                                                                                     0.0s
+ => [internal] load build definition from Dockerfile                                                               0.1s
+ => => transferring dockerfile: 1.09kB                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                  1.9s
+ => [internal] load .dockerignore                                                                                  0.0s
+ => => transferring context: 150B                                                                                  0.0s
+ => [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d2836  5.2s
+ => => resolve docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132  0.0s
+ => => sha256:e31b2016552274339ed88ed4a438d78bf37e0f6bdf328d02207b2a598c1ef86d 445B / 445B                         0.3s
+ => => sha256:ad6d96c196e3198e14ea37df8bba4f54bf92fb525eb65e49fa4027c7dee13f80 42.78MB / 42.78MB                   1.7s
+ => => sha256:eb87f4721c91769ed5206f34a9ab6ec98fc1d5235c12c2fc956665b1155e9ecb 1.26MB / 1.26MB                     0.7s
+ => => sha256:589002ba0eaed121a1dbf42f6648f29e5be55d5c8a6ee0f8eaa0285cc21ac153 3.86MB / 3.86MB                     0.8s
+ => => extracting sha256:589002ba0eaed121a1dbf42f6648f29e5be55d5c8a6ee0f8eaa0285cc21ac153                          0.5s
+ => => extracting sha256:ad6d96c196e3198e14ea37df8bba4f54bf92fb525eb65e49fa4027c7dee13f80                          3.0s
+ => => extracting sha256:eb87f4721c91769ed5206f34a9ab6ec98fc1d5235c12c2fc956665b1155e9ecb                          0.1s
+ => => extracting sha256:e31b2016552274339ed88ed4a438d78bf37e0f6bdf328d02207b2a598c1ef86d                          0.0s
+ => [internal] load build context                                                                                  1.2s
+ => => transferring context: 39.63MB                                                                               1.2s
+ => [builder 2/6] WORKDIR /app                                                                                     0.2s
+ => [builder 3/6] COPY package*.json ./                                                                            0.2s
+ => [runner  3/12] RUN apk add --no-cache dumb-init                                                                2.5s
+ => [builder 4/6] RUN npm ci                                                                                      38.2s
+ => [builder 5/6] COPY . .                                                                                         0.6s 
+ => [builder 6/6] RUN npm run build                                                                               33.4s 
+ => [runner  4/12] COPY --from=builder /app/dist ./dist                                                            0.1s 
+ => [runner  5/12] COPY --from=builder /app/package*.json ./                                                       0.7s 
+ => [runner  6/12] COPY --from=builder /app/drizzle.config.ts ./                                                   0.1s 
+ => [runner  7/12] COPY --from=builder /app/shared ./shared                                                        0.1s
+ => [runner  8/12] COPY --from=builder /app/server ./server                                                        0.1s
+ => [runner  9/12] COPY --from=builder /app/node_modules ./node_modules                                            6.4s
+ => [runner 10/12] COPY docker-entrypoint.sh ./                                                                    0.3s
+ => [runner 11/12] RUN addgroup --system --gid 1001 nodejs &&     adduser --system --uid 1001 expressjs &&       132.0s
+ => [runner 12/12] RUN chmod +x docker-entrypoint.sh                                                               0.7s
+ => exporting to image                                                                                            78.6s
+ => => exporting layers                                                                                           23.4s
+ => => exporting manifest sha256:575ba19de013858b817a42dfaf3a4736d6f6937073211c8b6ff2328af2e1f1db                  0.0s
+ => => exporting config sha256:b357235572af9e73b713a108331c5001e0736ad90f198244696ee9e31f5746ce                    0.0s
+ => => exporting attestation manifest sha256:ad6343daa04ecea86abbb11c76b8d64e265b3052fb6e19bc68796814851cc677      0.1s
+ => => exporting manifest list sha256:dc5586bd91b60ced1def53d19908ce6177e1bed6025a9e07a0676c1e5af76ec6             0.0s
+ => => naming to docker.io/library/simulavoto-simulavoto:latest                                                    0.0s
+ => => unpacking to docker.io/library/simulavoto-simulavoto:latest                                                54.9s
+ => resolving provenance for metadata file                                                                         0.0s
+[+] up 2/2
+ ✔ Image simulavoto-simulavoto Built                                                                              302.7s
+ ✔ Container simulavoto        Created                                                                            1.5s
+Error response from daemon: failed to set up container networking: Could not attach to network supabase_default: rpc error: code = NotFound desc = network supabase_default not found
