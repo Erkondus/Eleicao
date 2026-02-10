@@ -24,17 +24,27 @@ CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
 ### 1.2 Executar Script de Inicialização
+
+Para **instalações limpas**, execute APENAS o `init-db.sql`:
+
 1. Acesse: https://supabase.com/dashboard
 2. Vá em **SQL Editor**
-3. Cole e execute o conteúdo de `scripts/init-db.sql`
-4. **Para instalações completas**, execute também `scripts/migration-2026-01.sql`
+3. Cole e execute o conteúdo de `scripts/init-db.sql` (contém todas as 68 tabelas)
+4. Pronto! **Não** execute o migration.
 
-> **Nota**: O script `init-db.sql` cria as tabelas básicas. O script `migration-2026-01.sql` adiciona tabelas para funcionalidades avançadas (IBGE, notificações, campanhas, análise de sentimento).
+> **Nota**: O `init-db.sql` já contém todas as tabelas necessárias. O `migration-2026-01.sql` é APENAS para atualizar bancos de versões anteriores.
 
-### 1.3 Obter Connection String
-1. Vá em **Settings** → **Database**
-2. Copie a **Connection string (URI)**
-3. Formato: `postgresql://postgres:SENHA@db.xxx.supabase.co:5432/postgres`
+### 1.3 Obter Connection String (Connection Pooler)
+
+**IMPORTANTE**: Use a URL do **Connection Pooler** (porta 6543), não a conexão direta (porta 5432). O Connection Pooler tem suporte IPv4, evitando problemas de conectividade.
+
+1. No Supabase, vá em **Settings** → **Database**
+2. Procure **Connection Pooler** (ou "Connection String - Pooler")
+3. Copie a URL com porta **6543**
+4. Formato:
+   ```
+   postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
+   ```
 
 ---
 
@@ -50,10 +60,9 @@ cd simulavoto
 ### 2.2 Criar arquivo .env
 ```bash
 cat > .env << 'EOF'
-DATABASE_URL=postgresql://postgres:SUA_SENHA@db.xxx.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
 SESSION_SECRET=GERE_COM_openssl_rand_base64_32
 OPENAI_API_KEY=sk-sua-chave-aqui
-DOMAIN=simulavoto.seudominio.com
 EOF
 ```
 
@@ -74,8 +83,7 @@ docker compose logs -f
 
 Deve mostrar:
 ```
-DoH resolved db.xxx.supabase.co to: 1.2.3.4
-Database pool initialized with IPv4 resolution
+Database pool initialized successfully
 Server running on port 5000
 ```
 
@@ -99,10 +107,9 @@ Clique em **Add environment variable** para cada:
 
 | Nome | Valor |
 |------|-------|
-| `DATABASE_URL` | `postgresql://postgres:SENHA@db.xxx.supabase.co:5432/postgres` |
+| `DATABASE_URL` | `postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres` |
 | `SESSION_SECRET` | Resultado de `openssl rand -base64 32` |
 | `OPENAI_API_KEY` | `sk-sua-chave-aqui` |
-| `DOMAIN` | `simulavoto.seudominio.com` |
 
 ### 3.4 Deploy
 Clique em **Deploy the stack**
@@ -125,9 +132,9 @@ Clique em **Deploy the stack**
 | Scheme | `http` |
 | Forward Hostname/IP | `simulavoto` (nome do container) ou `IP_DO_SERVIDOR` |
 | Forward Port | `5000` |
-| Cache Assets | ✅ (opcional) |
-| Block Common Exploits | ✅ |
-| Websockets Support | ✅ |
+| Cache Assets | Opcional |
+| Block Common Exploits | Sim |
+| Websockets Support | Sim |
 
 ### 4.3 Configurar SSL
 
@@ -135,11 +142,11 @@ Clique em **Deploy the stack**
 | Campo | Valor |
 |-------|-------|
 | SSL Certificate | Request a new SSL Certificate |
-| Force SSL | ✅ |
-| HTTP/2 Support | ✅ |
-| HSTS Enabled | ✅ (opcional) |
+| Force SSL | Sim |
+| HTTP/2 Support | Sim |
+| HSTS Enabled | Opcional |
 | Email | seu@email.com |
-| I Agree... | ✅ |
+| I Agree... | Sim |
 
 Clique em **Save**.
 
@@ -148,7 +155,7 @@ Acesse: `http://IP_DO_SERVIDOR:5000`
 
 ---
 
-## 5. Comandos Úteis
+## 5. Comandos Uteis
 
 ### Ver logs
 ```bash
@@ -160,7 +167,7 @@ docker compose logs -f simulavoto
 docker compose restart simulavoto
 ```
 
-### Atualizar (nova versão)
+### Atualizar (nova versao)
 ```bash
 git pull
 docker compose up -d --build
@@ -180,40 +187,55 @@ docker compose down -v
 
 ## 6. Troubleshooting
 
-### Container não inicia
+### Container nao inicia
 ```bash
 docker compose logs simulavoto
 ```
 
-### Erro de DNS (ENOTFOUND)
-A aplicação usa DNS-over-HTTPS como fallback. Os logs devem mostrar:
+### Erro: ENETUNREACH (IPv6)
+
+**Causa**: O DNS retorna apenas IPv6 e o container nao tem conectividade IPv6.
+
+**Solucao**: Use a URL do **Connection Pooler** (porta 6543) que tem suporte IPv4:
 ```
-System DNS failed for db.xxx.supabase.co, trying DoH...
-DoH resolved db.xxx.supabase.co to: 1.2.3.4
+postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
 ```
 
-Se ainda não funcionar, use IP direto na DATABASE_URL:
+O docker-compose.yaml ja inclui DNS Google (8.8.8.8) e Cloudflare (1.1.1.1) como fallback.
+
+### Erro: ENOTFOUND (DNS)
+
+**Causa**: O container nao consegue resolver nomes DNS.
+
+**Solucao 1**: O docker-compose.yaml ja configura DNS publicos.
+
+**Solucao 2**: Use IP direto:
 ```bash
-nslookup db.xxx.supabase.co
+nslookup aws-0-us-east-1.pooler.supabase.com
 # Use o IP retornado na DATABASE_URL
 ```
 
-### Erro de conexão SSL
-Verifique se a DATABASE_URL está correta e o Supabase permite conexões externas.
+### Erro: SSL/TLS
+Verifique se a DATABASE_URL esta correta e o Supabase permite conexoes externas.
 
 ### Health check falhando
 ```bash
 docker exec simulavoto wget -qO- http://localhost:5000/api/health
 ```
 
+### Erro: network not found
+Se estiver usando Portainer Stack e ver erro sobre `network not found`:
+- Certifique-se de usar a versao mais recente do `docker-compose.yaml` (sem redes externas)
+- Execute: `docker compose down && docker compose up -d`
+
 ---
 
-## 7. Credenciais Padrão
+## 7. Credenciais Padrao
 
-- **Usuário**: `admin`
+- **Usuario**: `admin`
 - **Senha**: `admin123`
 
-⚠️ **IMPORTANTE**: Altere a senha após o primeiro login!
+**IMPORTANTE**: Altere a senha apos o primeiro login!
 
 ---
 
@@ -232,39 +254,29 @@ psql $DATABASE_URL < backup.sql
 
 ---
 
-## 9. Funcionalidades Disponíveis
+## 9. Funcionalidades Disponiveis
 
-### Módulos Principais
+### Modulos Principais
 
-| Módulo | Descrição |
+| Modulo | Descricao |
 |--------|-----------|
-| **Dashboard Eleitoral** | Mapa interativo do Brasil, métricas consolidadas, status de importações |
-| **Simulações** | Cálculo de quocientes eleitorais, distribuição de cadeiras (D'Hondt) |
-| **Importação TSE** | Upload de CSV até 5GB com monitoramento em tempo real |
-| **Previsões IA** | Monte Carlo, análise de tendências, narrativas GPT-4o |
-| **Análise de Sentimento** | Multi-fonte (notícias, redes sociais), word cloud, alertas de crise |
-| **Campanhas** | Gestão de equipe, calendário, orçamento, KPIs estratégicos |
-| **Relatórios** | Geração automática CSV/PDF, agendamento, envio por email |
+| **Dashboard Eleitoral** | Mapa interativo do Brasil, metricas consolidadas, status de importacoes |
+| **Simulacoes** | Calculo de quocientes eleitorais, distribuicao de cadeiras (D'Hondt) |
+| **Importacao TSE** | Upload de CSV ate 5GB com monitoramento em tempo real |
+| **Previsoes IA** | Monte Carlo, analise de tendencias, narrativas GPT-4o |
+| **Analise de Sentimento** | Multi-fonte (noticias, redes sociais), word cloud, alertas de crise |
+| **Campanhas** | Gestao de equipe, calendario, orcamento, KPIs estrategicos |
+| **Relatorios** | Geracao automatica CSV/PDF, agendamento, envio por email |
 
-### Módulo de Campanhas (Janeiro 2026)
+### Variaveis de Ambiente Completas
 
-O módulo de campanhas inclui:
-
-- **Gestão de Equipe**: Adicionar/remover membros com funções (Coordenador, Gerente, Membro, Voluntário)
-- **Calendário**: Visualização mensal de atividades com codificação por cores
-- **Metas de KPIs**: Recomendações IA, criação manual, acompanhamento de progresso
-- **Notificações**: Alertas automáticos para eventos da campanha
-
-### Variáveis de Ambiente Completas
-
-| Variável | Obrigatória | Descrição |
+| Variavel | Obrigatoria | Descricao |
 |----------|-------------|-----------|
-| `DATABASE_URL` | Sim | Connection string PostgreSQL/Supabase |
-| `SESSION_SECRET` | Sim | Segredo para criptografia de sessões |
-| `OPENAI_API_KEY` | Não* | Para recursos de IA (previsões, análise, KPIs) |
-| `RESEND_API_KEY` | Não | Para envio de relatórios por email |
-| `NODE_ENV` | Não | Ambiente de execução (padrão: production) |
-| `PORT` | Não | Porta do servidor (padrão: 5000) |
-| `DOMAIN` | Não | Domínio para proxy reverso |
+| `DATABASE_URL` | Sim | Connection string PostgreSQL/Supabase (usar Connection Pooler porta 6543) |
+| `SESSION_SECRET` | Sim | Segredo para criptografia de sessoes |
+| `OPENAI_API_KEY` | Nao* | Para recursos de IA (previsoes, analise, KPIs) |
+| `RESEND_API_KEY` | Nao | Para envio de relatorios por email |
+| `NODE_ENV` | Nao | Ambiente de execucao (padrao: production) |
+| `PORT` | Nao | Porta do servidor (padrao: 5000) |
 
 *Recursos de IA requerem OPENAI_API_KEY para funcionar completamente.

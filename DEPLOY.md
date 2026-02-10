@@ -2,82 +2,80 @@
 
 Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dados.
 
-## Opções de Deploy
+## Opcoes de Deploy
 
 | Plataforma | Guia |
 |------------|------|
 | **Portainer** (Recomendado) | [DEPLOY-PORTAINER.md](./DEPLOY-PORTAINER.md) |
-| **Atualização Portainer** | [DEPLOY-UPDATE-PORTAINER.md](./DEPLOY-UPDATE-PORTAINER.md) |
+| **Atualizacao Portainer** | [DEPLOY-UPDATE-PORTAINER.md](./DEPLOY-UPDATE-PORTAINER.md) |
 | **Coolify** | Este documento |
-| **Docker direto** | Seção [Deploy Local com Docker](#deploy-local-com-docker) |
+| **Docker direto** | Secao [Deploy Local com Docker](#deploy-local-com-docker) |
 
-## Índice
+## Indice
 
-1. [Pré-requisitos](#pré-requisitos)
-2. [Configuração do Supabase](#configuração-do-supabase)
-3. [Configuração do Coolify](#configuração-do-coolify)
-4. [Variáveis de Ambiente](#variáveis-de-ambiente)
+1. [Pre-requisitos](#pre-requisitos)
+2. [Configuracao do Supabase](#configuracao-do-supabase)
+3. [Configuracao do Coolify](#configuracao-do-coolify)
+4. [Variaveis de Ambiente](#variaveis-de-ambiente)
 5. [Deploy Local com Docker](#deploy-local-com-docker)
-6. [Comandos Úteis](#comandos-úteis)
-7. [Solução de Problemas](#solução-de-problemas)
+6. [Comandos Uteis](#comandos-uteis)
+7. [Solucao de Problemas](#solucao-de-problemas)
 
 ---
 
-## Pré-requisitos
+## Pre-requisitos
 
-- Conta no [Supabase](https://supabase.com) (gratuito para começar)
+- Conta no [Supabase](https://supabase.com) (gratuito para comecar)
 - Servidor com [Coolify](https://coolify.io) ou [Portainer](https://www.portainer.io/)
 - Chave de API do OpenAI (para recursos de IA)
-- Git repository com o código fonte
+- Git repository com o codigo fonte
 
 ---
 
-## Configuração do Supabase
+## Configuracao do Supabase
 
 ### 1. Criar Projeto
 
 1. Acesse [app.supabase.com](https://app.supabase.com)
 2. Clique em "New Project"
 3. Configure:
-   - **Nome**: SimulaVoto (ou nome de sua preferência)
+   - **Nome**: SimulaVoto (ou nome de sua preferencia)
    - **Senha do Banco**: Gere uma senha forte
-   - **Região**: Escolha a mais próxima (ex: South America - São Paulo)
+   - **Regiao**: Escolha a mais proxima (ex: South America - Sao Paulo)
 4. Clique em "Create new project"
 
-### 2. Habilitar Extensão pgvector
+### 2. Habilitar Extensoes
 
-1. Vá em **SQL Editor** no painel do Supabase
-2. Execute:
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS vector;
-   ```
+No **SQL Editor**, execute:
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
+```
 
-### 3. Executar Script de Criação de Tabelas
+### 3. Executar Script de Criacao de Tabelas
 
-1. No **SQL Editor**, copie e execute o conteúdo do arquivo:
-   ```
-   scripts/init-db.sql
-   ```
-2. Para funcionalidades completas, execute também:
-   ```
-   scripts/migration-2026-01.sql
-   ```
+**Para instalacoes limpas**, execute APENAS o `init-db.sql`:
 
-> **Nota**: O `init-db.sql` cria tabelas básicas. O `migration-2026-01.sql` adiciona tabelas avançadas (IBGE, notificações, campanhas, análise de sentimento).
+1. No **SQL Editor**, copie e execute o conteudo de `scripts/init-db.sql`
+2. Pronto! O script contem todas as 68 tabelas.
 
-### 4. Obter Connection String
+> **Nota**: O `migration-2026-01.sql` e APENAS para atualizar bancos de versoes anteriores. Nao execute em instalacoes limpas.
 
-1. Vá em **Settings** → **Database**
-2. Copie a **Connection String** (URI)
-3. Substitua `[YOUR-PASSWORD]` pela senha do banco
-4. A URL deve parecer com:
+### 4. Obter Connection String (Connection Pooler)
+
+**IMPORTANTE**: Use a URL do **Connection Pooler** (porta 6543), nao a conexao direta (porta 5432).
+
+1. Va em **Settings** -> **Database**
+2. Procure **Connection Pooler**
+3. Copie a URL com porta **6543**
+4. Formato:
    ```
-   postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+   postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
    ```
 
 ---
 
-## Configuração do Coolify
+## Configuracao do Coolify
 
 ### 1. Adicionar Novo Projeto
 
@@ -85,14 +83,14 @@ Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dad
 2. Clique em **New Project**
 3. Nomeie como "SimulaVoto"
 
-### 2. Configurar Aplicação
+### 2. Configurar Aplicacao
 
-1. Clique em **Add New Resource** → **Application**
+1. Clique em **Add New Resource** -> **Application**
 2. Selecione **Docker (Build Pack)**
-3. Conecte seu repositório Git
+3. Conecte seu repositorio Git
 4. Configure o branch (main/master)
 
-### 3. Configurações de Build
+### 3. Configuracoes de Build
 
 ```yaml
 Build Command: npm run build
@@ -101,22 +99,22 @@ Port: 5000
 Health Check Path: /api/health
 ```
 
-### 4. Configurar Variáveis de Ambiente
+### 4. Configurar Variaveis de Ambiente
 
-Adicione as seguintes variáveis em **Environment Variables**:
+Adicione as seguintes variaveis em **Environment Variables**:
 
-| Variável | Descrição | Exemplo |
+| Variavel | Descricao | Exemplo |
 |----------|-----------|---------|
-| `DATABASE_URL` | URL de conexão PostgreSQL | `postgresql://...` |
-| `SESSION_SECRET` | Segredo para sessões (32+ caracteres) | `gerar-string-aleatoria-longa` |
+| `DATABASE_URL` | URL de conexao PostgreSQL (Connection Pooler) | `postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres` |
+| `SESSION_SECRET` | Segredo para sessoes (32+ caracteres) | `gerar-string-aleatoria-longa` |
 | `OPENAI_API_KEY` | Chave API do OpenAI | `sk-...` |
 | `NODE_ENV` | Ambiente | `production` |
-| `PORT` | Porta da aplicação | `5000` |
+| `PORT` | Porta da aplicacao | `5000` |
 
 ### 5. Recursos Recomendados
 
-- **RAM**: Mínimo 512MB, recomendado 1GB
-- **CPU**: 0.5 vCPU mínimo
+- **RAM**: Minimo 512MB, recomendado 1GB
+- **CPU**: 0.5 vCPU minimo
 - **Storage**: 1GB para logs e cache
 
 ### 6. Deploy
@@ -128,21 +126,22 @@ Adicione as seguintes variáveis em **Environment Variables**:
 
 ---
 
-## Variáveis de Ambiente
+## Variaveis de Ambiente
 
-### Obrigatórias
+### Obrigatorias
 
-| Variável | Descrição |
+| Variavel | Descricao |
 |----------|-----------|
-| `DATABASE_URL` | Connection string do PostgreSQL/Supabase |
-| `SESSION_SECRET` | String secreta para criptografia de sessões |
+| `DATABASE_URL` | Connection string do PostgreSQL/Supabase (usar Connection Pooler porta 6543) |
+| `SESSION_SECRET` | String secreta para criptografia de sessoes |
 
 ### Opcionais
 
-| Variável | Descrição | Padrão |
+| Variavel | Descricao | Padrao |
 |----------|-----------|--------|
 | `OPENAI_API_KEY` | Para recursos de IA | - |
-| `NODE_ENV` | Ambiente de execução | `production` |
+| `RESEND_API_KEY` | Para envio de emails | - |
+| `NODE_ENV` | Ambiente de execucao | `production` |
 | `PORT` | Porta do servidor | `5000` |
 
 ### Gerar SESSION_SECRET
@@ -160,19 +159,19 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ## Deploy Local com Docker
 
-### Usando Docker Compose (Desenvolvimento)
+### Usando Docker Compose
 
-1. Clone o repositório
+1. Clone o repositorio
 2. Crie um arquivo `.env`:
    ```env
-   DATABASE_URL=postgresql://simulavoto:simulavoto123@localhost:5432/simulavoto
+   DATABASE_URL=postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
    SESSION_SECRET=sua-chave-secreta-aqui-32-caracteres
    OPENAI_API_KEY=sk-sua-chave-openai
    ```
 
 3. Inicie os containers:
    ```bash
-   docker-compose up -d
+   docker compose up -d --build
    ```
 
 4. Acesse: http://localhost:5000
@@ -189,7 +188,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    docker run -d \
      --name simulavoto \
      -p 5000:5000 \
-     -e DATABASE_URL="sua-url-do-banco" \
+     --dns 8.8.8.8 \
+     -e DATABASE_URL="sua-url-do-pooler" \
      -e SESSION_SECRET="sua-chave-secreta" \
      -e OPENAI_API_KEY="sk-sua-chave" \
      simulavoto:latest
@@ -197,9 +197,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ---
 
-## Comandos Úteis
+## Comandos Uteis
 
-### Verificar Saúde da Aplicação
+### Verificar Saude da Aplicacao
 
 ```bash
 curl http://localhost:5000/api/health
@@ -208,27 +208,19 @@ curl http://localhost:5000/api/health
 ### Visualizar Logs
 
 ```bash
-# Docker
-docker logs -f simulavoto
-
-# Docker Compose
-docker-compose logs -f app
+docker compose logs -f simulavoto
 ```
 
-### Reiniciar Aplicação
+### Reiniciar Aplicacao
 
 ```bash
-# Docker Compose
-docker-compose restart app
-
-# Docker
-docker restart simulavoto
+docker compose restart simulavoto
 ```
 
-### Executar Migrações Manualmente
+### Parar
 
 ```bash
-docker exec -it simulavoto npm run db:push
+docker compose down
 ```
 
 ### Acessar Shell do Container
@@ -239,136 +231,56 @@ docker exec -it simulavoto sh
 
 ---
 
-## Solução de Problemas
+## Solucao de Problemas
 
-### Erro: DATABASE_URL não definida
+### Erro: DATABASE_URL nao definida
 
-**Causa**: Variável de ambiente não configurada
-**Solução**: Verifique se `DATABASE_URL` está definida no Coolify ou `.env`
+**Causa**: Variavel de ambiente nao configurada
+**Solucao**: Verifique se `DATABASE_URL` esta definida no `.env` ou nas variaveis do Coolify/Portainer
 
-### Erro: Conexão recusada ao banco
+### Erro: ENETUNREACH (IPv6)
 
-**Causas possíveis**:
-1. Supabase ainda inicializando
-2. Senha incorreta
-3. IP não liberado
+**Causa**: O DNS retorna apenas IPv6 e o container nao tem conectividade IPv6
+**Solucao**: Use a URL do **Connection Pooler** (porta 6543) que tem suporte IPv4:
+```
+postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
+```
 
-**Soluções**:
-1. Aguarde alguns minutos após criar o projeto
-2. Verifique a senha na connection string
-3. No Supabase, vá em Settings → Database e verifique "Network restrictions"
+### Erro: ENOTFOUND (DNS)
 
-### Erro: Extensão vector não encontrada
+**Causa**: Container nao consegue resolver nomes DNS
+**Solucao**: O docker-compose.yaml ja configura DNS publicos (8.8.8.8, 1.1.1.1). Se persistir, use IP direto na DATABASE_URL.
 
-**Causa**: pgvector não habilitado
-**Solução**: Execute no SQL Editor do Supabase:
+### Erro: Extensao vector nao encontrada
+
+**Causa**: pgvector nao habilitado
+**Solucao**: Execute no SQL Editor do Supabase:
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### Erro de permissão no docker-entrypoint.sh
+### Erro de permissao no docker-entrypoint.sh
 
-**Causa**: Arquivo sem permissão de execução
-**Solução**: Já corrigido no Dockerfile, mas se persistir:
+**Causa**: Arquivo sem permissao de execucao
+**Solucao**: Ja corrigido no Dockerfile, mas se persistir:
 ```bash
 chmod +x docker-entrypoint.sh
 ```
 
-### Aplicação não responde
-
-1. Verifique os logs para erros
-2. Confirme que a porta 5000 está exposta
-3. Verifique o health check
-4. Reinicie o container
-
 ### Erro 502 Bad Gateway
 
-**Causa**: Aplicação ainda inicializando ou crashou
-**Solução**:
+**Causa**: Aplicacao ainda inicializando ou crashou
+**Solucao**:
 1. Aguarde 30-60 segundos
 2. Verifique os logs
 3. Aumente o timeout de health check
 
-### Erro: ENETUNREACH ao conectar ao banco
-
-**Causa**: O servidor está tentando conectar via IPv6 mas a rede não suporta
-**Sintoma**: Logs mostram erro `ENETUNREACH` com endereço IPv6 (ex: `2600:1f1e:...`)
-
-**Solução 1 - Automática (já implementada)**:
-O docker-entrypoint.sh já força IPv4 com:
-```sh
-export NODE_OPTIONS="--dns-result-order=ipv4first"
-```
-
-**Solução 2 - Connection String IPv4**:
-Use a connection string com host IPv4 direto do Supabase:
-1. No Supabase, vá em Settings → Database
-2. Use "Direct connection" em vez de "Session pooler"
-3. Ou adicione `?options=-c%20prefer_ipv4=true` à URL
-
-**Solução 3 - Adicionar variável no Coolify**:
-Adicione esta variável de ambiente:
-```
-NODE_OPTIONS=--dns-result-order=ipv4first
-```
-
-### Erro: ENOTFOUND ao conectar ao banco (DNS não resolve hostname)
-
-**Causa**: O container Docker não consegue resolver nomes DNS externos
-**Sintoma**: Logs mostram `getaddrinfo ENOTFOUND db.xxx.supabase.co`
-
-**Solução Automática (já implementada)**:
-A aplicação agora usa DNS-over-HTTPS (Cloudflare 1.1.1.1) como fallback quando o DNS do sistema falha. Os logs devem mostrar:
-```
-System DNS failed for db.xxx.supabase.co, trying DoH...
-DoH resolved db.xxx.supabase.co to: 1.2.3.4
-```
-
-Se ainda não funcionar:
-
-**Solução 1 - Habilitar "Connect to Predefined Network" no Coolify**:
-1. Vá nas configurações do serviço no Coolify
-2. Em "Networks", habilite "Connect to Predefined Network"
-3. Redeploy a aplicação
-
-**Solução 2 - Usar IP direto no DATABASE_URL**:
-1. Obtenha o IP do Supabase: `nslookup db.xxx.supabase.co`
-2. Use o IP na connection string:
-   ```
-   postgresql://postgres:senha@IP_AQUI:5432/postgres
-   ```
-
-**Solução 3 - Usar Connection Pooler do Supabase**:
-Use a URL do connection pooler em vez da direta:
-1. No Supabase, vá em Settings → Database → Connection Pooler
-2. Copie a URL que usa `pooler.supabase.com` em vez de `db.xxx.supabase.co`
-
 ---
 
-## Credenciais Padrão
+## Credenciais Padrao
 
-Após o primeiro deploy, faça login com:
-- **Usuário**: admin
+Apos o primeiro deploy, faca login com:
+- **Usuario**: admin
 - **Senha**: admin123
 
-⚠️ **IMPORTANTE**: Altere a senha do admin imediatamente após o primeiro acesso!
-
----
-
-## Suporte
-
-Para problemas específicos:
-1. Verifique os logs da aplicação
-2. Consulte a documentação do Coolify
-3. Verifique status do Supabase
-
----
-
-## Próximos Passos
-
-1. ✅ Deploy inicial
-2. ⬜ Configurar domínio personalizado
-3. ⬜ Configurar SSL/HTTPS
-4. ⬜ Configurar backup automático do banco
-5. ⬜ Monitoramento e alertas
-6. ⬜ Alterar senha do usuário admin
+**IMPORTANTE**: Altere a senha do admin imediatamente apos o primeiro acesso!

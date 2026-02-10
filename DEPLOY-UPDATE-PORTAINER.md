@@ -1,32 +1,27 @@
-# Guia de Atualização - SimulaVoto no Portainer
+# Guia de Atualizacao - SimulaVoto no Portainer
 
-Este guia explica como atualizar uma instalação existente do SimulaVoto em ambiente Portainer.
+Este guia explica como atualizar uma instalacao existente do SimulaVoto em ambiente Portainer.
 
 ---
 
 ## Antes de Atualizar
 
-### 1. Verificar Versão Atual
+### 1. Verificar Versao Atual
 
 ```bash
-# No servidor via SSH
-cd /opt/simulavoto  # ou diretório onde está instalado
+cd /opt/simulavoto
 git log -1 --oneline
 ```
 
 ### 2. Backup do Banco de Dados
 
-**IMPORTANTE**: Sempre faça backup antes de atualizar!
+**IMPORTANTE**: Sempre faca backup antes de atualizar!
 
 ```bash
-# Via pg_dump (recomendado)
 pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Ou via Supabase Dashboard
-# Vá em Settings → Database → Backups
 ```
 
-### 3. Verificar Espaço em Disco
+### 3. Verificar Espaco em Disco
 
 ```bash
 df -h
@@ -35,54 +30,47 @@ df -h
 
 ---
 
-## Métodos de Atualização
+## Metodos de Atualizacao
 
-### Atualização Rápida (Apenas Código)
+### Atualizacao Rapida (Apenas Codigo)
 
-Use este método quando não há mudanças no banco de dados, apenas correções de código:
+Use este metodo quando nao ha mudancas no banco de dados:
 
 ```bash
-# 1. Acesse o servidor via SSH
 cd /opt/simulavoto
-
-# 2. Baixe as atualizações
 git fetch origin && git pull origin main
-
-# 3. Rebuild e restart
 docker compose up -d --build
-
-# 4. Verificar status
 docker compose logs -f --tail=30 simulavoto
 ```
 
-O processo leva aproximadamente 2-3 minutos. A aplicação ficará offline durante o rebuild.
+O processo leva aproximadamente 2-3 minutos.
 
 ---
 
-### Método 1: Via SSH (Recomendado)
+### Metodo 1: Via SSH (Recomendado)
 
-#### 1.1 Parar Aplicação
+#### 1.1 Parar Aplicacao
 
 ```bash
 cd /opt/simulavoto
 docker compose down
 ```
 
-#### 1.2 Baixar Atualizações
+#### 1.2 Baixar Atualizacoes
 
 ```bash
 git fetch origin
 git pull origin main
 ```
 
-#### 1.3 Verificar Novas Variáveis de Ambiente
+#### 1.3 Verificar Variaveis de Ambiente
 
-Consulte a seção [Novas Variáveis](#novas-variáveis-de-ambiente) abaixo.
+Consulte a secao [Variaveis de Ambiente](#variaveis-de-ambiente) abaixo.
 
-Se houver novas variáveis, edite o `.env`:
+**IMPORTANTE**: Certifique-se de usar a URL do **Connection Pooler** (porta 6543):
 ```bash
 nano .env
-# Adicione as novas variáveis conforme necessário
+# DATABASE_URL=postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
 ```
 
 #### 1.4 Rebuild e Deploy
@@ -91,14 +79,7 @@ nano .env
 docker compose up -d --build
 ```
 
-#### 1.5 Executar Migrações do Banco
-
-```bash
-# Aguarde o container iniciar (30 segundos)
-docker exec simulavoto npm run db:push
-```
-
-#### 1.6 Verificar Status
+#### 1.5 Verificar Status
 
 ```bash
 docker compose logs -f
@@ -107,23 +88,23 @@ docker compose logs -f
 
 ---
 
-### Método 2: Via Portainer UI
+### Metodo 2: Via Portainer UI
 
 #### 2.1 Acessar Stack
 
 1. Abra o Portainer
-2. Vá em **Stacks** → **simulavoto**
+2. Va em **Stacks** -> **simulavoto**
 
-#### 2.2 Pull das Atualizações
+#### 2.2 Pull das Atualizacoes
 
 1. Clique em **Editor**
-2. Role até encontrar **Pull and redeploy**
-3. Ou use **Stack actions** → **Pull and redeploy**
+2. Use **Stack actions** -> **Pull and redeploy**
 
-#### 2.3 Verificar Variáveis de Ambiente
+#### 2.3 Verificar Variaveis de Ambiente
 
-1. Vá na aba **Environment variables**
-2. Adicione novas variáveis se necessário (consulte seção abaixo)
+1. Va na aba **Environment variables**
+2. Verifique que `DATABASE_URL` usa porta **6543** (Connection Pooler)
+3. Adicione novas variaveis se necessario
 
 #### 2.4 Redeploy
 
@@ -133,74 +114,51 @@ docker compose logs -f
 
 #### 2.5 Verificar Logs
 
-1. Vá em **Containers**
+1. Va em **Containers**
 2. Clique no container **simulavoto**
-3. Vá em **Logs**
+3. Va em **Logs**
 
 ---
 
-## Novas Variáveis de Ambiente
+## Variaveis de Ambiente
 
-### Versão Janeiro 2026 (Atualização de Segurança e Performance)
+### Janeiro 2026
 
-Nenhuma nova variável obrigatória foi adicionada. As variáveis existentes continuam funcionando:
+Nenhuma nova variavel obrigatoria foi adicionada:
 
-| Variável | Obrigatória | Descrição |
+| Variavel | Obrigatoria | Descricao |
 |----------|-------------|-----------|
-| `DATABASE_URL` | Sim | Connection string PostgreSQL |
-| `SESSION_SECRET` | Sim | Segredo para sessões (32+ chars) |
-| `OPENAI_API_KEY` | Não* | Chave API do OpenAI |
-| `NODE_ENV` | Não | Ambiente (`production`) |
-| `PORT` | Não | Porta (padrão: 5000) |
-| `RESEND_API_KEY` | Não | Para envio de emails |
+| `DATABASE_URL` | Sim | Connection string PostgreSQL (usar Connection Pooler porta 6543) |
+| `SESSION_SECRET` | Sim | Segredo para sessoes (32+ chars) |
+| `OPENAI_API_KEY` | Nao* | Chave API do OpenAI |
+| `NODE_ENV` | Nao | Ambiente (`production`) |
+| `PORT` | Nao | Porta (padrao: 5000) |
+| `RESEND_API_KEY` | Nao | Para envio de emails |
 
-*A chave OpenAI é necessária para recursos de IA como:
-- Recomendações de KPIs
-- Análise de sentimento
-- Previsões eleitorais com IA
-- Validação de dados com IA
+*A chave OpenAI e necessaria para recursos de IA.
 
 ---
 
-## Novos Recursos e Correções (Janeiro 2026)
+## Novos Recursos e Correcoes (Janeiro 2026)
 
-Esta atualização inclui correções críticas de segurança, performance e bugs:
+### Atualizacoes de Seguranca
 
-### Atualizações de Segurança
-
-| Pacote | Versão Anterior | Versão Nova | Correção |
+| Pacote | Versao Anterior | Versao Nova | Correcao |
 |--------|-----------------|-------------|----------|
 | `express` | 4.21.2 | 4.21.3+ | Vulnerabilidade em body-parser/qs |
 | `qs` | < 6.14.1 | 6.14.1+ | DoS via memory exhaustion |
 | `body-parser` | 1.x | 2.2.2 | Vulnerabilidades de parsing |
 
-**Status**: Vulnerabilidades reduzidas de 4 para 1 (apenas lodash moderada restante - dependência indireta)
+### Otimizacoes de Performance (CPU)
 
-### Otimizações de Performance (CPU)
+1. **Simulacoes Eleitorais**: Limite de 5 simultaneas, timeout de 10min
+2. **Busca Semantica**: Eliminacao de queries N+1, consultas em batch
+3. **Processamento CSV**: Yield points para event loop
 
-Correções para prevenir crashes do servidor sob carga:
-
-1. **Simulações Eleitorais** (`server/election-simulation.ts`)
-   - Limite de 5 simulações simultâneas (MAX_ACTIVE_SIMULATIONS)
-   - Timeout de 10 minutos por simulação
-   - Limpeza automática de intervalos órfãos
-
-2. **Busca Semântica** (`server/semantic-search.ts`)
-   - Eliminação de queries N+1
-   - Consultas em batch usando `ANY(voteIds)`
-   - Mapa O(1) para lookups
-
-3. **Processamento CSV** (`server/routes.ts`)
-   - Yield points para event loop após cada batch
-   - Evita bloqueio do servidor durante imports grandes
-
-### Correção de Bug Crítico - Import 2014
+### Correcao de Bug Critico - Import 2014
 
 **Problema**: Imports de CANDIDATO 2014 falhavam com erro `INTEGER overflow`
-
-**Causa**: Campo `SQ_COLIGACAO` na posição 31 contém valores grandes (IDs de 15+ dígitos) que excediam o limite INTEGER
-
-**Solução**: Mapeamento correto das colunas do CSV Legacy (38 colunas) vs Modern (50 colunas)
+**Solucao**: Mapeamento correto das colunas do CSV Legacy (38 colunas) vs Modern (50 colunas)
 
 ### Formatos CSV TSE Suportados
 
@@ -208,96 +166,45 @@ Correções para prevenir crashes do servidor sob carga:
 |------|---------|------|---------|
 | CANDIDATO | Legacy | 2002-2014 | 38 |
 | CANDIDATO | Modern | 2018-2022+ | 50 |
-| PARTIDO | Legacy | ≤2010 | ≤23 |
+| PARTIDO | Legacy | ate 2010 | ate 23 |
 | PARTIDO | Intermediate | 2002-2014 | 28 |
 | PARTIDO | Modern | 2018-2022+ | 36-38 |
 | DETALHE | Universal | Todos | 47 |
 
-### Módulo de Gerenciamento de Campanhas
+### Modulo de Gerenciamento de Campanhas
 
-1. **Gestão de Equipe**
-   - Adicionar/remover membros
-   - Atribuição de funções (Coordenador, Gerente, Membro, Voluntário)
-   - Rastreamento de participação
+1. **Gestao de Equipe**: Adicionar/remover membros com funcoes
+2. **Visualizacao de Calendario**: Grade mensal com atividades
+3. **Metas de KPIs**: Recomendacoes IA via GPT-4o
+4. **Sistema de Notificacoes**: Alertas automaticos
 
-2. **Visualização de Calendário**
-   - Grade mensal com atividades
-   - Codificação por cores por tipo (evento, reunião, marco, ação)
-   - Navegação entre meses
-   - Lista de próximas atividades
+---
 
-3. **Metas de KPIs Estratégicos**
-   - Recomendações de IA via GPT-4o
-   - Criação manual de metas
-   - Acompanhamento de progresso
-   - Níveis de prioridade
+## Migracoes de Banco de Dados
 
-4. **Sistema de Notificações**
-   - Notificações automáticas para eventos da campanha
-   - Alertas de atribuição de tarefas
-   - Integração com sistema de notificações in-app
+### Para instalacao LIMPA (banco novo)
 
-### Migrações de Banco de Dados
+Execute APENAS o `init-db.sql` no Supabase SQL Editor:
 
-O sistema requer novas tabelas para funcionar corretamente. Execute uma das opções:
+1. Acesse o Supabase Dashboard -> **SQL Editor**
+2. Execute `scripts/init-db.sql` (contem todas as 68 tabelas)
+3. Pronto! **Nao** execute o migration.
 
-**Opção 1: Via Drizzle (Recomendado)**
+### Para atualizacao de banco existente
+
+**Opcao 1: Via Drizzle (Recomendado)**
 ```bash
 docker exec simulavoto npm run db:push
 ```
 
-**Opção 2: Via SQL no Supabase**
-
-⚠️ **IMPORTANTE**: Para **instalações LIMPAS**, use APENAS `scripts/init-db.sql`.  
-O migration abaixo é **SOMENTE** para atualizar bancos de versões anteriores.
-
-**Para instalação limpa:**
-1. Acesse o Supabase Dashboard → **SQL Editor**
-2. Execute `scripts/init-db.sql` (contém todas as 68 tabelas)
-3. Pronto! Não execute o migration.
-
-**Para atualização de banco existente:**
-1. Acesse o Supabase Dashboard → **SQL Editor**
+**Opcao 2: Via SQL no Supabase**
+1. Acesse o Supabase Dashboard -> **SQL Editor**
 2. Execute `scripts/migration-2026-01.sql`
-3. **Se houver erros de colunas**, execute também `scripts/fix-columns-2026-01.sql`
-
-**Opção 3: Correção COMPLETA de colunas faltantes (IMPORTANTE!)**
-
-Se o banco já tem tabelas mas com estrutura diferente, você verá erros como:
-- `column "uf_nome" does not exist`
-- `column "taxa_escolarizacao_6_14" does not exist`
-- `column "time_of_day" does not exist`
-- `operator does not exist: character varying = integer`
-
-**Use o script completo atualizado:**
-
-1. Acesse **SQL Editor** no Supabase Dashboard
-2. Cole e execute o conteúdo de `scripts/fix-all-columns-production.sql`
-3. Reinicie o container: `docker compose restart simulavoto`
-
-**Este script corrige:**
-- `parties`: Adiciona `notes`, `tags`, `updated_at`
-- `scenarios`: Adiciona `historical_year`, `historical_uf`, `historical_municipio`
-- `report_schedules`: Adiciona `time_of_day`, `timezone`, `is_active`, `run_count`, etc.
-- `ibge_municipios`: Adiciona `uf_nome`, `regiao_nome`, converte `codigo_ibge` para VARCHAR(7)
-- `ibge_populacao`: Adiciona `tabela_sidra`, converte `codigo_ibge` para VARCHAR(7)
-- `ibge_indicadores`: Recria tabela com estrutura completa (educação, economia, IDH, infraestrutura)
-
-**Novas tabelas incluídas:**
-- `in_app_notifications` - Notificações in-app
-- `ibge_municipios` - Municípios do IBGE
-- `ibge_populacao` - Dados de população
-- `ibge_indicadores` - Indicadores socioeconômicos
-- `ibge_import_jobs` - Jobs de importação IBGE
-- `campaign_team_members` - Membros da equipe de campanha
-- `activity_assignees` - Atribuições de atividades
-- `ai_kpi_goals` - Metas de KPI com suporte IA
-- `campaign_notifications` - Notificações de campanha
-- E outras tabelas de análise de sentimento, dashboards, etc.
+3. **Se houver erros de colunas**, execute tambem `scripts/fix-all-columns-production.sql`
 
 ---
 
-## Verificação Pós-Atualização
+## Verificacao Pos-Atualizacao
 
 ### 1. Health Check
 
@@ -321,21 +228,14 @@ Server running on port 5000
 
 ### 3. Testar Funcionalidades
 
-1. Acesse a aplicação
-2. Faça login como admin
-3. Vá em **Campanhas**
-4. Verifique as novas abas: **Equipe**, **Calendário**, **Metas KPI**
-
-### 4. Verificar Banco de Dados
-
-```bash
-docker exec simulavoto npm run db:push
-# Deve mostrar: "All tables are up to date"
-```
+1. Acesse a aplicacao
+2. Faca login como admin
+3. Va em **Campanhas**
+4. Verifique as novas abas: **Equipe**, **Calendario**, **Metas KPI**
 
 ---
 
-## Rollback (Reverter Atualização)
+## Rollback (Reverter Atualizacao)
 
 Se algo der errado:
 
@@ -345,13 +245,10 @@ Se algo der errado:
 docker compose down
 ```
 
-### 2. Reverter para Versão Anterior
+### 2. Reverter para Versao Anterior
 
 ```bash
-# Ver commits anteriores
 git log --oneline -10
-
-# Reverter para commit específico
 git checkout <commit_hash>
 ```
 
@@ -361,7 +258,7 @@ git checkout <commit_hash>
 docker compose up -d --build
 ```
 
-### 4. Restaurar Backup do Banco (se necessário)
+### 4. Restaurar Backup do Banco (se necessario)
 
 ```bash
 psql $DATABASE_URL < backup_YYYYMMDD_HHMMSS.sql
@@ -369,116 +266,61 @@ psql $DATABASE_URL < backup_YYYYMMDD_HHMMSS.sql
 
 ---
 
-## Troubleshooting de Atualização
+## Troubleshooting
+
+### Erro: network not found
+
+**Causa**: docker-compose antigo referenciava rede `supabase_default`
+**Solucao**: Atualize o docker-compose.yaml (versao atual nao usa redes externas):
+```bash
+git pull
+docker compose down
+docker compose up -d --build
+```
+
+### Erro: ENETUNREACH (IPv6)
+
+**Causa**: DNS retorna apenas IPv6 e container nao tem conectividade IPv6
+**Solucao**: Use a URL do **Connection Pooler** (porta 6543):
+```
+postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
+```
 
 ### Erro: Conflito de Merge no Git
 
 ```bash
-# Descartar mudanças locais e forçar atualização
 git fetch origin
 git reset --hard origin/main
 ```
 
-### Erro: Container não inicia após atualização
+### Erro: Container nao inicia
 
 ```bash
-# Ver logs detalhados
 docker compose logs simulavoto
-
-# Verificar se o build foi bem-sucedido
 docker compose build --no-cache
 docker compose up -d
 ```
 
-### Erro: Tabelas não criadas
+### Erro: Porta ja em uso
 
 ```bash
-# Forçar push do schema
-docker exec simulavoto npm run db:push --force
-```
-
-### Erro: Permissão negada
-
-```bash
-# Corrigir permissões
-chmod +x docker-entrypoint.sh
-docker compose up -d --build
-```
-
-### Erro: Porta já em uso
-
-```bash
-# Verificar o que está usando a porta
 netstat -tlnp | grep 5000
-
-# Parar processo conflitante ou mudar porta no .env
-PORT=5001
+# Parar processo conflitante ou mudar PORT no .env
 ```
 
 ---
 
-## Atualizações Automáticas (Opcional)
+## Checklist de Atualizacao
 
-### Usando Watchtower
-
-Para atualizações automáticas de containers:
-
-```yaml
-# Adicionar ao docker-compose.yaml
-  watchtower:
-    image: containrrr/watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 86400 simulavoto
-    restart: unless-stopped
-```
-
-### Usando Cron
-
-```bash
-# Editar crontab
-crontab -e
-
-# Adicionar job de atualização diária às 3h da manhã
-0 3 * * * cd /opt/simulavoto && git pull && docker compose up -d --build >> /var/log/simulavoto-update.log 2>&1
-```
-
----
-
-## Checklist de Atualização
-
-### Atualização Janeiro 2026 (Segurança + Performance)
+### Atualizacao Janeiro 2026
 
 - [ ] Backup do banco realizado
-- [ ] Espaço em disco verificado (>2GB)
+- [ ] Espaco em disco verificado (>2GB)
+- [ ] `DATABASE_URL` usa Connection Pooler (porta 6543)
 - [ ] `git pull` executado
 - [ ] `docker compose up -d --build` executado
-- [ ] Verificar se pacotes foram atualizados (logs devem mostrar rebuild)
 - [ ] Health check passando (`curl localhost:5000/api/health`)
 - [ ] Testar import TSE 2014 (CANDIDATO) - deve funcionar sem erro overflow
-- [ ] Monitorar CPU durante imports grandes (deve permanecer estável)
+- [ ] Monitorar CPU durante imports grandes (deve permanecer estavel)
 - [ ] Login funcionando
 - [ ] Funcionalidades de IA operacionais (se OPENAI_API_KEY configurada)
-
-### Checklist Geral
-
-- [ ] Backup do banco realizado
-- [ ] Espaço em disco verificado (>2GB)
-- [ ] Novas variáveis de ambiente adicionadas
-- [ ] `git pull` executado
-- [ ] `docker compose up -d --build` executado
-- [ ] `npm run db:push` executado
-- [ ] Health check passando
-- [ ] Login funcionando
-- [ ] Novas funcionalidades acessíveis
-
----
-
-## Suporte
-
-Para problemas com atualização:
-
-1. Verifique os logs: `docker compose logs simulavoto`
-2. Consulte a seção de Troubleshooting
-3. Verifique issues no repositório GitHub
-4. Entre em contato com a equipe de suporte

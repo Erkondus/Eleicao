@@ -1,0 +1,649 @@
+docker compose logs -f
+WARN[0000] Found multiple config files with supported names: /opt/simulavoto/docker-compose.yml, /opt/simulavoto/docker-compose.yaml 
+WARN[0000] Using /opt/simulavoto/docker-compose.yml     
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 35.160.209.8
+simulavoto  | Resolved host: 35.160.209.8
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | npm notice
+simulavoto  | npm notice New major version of npm available! 10.8.2 -> 11.9.0
+simulavoto  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+simulavoto  | npm notice To update run: npm install -g npm@11.9.0
+simulavoto  | npm notice
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 44.238.118.41
+simulavoto  | Resolved host: 44.238.118.41
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 44.238.118.41
+simulavoto  | Resolved host: 44.238.118.41
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 44.238.118.41
+simulavoto  | Resolved host: 44.238.118.41
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 35.160.209.8
+simulavoto  | Resolved host: 35.160.209.8
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 35.160.209.8
+simulavoto  | Resolved host: 35.160.209.8
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 35.160.209.8
+simulavoto  | Resolved host: 35.160.209.8
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 44.238.118.41
+simulavoto  | Resolved host: 44.238.118.41
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto exited with code 1 (restarting)
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: aws-0-us-west-2.pooler.supabase.com
+simulavoto  | DATABASE_URL port: 6543
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS resolved aws-0-us-west-2.pooler.supabase.com to: 44.238.118.41
+simulavoto  | Resolved host: 44.238.118.41
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto  | STARTUP ERROR: error: Tenant or user not found
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   length: 52,
+simulavoto  |   severity: 'FATAL',
+simulavoto  |   code: 'XX000',
+simulavoto  |   detail: undefined,
+simulavoto  |   hint: undefined,
+simulavoto  |   position: undefined,
+simulavoto  |   internalPosition: undefined,
+simulavoto  |   internalQuery: undefined,
+simulavoto  |   where: undefined,
+simulavoto  |   schema: undefined,
+simulavoto  |   table: undefined,
+simulavoto  |   column: undefined,
+simulavoto  |   dataType: undefined,
+simulavoto  |   constraint: undefined,
+simulavoto  |   file: undefined,
+simulavoto  |   line: undefined,
+simulavoto  |   routine: undefined
+simulavoto  | }
+simulavoto exited with code 1 (restarting)

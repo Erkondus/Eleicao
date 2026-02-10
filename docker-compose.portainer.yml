@@ -11,8 +11,9 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - SESSION_SECRET=${SESSION_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - supabase_default
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     deploy:
       mode: replicated
       replicas: 1
@@ -31,7 +32,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
-
-networks:
-  supabase_default:
-    external: true
