@@ -101,12 +101,11 @@ export class IBGEService {
     const remaining = total - processed - failed;
     const estimatedSeconds = recordsPerSecond > 0 ? remaining / recordsPerSecond : 0;
 
-    const batchSize = 500;
     const progress: ImportProgress = {
       phase,
       phaseDescription,
-      currentBatch: Math.ceil((processed + failed) / batchSize),
-      totalBatches: Math.ceil(total / batchSize),
+      currentBatch: Math.ceil((processed + failed) / 1000) || 0,
+      totalBatches: Math.ceil(total / 1000) || 0,
       recordsPerSecond: Math.round(recordsPerSecond * 10) / 10,
       estimatedTimeRemaining: this.formatDuration(estimatedSeconds),
       lastProcessedRecord: lastRecord,
@@ -266,22 +265,57 @@ export class IBGEService {
         console.log(`[IBGE] Filtered out ${skippedCount} municipalities with incomplete data`);
       }
       
+      const batchSize = 1000;
+
       await db.update(ibgeImportJobs)
         .set({ 
           totalRecords: municipios.length,
           errorDetails: { 
             progress: { 
               phase: "import", 
-              phaseDescription: `Importando ${municipios.length} municípios em lote...`,
-              totalBatches: Math.ceil(municipios.length / 500),
+              phaseDescription: `Limpando dados antigos e importando ${municipios.length} municípios...`,
+              totalBatches: Math.ceil(municipios.length / batchSize),
               skippedIncomplete: skippedCount
             } 
           }
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
-      const batchSize = 500;
-      for (let i = 0; i < municipios.length; i += batchSize) {
+      await db.delete(ibgeMunicipios);
+
+      const allValues: InsertIbgeMunicipio[] = [];
+      for (const mun of municipios) {
+        try {
+          const codigoIbge = mun.id.toString().padStart(7, '0');
+          const microrregiao = mun.microrregiao;
+          const mesorregiao = microrregiao?.mesorregiao;
+          const uf = mesorregiao?.UF;
+          const regiao = uf?.regiao;
+          
+          allValues.push({
+            codigoIbge,
+            nome: mun.nome,
+            uf: uf?.sigla || "??",
+            ufNome: uf?.nome || "Desconhecido",
+            regiaoNome: regiao?.nome || "Desconhecido",
+            mesorregiao: mesorregiao?.nome || "Desconhecido",
+            microrregiao: microrregiao?.nome || "Desconhecido",
+          });
+        } catch (err) {
+          const error = err as Error & { code?: string };
+          errorList.push({
+            timestamp: new Date().toISOString(),
+            record: `${mun.nome} (${mun.id})`,
+            errorType: error.code || "PARSE_ERROR",
+            errorMessage: error.message || "Erro desconhecido",
+            errorCode: error.code,
+            details: JSON.stringify({ municipioId: mun.id, nome: mun.nome }),
+          });
+          errors++;
+        }
+      }
+
+      for (let i = 0; i < allValues.length; i += batchSize) {
         if (this.isJobCancelled(jobId)) {
           await db.update(ibgeImportJobs)
             .set({ 
@@ -297,87 +331,36 @@ export class IBGEService {
           return { imported, errors };
         }
 
-        const batch = municipios.slice(i, i + batchSize);
-        
-        const batchValues: InsertIbgeMunicipio[] = [];
-        for (const mun of batch) {
-          try {
-            const codigoIbge = mun.id.toString().padStart(7, '0');
-            const microrregiao = mun.microrregiao;
-            const mesorregiao = microrregiao?.mesorregiao;
-            const uf = mesorregiao?.UF;
-            const regiao = uf?.regiao;
-            
-            batchValues.push({
-              codigoIbge,
-              nome: mun.nome,
-              uf: uf?.sigla || "??",
-              ufNome: uf?.nome || "Desconhecido",
-              regiaoNome: regiao?.nome || "Desconhecido",
-              mesorregiao: mesorregiao?.nome || "Desconhecido",
-              microrregiao: microrregiao?.nome || "Desconhecido",
-            });
-          } catch (err) {
-            const error = err as Error & { code?: string };
-            errorList.push({
-              timestamp: new Date().toISOString(),
-              record: `${mun.nome} (${mun.id})`,
-              errorType: error.code || "PARSE_ERROR",
-              errorMessage: error.message || "Erro desconhecido",
-              errorCode: error.code,
-              details: JSON.stringify({ municipioId: mun.id, nome: mun.nome }),
-            });
-            errors++;
-          }
-        }
+        const batch = allValues.slice(i, i + batchSize);
 
-        if (batchValues.length > 0) {
-          try {
-            await db.insert(ibgeMunicipios)
-              .values(batchValues)
-              .onConflictDoUpdate({
-                target: ibgeMunicipios.codigoIbge,
-                set: {
-                  nome: sql`excluded.nome`,
-                  uf: sql`excluded.uf`,
-                  ufNome: sql`excluded.uf_nome`,
-                  regiaoNome: sql`excluded.regiao_nome`,
-                  mesorregiao: sql`excluded.mesorregiao`,
-                  microrregiao: sql`excluded.microrregiao`,
-                  updatedAt: sql`CURRENT_TIMESTAMP`,
-                }
-              });
-            imported += batchValues.length;
-          } catch (err) {
-            const error = err as Error;
-            console.warn(`[IBGE Municipios] Batch failed at ${i}, falling back to individual inserts:`, error.message);
-            for (const val of batchValues) {
-              try {
-                await db.insert(ibgeMunicipios)
-                  .values(val)
-                  .onConflictDoUpdate({
-                    target: ibgeMunicipios.codigoIbge,
-                    set: {
-                      nome: val.nome,
-                      uf: val.uf,
-                      ufNome: val.ufNome,
-                      regiaoNome: val.regiaoNome,
-                      mesorregiao: val.mesorregiao,
-                      microrregiao: val.microrregiao,
-                      updatedAt: new Date(),
-                    }
+        try {
+          await db.insert(ibgeMunicipios).values(batch);
+          imported += batch.length;
+        } catch (err) {
+          const error = err as Error;
+          console.warn(`[IBGE Municipios] Batch of ${batch.length} failed at ${i}, splitting:`, error.message);
+          const halfSize = Math.ceil(batch.length / 2);
+          for (const subBatch of [batch.slice(0, halfSize), batch.slice(halfSize)]) {
+            if (subBatch.length === 0) continue;
+            try {
+              await db.insert(ibgeMunicipios).values(subBatch);
+              imported += subBatch.length;
+            } catch (subErr) {
+              for (const val of subBatch) {
+                try {
+                  await db.insert(ibgeMunicipios).values(val);
+                  imported++;
+                } catch (innerErr) {
+                  const innerError = innerErr as Error & { code?: string };
+                  errorList.push({
+                    timestamp: new Date().toISOString(),
+                    record: `${val.nome} (${val.codigoIbge})`,
+                    errorType: innerError.code || "DATABASE_ERROR",
+                    errorMessage: innerError.message || "Erro desconhecido",
+                    errorCode: innerError.code,
                   });
-                imported++;
-              } catch (innerErr) {
-                const innerError = innerErr as Error & { code?: string };
-                errorList.push({
-                  timestamp: new Date().toISOString(),
-                  record: `${val.nome} (${val.codigoIbge})`,
-                  errorType: innerError.code || "DATABASE_ERROR",
-                  errorMessage: innerError.message || "Erro desconhecido",
-                  errorCode: innerError.code,
-                });
-                errors++;
+                  errors++;
+                }
               }
             }
           }
@@ -496,14 +479,16 @@ export class IBGEService {
         console.log(`[IBGE Population] Filtered out ${skippedCount} records for invalid/missing municipalities`);
       }
 
+      const batchSize = 1000;
+
       await db.update(ibgeImportJobs)
         .set({ 
           totalRecords: validPopulationData.length,
           errorDetails: { 
             progress: { 
               phase: "import", 
-              phaseDescription: `Importando ${validPopulationData.length} registros de população em lote...`,
-              totalBatches: Math.ceil(validPopulationData.length / 500),
+              phaseDescription: `Importando ${validPopulationData.length} registros de população...`,
+              totalBatches: Math.ceil(validPopulationData.length / batchSize),
               skippedInvalidMunicipios: skippedCount
             } 
           }
@@ -511,8 +496,6 @@ export class IBGEService {
         .where(eq(ibgeImportJobs.id, jobId));
 
       await db.delete(ibgePopulacao).where(eq(ibgePopulacao.ano, targetYear));
-
-      const batchSize = 500;
       
       for (let i = 0; i < validPopulationData.length; i += batchSize) {
         if (this.isJobCancelled(jobId)) {
@@ -725,24 +708,23 @@ export class IBGEService {
         throw new Error("Nenhum município encontrado. Importe os municípios primeiro.");
       }
 
+      const batchSize = 1000;
+      const ano = 2010;
+
       await db.update(ibgeImportJobs)
         .set({ 
           totalRecords: municipios.length,
           errorDetails: { 
             progress: { 
               phase: "import", 
-              phaseDescription: `Gerando indicadores para ${municipios.length} municípios em lote...`,
-              totalBatches: Math.ceil(municipios.length / 500)
+              phaseDescription: `Gerando indicadores para ${municipios.length} municípios...`,
+              totalBatches: Math.ceil(municipios.length / batchSize)
             } 
           }
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
-      const ano = 2010;
-      
       await db.delete(ibgeIndicadores).where(eq(ibgeIndicadores.ano, ano));
-
-      const batchSize = 500;
       
       for (let i = 0; i < municipios.length; i += batchSize) {
         if (this.isJobCancelled(jobId)) {
