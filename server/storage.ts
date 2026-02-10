@@ -1118,92 +1118,71 @@ export class DatabaseStorage implements IStorage {
   async bulkInsertTseCandidateVotes(votes: InsertTseCandidateVote[]): Promise<number> {
     if (votes.length === 0) return 0;
     
-    // Always use smaller batches to avoid "Maximum call stack size exceeded" error
-    const BATCH_SIZE = 500;
-    
-    // Get initial count once
-    const initialCount = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tseCandidateVotes)
-      .then(r => r[0]?.count ?? 0);
+    const NUM_COLUMNS = 54;
+    const BATCH_SIZE = Math.floor(65000 / NUM_COLUMNS * 0.9);
+    let totalInserted = 0;
     
     for (let i = 0; i < votes.length; i += BATCH_SIZE) {
       const batch = votes.slice(i, i + BATCH_SIZE);
-      try {
-        await db.insert(tseCandidateVotes)
-          .values(batch)
-          .onConflictDoNothing();
-      } catch (err: any) {
-        console.warn(`[bulkInsertTseCandidateVotes] Batch failed at ${i}:`, err.message);
-      }
+      totalInserted += await this._insertBatchWithSplit("tseCandidateVotes", tseCandidateVotes, batch);
     }
     
-    // Get final count to calculate actual insertions
-    const finalCount = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tseCandidateVotes)
-      .then(r => r[0]?.count ?? 0);
-    
-    return finalCount - initialCount;
+    return totalInserted;
+  }
+
+  private async _insertBatchWithSplit(tableName: string, table: any, records: any[]): Promise<number> {
+    if (records.length === 0) return 0;
+    try {
+      const result = await db.insert(table)
+        .values(records)
+        .onConflictDoNothing()
+        .returning({ id: table.id });
+      return result.length;
+    } catch (err: any) {
+      const isParamError = err.message?.includes("bind") || err.message?.includes("parameters") || err.message?.includes("stack");
+      if (records.length <= 1) {
+        console.warn(`[${tableName}] Single record insert failed:`, err.message);
+        return 0;
+      }
+      if (isParamError || records.length > 50) {
+        const mid = Math.ceil(records.length / 2);
+        const left = await this._insertBatchWithSplit(tableName, table, records.slice(0, mid));
+        const right = await this._insertBatchWithSplit(tableName, table, records.slice(mid));
+        return left + right;
+      }
+      console.warn(`[${tableName}] Batch of ${records.length} failed (non-param error):`, err.message);
+      return 0;
+    }
   }
 
   async insertTseElectoralStatisticsBatch(records: InsertTseElectoralStatistics[]): Promise<number> {
     if (records.length === 0) return 0;
     
-    // Always use smaller batches to avoid "Maximum call stack size exceeded" error
-    const BATCH_SIZE = 500;
+    const NUM_COLUMNS = 47;
+    const BATCH_SIZE = Math.floor(65000 / NUM_COLUMNS * 0.9);
     let totalInserted = 0;
-    
-    // Get initial count once
-    const initialCount = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tseElectoralStatistics)
-      .then(r => r[0]?.count ?? 0);
     
     for (let i = 0; i < records.length; i += BATCH_SIZE) {
       const batch = records.slice(i, i + BATCH_SIZE);
-      try {
-        await db.insert(tseElectoralStatistics)
-          .values(batch)
-          .onConflictDoNothing();
-      } catch (err: any) {
-        console.warn(`[insertTseElectoralStatisticsBatch] Batch failed at ${i}:`, err.message);
-      }
+      totalInserted += await this._insertBatchWithSplit("tseElectoralStatistics", tseElectoralStatistics, batch);
     }
     
-    // Get final count to calculate actual insertions
-    const finalCount = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tseElectoralStatistics)
-      .then(r => r[0]?.count ?? 0);
-    
-    return finalCount - initialCount;
+    return totalInserted;
   }
 
   async insertTsePartyVotesBatch(records: InsertTsePartyVotes[]): Promise<number> {
     if (records.length === 0) return 0;
     
-    // Always use smaller batches to avoid "Maximum call stack size exceeded" error
-    const BATCH_SIZE = 500;
-    
-    // Get initial count once
-    const initialCount = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tsePartyVotes)
-      .then(r => r[0]?.count ?? 0);
+    const NUM_COLUMNS = 41;
+    const BATCH_SIZE = Math.floor(65000 / NUM_COLUMNS * 0.9);
+    let totalInserted = 0;
     
     for (let i = 0; i < records.length; i += BATCH_SIZE) {
       const batch = records.slice(i, i + BATCH_SIZE);
-      try {
-        await db.insert(tsePartyVotes)
-          .values(batch)
-          .onConflictDoNothing();
-      } catch (err: any) {
-        console.warn(`[insertTsePartyVotesBatch] Batch failed at ${i}:`, err.message);
-      }
+      totalInserted += await this._insertBatchWithSplit("tsePartyVotes", tsePartyVotes, batch);
     }
     
-    // Get final count to calculate actual insertions
-    const finalCount = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tsePartyVotes)
-      .then(r => r[0]?.count ?? 0);
-    
-    return finalCount - initialCount;
+    return totalInserted;
   }
 
   async getElectoralStatisticsSummary(filters: {
