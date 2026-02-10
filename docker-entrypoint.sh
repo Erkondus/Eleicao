@@ -16,10 +16,8 @@ if [ -z "$SESSION_SECRET" ]; then
   exit 1
 fi
 
-# Skip db:push - use init-db.sql manually in Supabase SQL Editor
-# This avoids IPv6 connectivity issues with drizzle-kit
-echo "Database migrations should be run manually via init-db.sql"
-echo "See DEPLOY.md for instructions"
+echo "Database: using PostgreSQL container (local)"
+echo "Tables are initialized via init-db.sql on first run"
 
 echo "Starting application..."
 exec npm start

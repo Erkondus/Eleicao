@@ -1,6 +1,6 @@
 # Deploy SimulaVoto no Portainer
 
-Guia completo para deploy do SimulaVoto usando Portainer.
+Guia completo para deploy do SimulaVoto usando Portainer com banco de dados PostgreSQL local.
 
 > **Atualizando uma instalação existente?** Consulte [DEPLOY-UPDATE-PORTAINER.md](./DEPLOY-UPDATE-PORTAINER.md)
 
@@ -10,41 +10,19 @@ Guia completo para deploy do SimulaVoto usando Portainer.
 
 - Portainer instalado e funcionando
 - Acesso SSH ao servidor (para build local)
-- Banco de dados Supabase configurado
 
 ---
 
-## 1. Configurar Banco de Dados (Supabase)
+## 1. Arquitetura
 
-### 1.1 Habilitar Extensões
-No Supabase SQL Editor, execute:
-```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS vector;
-```
+O SimulaVoto utiliza dois containers:
 
-### 1.2 Executar Script de Inicialização
+| Container | Imagem | Descrição |
+|-----------|--------|-----------|
+| `simulavoto-db` | `pgvector/pgvector:pg16` | PostgreSQL 16 com pgvector (banco local) |
+| `simulavoto` | Build local (Dockerfile) | Aplicação Node.js |
 
-Para **instalações limpas**, execute APENAS o `init-db.sql`:
-
-1. Acesse: https://supabase.com/dashboard
-2. Vá em **SQL Editor**
-3. Cole e execute o conteúdo de `scripts/init-db.sql` (contém todas as 68 tabelas)
-4. Pronto! **Não** execute o migration.
-
-> **Nota**: O `init-db.sql` já contém todas as tabelas necessárias. O `migration-2026-01.sql` é APENAS para atualizar bancos de versões anteriores.
-
-### 1.3 Obter Connection String (Connection Pooler)
-
-**IMPORTANTE**: Use a URL do **Connection Pooler** (porta 6543), não a conexão direta (porta 5432). O Connection Pooler tem suporte IPv4, evitando problemas de conectividade.
-
-1. No Supabase, vá em **Settings** → **Database**
-2. Procure **Connection Pooler** (ou "Connection String - Pooler")
-3. Copie a URL com porta **6543**
-4. Formato:
-   ```
-   postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
-   ```
+O banco de dados é inicializado automaticamente com o script `init-db.sql` no primeiro deploy. Os dados ficam persistidos no volume Docker `simulavoto_pgdata`.
 
 ---
 
@@ -60,7 +38,7 @@ cd simulavoto
 ### 2.2 Criar arquivo .env
 ```bash
 cat > .env << 'EOF'
-DATABASE_URL=postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
+POSTGRES_PASSWORD=SuaSenhaSegura2026!
 SESSION_SECRET=GERE_COM_openssl_rand_base64_32
 OPENAI_API_KEY=sk-sua-chave-aqui
 EOF
@@ -69,6 +47,11 @@ EOF
 Para gerar SESSION_SECRET:
 ```bash
 openssl rand -base64 32
+```
+
+Para gerar POSTGRES_PASSWORD:
+```bash
+openssl rand -base64 24
 ```
 
 ### 2.3 Build e Deploy
@@ -83,8 +66,9 @@ docker compose logs -f
 
 Deve mostrar:
 ```
-Database pool initialized successfully
-Server running on port 5000
+simulavoto-db  | database system is ready to accept connections
+simulavoto     | Database pool initialized successfully
+simulavoto     | Server running on port 5000
 ```
 
 ---
@@ -100,16 +84,18 @@ Server running on port 5000
 1. Selecione **Repository**
 2. **Repository URL**: `https://github.com/Erkondus/Eleicao`
 3. **Repository reference**: `refs/heads/main`
-4. **Compose path**: `docker-compose.yaml`
+4. **Compose path**: `docker-compose.portainer.yml`
 
 ### 3.3 Adicionar Environment Variables
 Clique em **Add environment variable** para cada:
 
 | Nome | Valor |
 |------|-------|
-| `DATABASE_URL` | `postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres` |
+| `POSTGRES_PASSWORD` | Senha segura para o PostgreSQL local (ex: resultado de `openssl rand -base64 24`) |
 | `SESSION_SECRET` | Resultado de `openssl rand -base64 32` |
 | `OPENAI_API_KEY` | `sk-sua-chave-aqui` |
+
+> **Nota**: A `DATABASE_URL` é gerada automaticamente pelo docker-compose usando a `POSTGRES_PASSWORD`. Você não precisa configurá-la manualmente.
 
 ### 3.4 Deploy
 Clique em **Deploy the stack**
@@ -136,6 +122,8 @@ Clique em **Deploy the stack**
 | Block Common Exploits | Sim |
 | Websockets Support | Sim |
 
+> **Nota**: Se o Nginx Proxy Manager estiver em outro stack/contexto Docker, use o IP do servidor ao invés do nome do container.
+
 ### 4.3 Configurar SSL
 
 **Aba SSL:**
@@ -160,14 +148,20 @@ Acesse: `http://IP_DO_SERVIDOR:5000`
 ### Ver logs
 ```bash
 docker compose logs -f simulavoto
+docker compose logs -f db
 ```
 
-### Reiniciar
+### Reiniciar aplicação
 ```bash
 docker compose restart simulavoto
 ```
 
-### Atualizar (nova versao)
+### Reiniciar banco
+```bash
+docker compose restart db
+```
+
+### Atualizar (nova versão)
 ```bash
 git pull
 docker compose up -d --build
@@ -178,105 +172,115 @@ docker compose up -d --build
 docker compose down
 ```
 
-### Remover tudo (incluindo volumes)
+### Remover tudo (incluindo dados do banco)
 ```bash
 docker compose down -v
 ```
 
+> **CUIDADO**: `docker compose down -v` remove o volume com todos os dados do banco!
+
 ---
 
-## 6. Troubleshooting
+## 6. Backup e Restauração
 
-### Container nao inicia
+### Backup do banco
+```bash
+docker exec simulavoto-db pg_dump -U simulavoto simulavoto > backup_$(date +%Y%m%d).sql
+```
+
+### Restaurar backup
+```bash
+docker exec -i simulavoto-db psql -U simulavoto simulavoto < backup_20260210.sql
+```
+
+### Backup do volume Docker
+```bash
+docker run --rm -v simulavoto_pgdata:/data -v $(pwd):/backup alpine tar czf /backup/pgdata_backup.tar.gz -C /data .
+```
+
+---
+
+## 7. Troubleshooting
+
+### Container da aplicação não inicia
 ```bash
 docker compose logs simulavoto
 ```
 
-### Erro: ENETUNREACH (IPv6)
-
-**Causa**: O DNS retorna apenas IPv6 e o container nao tem conectividade IPv6.
-
-**Solucao**: Use a URL do **Connection Pooler** (porta 6543) que tem suporte IPv4:
-```
-postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
-```
-
-O docker-compose.yaml ja inclui DNS Google (8.8.8.8) e Cloudflare (1.1.1.1) como fallback.
-
-### Erro: ENOTFOUND (DNS)
-
-**Causa**: O container nao consegue resolver nomes DNS.
-
-**Solucao 1**: O docker-compose.yaml ja configura DNS publicos.
-
-**Solucao 2**: Use IP direto:
+### Container do banco não inicia
 ```bash
-nslookup aws-0-us-east-1.pooler.supabase.com
-# Use o IP retornado na DATABASE_URL
+docker compose logs db
 ```
 
-### Erro: SSL/TLS
-Verifique se a DATABASE_URL esta correta e o Supabase permite conexoes externas.
+### Verificar se o banco está acessível
+```bash
+docker exec simulavoto-db pg_isready -U simulavoto -d simulavoto
+```
+
+### Acessar o banco via psql
+```bash
+docker exec -it simulavoto-db psql -U simulavoto -d simulavoto
+```
 
 ### Health check falhando
 ```bash
 docker exec simulavoto wget -qO- http://localhost:5000/api/health
 ```
 
-### Erro: network not found
-Se estiver usando Portainer Stack e ver erro sobre `network not found`:
-- Certifique-se de usar a versao mais recente do `docker-compose.yaml` (sem redes externas)
-- Execute: `docker compose down && docker compose up -d`
+### Reinicializar banco (apagar tudo)
+```bash
+docker compose down -v
+docker compose up -d --build
+```
 
 ---
 
-## 7. Credenciais Padrao
+## 8. Credenciais Padrão
 
-- **Usuario**: `admin`
+- **Usuário**: `admin`
 - **Senha**: `admin123`
 
-**IMPORTANTE**: Altere a senha apos o primeiro login!
+**IMPORTANTE**: Altere a senha após o primeiro login!
 
 ---
 
-## 8. Backup
+## 9. Acesso ao Banco de Dados
 
-### Backup do banco (Supabase)
-Use o painel do Supabase ou pg_dump:
+O PostgreSQL está exposto na porta **5433** do host (para evitar conflito com PostgreSQL local na porta 5432).
+
+Para conectar de fora do Docker:
 ```bash
-pg_dump $DATABASE_URL > backup.sql
+psql -h localhost -p 5433 -U simulavoto -d simulavoto
 ```
 
-### Restaurar
-```bash
-psql $DATABASE_URL < backup.sql
-```
+A senha é a definida em `POSTGRES_PASSWORD` no `.env`.
 
 ---
 
-## 9. Funcionalidades Disponiveis
+## 10. Variáveis de Ambiente
 
-### Modulos Principais
-
-| Modulo | Descricao |
-|--------|-----------|
-| **Dashboard Eleitoral** | Mapa interativo do Brasil, metricas consolidadas, status de importacoes |
-| **Simulacoes** | Calculo de quocientes eleitorais, distribuicao de cadeiras (D'Hondt) |
-| **Importacao TSE** | Upload de CSV ate 5GB com monitoramento em tempo real |
-| **Previsoes IA** | Monte Carlo, analise de tendencias, narrativas GPT-4o |
-| **Analise de Sentimento** | Multi-fonte (noticias, redes sociais), word cloud, alertas de crise |
-| **Campanhas** | Gestao de equipe, calendario, orcamento, KPIs estrategicos |
-| **Relatorios** | Geracao automatica CSV/PDF, agendamento, envio por email |
-
-### Variaveis de Ambiente Completas
-
-| Variavel | Obrigatoria | Descricao |
+| Variável | Obrigatória | Descrição |
 |----------|-------------|-----------|
-| `DATABASE_URL` | Sim | Connection string PostgreSQL/Supabase (usar Connection Pooler porta 6543) |
-| `SESSION_SECRET` | Sim | Segredo para criptografia de sessoes |
-| `OPENAI_API_KEY` | Nao* | Para recursos de IA (previsoes, analise, KPIs) |
-| `RESEND_API_KEY` | Nao | Para envio de relatorios por email |
-| `NODE_ENV` | Nao | Ambiente de execucao (padrao: production) |
-| `PORT` | Nao | Porta do servidor (padrao: 5000) |
+| `POSTGRES_PASSWORD` | Sim | Senha do PostgreSQL local |
+| `SESSION_SECRET` | Sim | Segredo para criptografia de sessões |
+| `OPENAI_API_KEY` | Não* | Para recursos de IA (previsões, análise, KPIs) |
+| `RESEND_API_KEY` | Não | Para envio de relatórios por email |
 
 *Recursos de IA requerem OPENAI_API_KEY para funcionar completamente.
+
+> **Nota**: `DATABASE_URL`, `NODE_ENV` e `PORT` são configurados automaticamente pelo docker-compose.
+
+---
+
+## 11. Funcionalidades Disponíveis
+
+| Módulo | Descrição |
+|--------|-----------|
+| **Dashboard Eleitoral** | Mapa interativo do Brasil, métricas consolidadas, status de importações |
+| **Simulações** | Cálculo de quocientes eleitorais, distribuição de cadeiras (D'Hondt) |
+| **Importação TSE** | Upload de CSV até 5GB com monitoramento em tempo real |
+| **Importação IBGE** | Municípios, população e indicadores com import otimizado em lote |
+| **Previsões IA** | Monte Carlo, análise de tendências, narrativas GPT-4o |
+| **Análise de Sentimento** | Multi-fonte (notícias, redes sociais), word cloud, alertas de crise |
+| **Campanhas** | Gestão de equipe, calendário, orçamento, KPIs estratégicos |
+| **Relatórios** | Geração automática CSV/PDF, agendamento, envio por email |

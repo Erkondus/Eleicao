@@ -1,6 +1,6 @@
 # SimulaVoto - Guia de Deploy
 
-Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dados.
+Este guia explica como fazer deploy do SimulaVoto com banco de dados PostgreSQL local (container Docker).
 
 ## Opcoes de Deploy
 
@@ -14,7 +14,7 @@ Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dad
 ## Indice
 
 1. [Pre-requisitos](#pre-requisitos)
-2. [Configuracao do Supabase](#configuracao-do-supabase)
+2. [Configuracao do Banco de Dados](#configuracao-do-banco-de-dados)
 3. [Configuracao do Coolify](#configuracao-do-coolify)
 4. [Variaveis de Ambiente](#variaveis-de-ambiente)
 5. [Deploy Local com Docker](#deploy-local-com-docker)
@@ -25,53 +25,28 @@ Este guia explica como fazer deploy do SimulaVoto com Supabase como banco de dad
 
 ## Pre-requisitos
 
-- Conta no [Supabase](https://supabase.com) (gratuito para comecar)
 - Servidor com [Coolify](https://coolify.io) ou [Portainer](https://www.portainer.io/)
 - Chave de API do OpenAI (para recursos de IA)
 - Git repository com o codigo fonte
 
 ---
 
-## Configuracao do Supabase
+## Configuracao do Banco de Dados
 
-### 1. Criar Projeto
+O banco de dados PostgreSQL e executado como um container Docker local, usando a imagem `pgvector/pgvector:pg16` que ja inclui suporte a extensao `vector` para busca semantica.
 
-1. Acesse [app.supabase.com](https://app.supabase.com)
-2. Clique em "New Project"
-3. Configure:
-   - **Nome**: SimulaVoto (ou nome de sua preferencia)
-   - **Senha do Banco**: Gere uma senha forte
-   - **Regiao**: Escolha a mais proxima (ex: South America - Sao Paulo)
-4. Clique em "Create new project"
+### Inicializacao Automatica
 
-### 2. Habilitar Extensoes
+O banco e inicializado automaticamente no primeiro deploy:
+- O script `scripts/init-db.sql` e montado como volume e executado automaticamente pelo PostgreSQL
+- As extensoes `pgcrypto`, `uuid-ossp` e `vector` sao criadas automaticamente
+- Todas as 68 tabelas sao criadas no primeiro start
 
-No **SQL Editor**, execute:
-```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS vector;
-```
+### Dados Persistentes
 
-### 3. Executar Script de Criacao de Tabelas
+Os dados ficam armazenados no volume Docker `simulavoto_pgdata` e sobrevivem a reinicializacoes e atualizacoes.
 
-**Para instalacoes limpas**, execute APENAS o `init-db.sql`:
-
-1. No **SQL Editor**, copie e execute o conteudo de `scripts/init-db.sql`
-2. Pronto! O script contem todas as 68 tabelas.
-
-> **Nota**: O `migration-2026-01.sql` e APENAS para atualizar bancos de versoes anteriores. Nao execute em instalacoes limpas.
-
-### 4. Obter Connection String (Connection Pooler)
-
-**IMPORTANTE**: Use a URL do **Connection Pooler** (porta 6543), nao a conexao direta (porta 5432).
-
-1. Va em **Settings** -> **Database**
-2. Procure **Connection Pooler**
-3. Copie a URL com porta **6543**
-4. Formato:
-   ```
-   postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
-   ```
+> **CUIDADO**: Apenas `docker compose down -v` remove os dados do banco!
 
 ---
 
@@ -105,11 +80,9 @@ Adicione as seguintes variaveis em **Environment Variables**:
 
 | Variavel | Descricao | Exemplo |
 |----------|-----------|---------|
-| `DATABASE_URL` | URL de conexao PostgreSQL (Connection Pooler) | `postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres` |
+| `POSTGRES_PASSWORD` | Senha do PostgreSQL local | `SuaSenhaSegura2026!` |
 | `SESSION_SECRET` | Segredo para sessoes (32+ caracteres) | `gerar-string-aleatoria-longa` |
 | `OPENAI_API_KEY` | Chave API do OpenAI | `sk-...` |
-| `NODE_ENV` | Ambiente | `production` |
-| `PORT` | Porta da aplicacao | `5000` |
 
 ### 5. Recursos Recomendados
 
@@ -132,7 +105,7 @@ Adicione as seguintes variaveis em **Environment Variables**:
 
 | Variavel | Descricao |
 |----------|-----------|
-| `DATABASE_URL` | Connection string do PostgreSQL/Supabase (usar Connection Pooler porta 6543) |
+| `POSTGRES_PASSWORD` | Senha do PostgreSQL local |
 | `SESSION_SECRET` | String secreta para criptografia de sessoes |
 
 ### Opcionais
@@ -164,7 +137,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 1. Clone o repositorio
 2. Crie um arquivo `.env`:
    ```env
-   DATABASE_URL=postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
+   POSTGRES_PASSWORD=SuaSenhaSegura2026!
    SESSION_SECRET=sua-chave-secreta-aqui-32-caracteres
    OPENAI_API_KEY=sk-sua-chave-openai
    ```
@@ -176,24 +149,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 4. Acesse: http://localhost:5000
 
-### Usando Docker Apenas
-
-1. Build da imagem:
-   ```bash
-   docker build -t simulavoto:latest .
-   ```
-
-2. Execute:
-   ```bash
-   docker run -d \
-     --name simulavoto \
-     -p 5000:5000 \
-     --dns 8.8.8.8 \
-     -e DATABASE_URL="sua-url-do-pooler" \
-     -e SESSION_SECRET="sua-chave-secreta" \
-     -e OPENAI_API_KEY="sk-sua-chave" \
-     simulavoto:latest
-   ```
+> O banco PostgreSQL e criado automaticamente como container Docker com volume persistente.
 
 ---
 
@@ -236,27 +192,14 @@ docker exec -it simulavoto sh
 ### Erro: DATABASE_URL nao definida
 
 **Causa**: Variavel de ambiente nao configurada
-**Solucao**: Verifique se `DATABASE_URL` esta definida no `.env` ou nas variaveis do Coolify/Portainer
+**Solucao**: A `DATABASE_URL` e gerada automaticamente pelo docker-compose. Verifique se `POSTGRES_PASSWORD` esta definida no `.env`.
 
-### Erro: ENETUNREACH (IPv6)
+### Erro: Banco nao conecta
 
-**Causa**: O DNS retorna apenas IPv6 e o container nao tem conectividade IPv6
-**Solucao**: Use a URL do **Connection Pooler** (porta 6543) que tem suporte IPv4:
-```
-postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
-```
-
-### Erro: ENOTFOUND (DNS)
-
-**Causa**: Container nao consegue resolver nomes DNS
-**Solucao**: O docker-compose.yaml ja configura DNS publicos (8.8.8.8, 1.1.1.1). Se persistir, use IP direto na DATABASE_URL.
-
-### Erro: Extensao vector nao encontrada
-
-**Causa**: pgvector nao habilitado
-**Solucao**: Execute no SQL Editor do Supabase:
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
+**Causa**: Container do banco ainda inicializando
+**Solucao**: Verifique se o container do banco esta saudavel:
+```bash
+docker exec simulavoto-db pg_isready -U simulavoto -d simulavoto
 ```
 
 ### Erro de permissao no docker-entrypoint.sh

@@ -1,4 +1,30 @@
 services:
+  db:
+    container_name: simulavoto-db
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=simulavoto
+      - POSTGRES_USER=simulavoto
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-SimulaVoto2026!}
+    volumes:
+      - simulavoto_pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simulavoto -d simulavoto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   simulavoto:
     container_name: simulavoto
     build:
@@ -9,13 +35,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://simulavoto:${POSTGRES_PASSWORD:-SimulaVoto2026!}@db:5432/simulavoto
       - SESSION_SECRET=${SESSION_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
     deploy:
       resources:
         limits:
@@ -28,3 +54,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+volumes:
+  simulavoto_pgdata:
+    driver: local
