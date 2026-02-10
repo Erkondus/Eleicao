@@ -1,0 +1,488 @@
+docker compose logs -f
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | npm notice
+simulavoto  | npm notice New major version of npm available! 10.8.2 -> 11.8.0
+simulavoto  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.8.0
+simulavoto  | npm notice To update run: npm install -g npm@11.8.0
+simulavoto  | npm notice
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | NODE_OPTIONS: --dns-result-order=ipv4first
+simulavoto  | Database migrations should be run manually via init-db.sql
+simulavoto  | See DEPLOY.md for instructions
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | DATABASE_URL host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving database hostname to IPv4...
+simulavoto  | System DNS failed for db.sxmqsiwpdocxbiscvpeg.supabase.co, trying DoH...
+simulavoto  | All DNS resolution methods failed for db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Resolved host: db.sxmqsiwpdocxbiscvpeg.supabase.co
+simulavoto  | Creating database pool...
+simulavoto  | SSL enabled for external database
+simulavoto  | Pool config SSL: enabled
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test failed: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto  | STARTUP ERROR: Error: connect ENETUNREACH 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb:5432 - Local (:::0)
+simulavoto  |     at /app/dist/index.cjs:76:13330
+simulavoto  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+simulavoto  |     at async pZ (/app/dist/index.cjs:82:113365)
+simulavoto  |     at async /app/dist/index.cjs:1246:14138 {
+simulavoto  |   errno: -101,
+simulavoto  |   code: 'ENETUNREACH',
+simulavoto  |   syscall: 'connect',
+simulavoto  |   address: '2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb',
+simulavoto  |   port: 5432
+simulavoto  | }
+simulavoto exited with code 1 (restarting)
+

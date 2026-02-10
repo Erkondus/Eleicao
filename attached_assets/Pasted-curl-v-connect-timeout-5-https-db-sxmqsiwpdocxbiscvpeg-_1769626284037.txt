@@ -1,0 +1,50 @@
+curl -v --connect-timeout 5 https://db.sxmqsiwpdocxbiscvpeg.supabase.co:5432 2>&1 | head -20
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0* Host db.sxmqsiwpdocxbiscvpeg.supabase.co:5432 was resolved.
+* IPv6: 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb
+* IPv4: (none)
+*   Trying [2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb]:5432...
+* ALPN: curl offers h2,http/1.1
+} [5 bytes data]
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+} [1590 bytes data]
+*  CAfile: /etc/ssl/certs/ca-certificates.crt
+*  CApath: /etc/ssl/certs
+{ [5 bytes data]
+* TLSv1.3 (IN), TLS alert, no application protocol (632):
+{ [2 bytes data]
+* TLS connect error: error:0A000460:SSL routines::tlsv1 alert no application protocol
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+* closing connection #0
+curl: (35) TLS connect error: error:0A000460:SSL routines::tlsv1 alert no application protocol
+root@manager:/opt/simulavoto# # Teste conectividade IPv4 ao Supabase
+curl -v --connect-timeout 5 https://db.sxmqsiwpdocxbiscvpeg.supabase.co:5432 2>&1 | head -20
+
+# Verifique resolução DNS
+nslookup db.sxmqsiwpdocxbiscvpeg.supabase.co
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0* Host db.sxmqsiwpdocxbiscvpeg.supabase.co:5432 was resolved.
+* IPv6: 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb
+* IPv4: (none)
+*   Trying [2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb]:5432...
+* ALPN: curl offers h2,http/1.1
+} [5 bytes data]
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+} [1590 bytes data]
+*  CAfile: /etc/ssl/certs/ca-certificates.crt
+*  CApath: /etc/ssl/certs
+{ [5 bytes data]
+* TLSv1.3 (IN), TLS alert, no application protocol (632):
+{ [2 bytes data]
+* TLS connect error: error:0A000460:SSL routines::tlsv1 alert no application protocol
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+* closing connection #0
+curl: (35) TLS connect error: error:0A000460:SSL routines::tlsv1 alert no application protocol
+Server:		127.0.0.53
+Address:	127.0.0.53#53
+
+Non-authoritative answer:
+Name:	db.sxmqsiwpdocxbiscvpeg.supabase.co
+Address: 2600:1f13:838:6e0f:c19d:38a6:9dbb:faeb
