@@ -74,18 +74,21 @@ else
   echo "Connecting to: ${DB_HOST}:${DB_PORT}"
   echo "DNS resolution: IPv4 forced via NODE_OPTIONS"
 
-  case "$DATABASE_URL" in
-    *sslmode=*)
-      ;;
-    *\?*)
-      export DATABASE_URL="${DATABASE_URL}&sslmode=require"
-      echo "SSL: appended sslmode=require"
-      ;;
-    *)
-      export DATABASE_URL="${DATABASE_URL}?sslmode=require"
-      echo "SSL: appended sslmode=require"
-      ;;
-  esac
+  SSL_VAL=$(echo "${DATABASE_SSL:-auto}" | tr '[:upper:]' '[:lower:]')
+  if [ "$SSL_VAL" = "false" ] || [ "$SSL_VAL" = "0" ]; then
+    echo "SSL: disabled via DATABASE_SSL=false"
+    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
+  elif [ "$SSL_VAL" = "true" ] || [ "$SSL_VAL" = "1" ]; then
+    echo "SSL: forced ON via DATABASE_SSL=true"
+    case "$DATABASE_URL" in
+      *sslmode=*) echo "SSL: sslmode already present in DATABASE_URL" ;;
+      *\?*) export DATABASE_URL="${DATABASE_URL}&sslmode=require" ;;
+      *) export DATABASE_URL="${DATABASE_URL}?sslmode=require" ;;
+    esac
+  else
+    echo "SSL: auto mode - app will try SSL first, fallback without"
+    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
+  fi
 fi
 
 echo "Running database schema sync (db:push)..."

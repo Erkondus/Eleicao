@@ -54,16 +54,17 @@ EOF
 **Modo Externo (Supabase self-hosted em bpxgroup.com.br):**
 ```bash
 cat > .env << 'EOF'
-DATABASE_URL=postgresql://postgres:SuaSenhaSupabase@supabase.bpxgroup.com.br:5432/postgres
+DATABASE_URL=postgresql://postgres:SuaSenhaSupabase@72.60.255.204:5432/postgres
+DATABASE_SSL=auto
 SESSION_SECRET=GERE_COM_openssl_rand_base64_32
 OPENAI_API_KEY=sk-sua-chave-aqui
 EOF
 ```
 
-> **Supabase com Connection Pooler (PgBouncer):** Use porta 6543:
-> ```
-> DATABASE_URL=postgresql://postgres:SuaSenhaSupabase@supabase.bpxgroup.com.br:6543/postgres
-> ```
+> **IMPORTANTE**: Usar o IP direto (`72.60.255.204`) porque o dominio `supabase.bpxgroup.com.br`
+> passa pelo Cloudflare, que nao redireciona conexoes PostgreSQL (porta 5432).
+> `DATABASE_SSL=auto` (padrao) tenta SSL primeiro e faz fallback automaticamente.
+> Se seu PostgreSQL tem SSL habilitado (ex: Nginx/Supavisor com Let's Encrypt), use `DATABASE_SSL=true`.
 
 Para gerar senhas seguras:
 ```bash
@@ -98,7 +99,10 @@ simulavoto     | Server running on port 5000
 Ou para modo externo:
 ```
 simulavoto     | Database mode: EXTERNAL (Supabase/cloud)
-simulavoto     | Connecting to: supabase.bpxgroup.com.br:5432
+simulavoto     | Connecting to: 72.60.255.204:5432
+simulavoto     | SSL: auto mode - app will try SSL first, fallback without
+simulavoto     | SSL mode: auto (DATABASE_SSL=auto)
+simulavoto     | SSL: connected successfully WITH SSL
 simulavoto     | Database pool initialized successfully
 simulavoto     | Server running on port 5000
 ```
@@ -136,9 +140,12 @@ simulavoto     | Server running on port 5000
 
 | Nome | Valor |
 |------|-------|
-| `DATABASE_URL` | `postgresql://postgres:SuaSenha@supabase.bpxgroup.com.br:5432/postgres` |
+| `DATABASE_URL` | `postgresql://postgres:SuaSenha@72.60.255.204:5432/postgres` |
+| `DATABASE_SSL` | `auto` (tenta SSL primeiro, fallback sem SSL) |
 | `SESSION_SECRET` | Resultado de `openssl rand -base64 32` |
 | `OPENAI_API_KEY` | `sk-sua-chave-aqui` |
+
+> **IMPORTANTE**: Use o IP direto do servidor (`72.60.255.204`) em vez do dominio (`supabase.bpxgroup.com.br`), pois o dominio passa pelo Cloudflare que nao redireciona conexoes PostgreSQL.
 
 ### 3.4 Deploy
 Clique em **Deploy the stack**
@@ -153,21 +160,40 @@ Clique em **Deploy the stack**
 |---------|-----|
 | Dashboard Supabase | `https://supabase.bpxgroup.com.br` |
 | API Supabase | `https://supabaseapi.bpxgroup.com.br` |
-| PostgreSQL direto | `supabase.bpxgroup.com.br:5432` |
+| PostgreSQL direto | `72.60.255.204:5432` (IP direto, sem Cloudflare) |
+
+> **ATENCAO**: O dominio `supabase.bpxgroup.com.br` passa pelo Cloudflare (proxy ativado).
+> O Cloudflare so redireciona HTTP/HTTPS (portas 80/443), NAO redireciona PostgreSQL (porta 5432).
+> Por isso, a DATABASE_URL deve usar o **IP direto** do servidor: `72.60.255.204`
 
 ### Formato da DATABASE_URL
 
-**Conexao direta (porta 5432):**
+**Conexao direta via IP (recomendado):**
 ```
-postgresql://postgres:[SENHA]@supabase.bpxgroup.com.br:5432/postgres
-```
-
-**Via Connection Pooler/PgBouncer (porta 6543, recomendado para producao):**
-```
-postgresql://postgres:[SENHA]@supabase.bpxgroup.com.br:6543/postgres
+postgresql://postgres:[SENHA]@72.60.255.204:5432/postgres
 ```
 
-> **Dica**: Se o Supabase estiver no mesmo servidor ou rede Docker que o SimulaVoto, voce pode usar o IP interno (ex: `172.x.x.x`) na DATABASE_URL. Nesse caso o sistema detecta como modo LOCAL automaticamente (sem SSL).
+**Via Connection Pooler/PgBouncer (porta 6543):**
+```
+postgresql://postgres:[SENHA]@72.60.255.204:6543/postgres
+```
+
+> **Dica**: Se SimulaVoto e Supabase estiverem no mesmo servidor, voce pode usar o IP interno do Docker
+> (ex: `172.x.x.x`) na DATABASE_URL. Nesse caso o sistema detecta como modo LOCAL (sem SSL).
+
+### Controle de SSL
+
+| Valor de `DATABASE_SSL` | Comportamento |
+|--------------------------|---------------|
+| `auto` (padrao) | Tenta com SSL primeiro; se falhar, tenta sem SSL automaticamente |
+| `true` | SSL sempre habilitado (forcar SSL) |
+| `false` | SSL sempre desabilitado |
+
+**Supabase com Nginx + Let's Encrypt:**
+- O certificado Let's Encrypt protege as portas HTTP/HTTPS (80/443) do dashboard e API
+- A conexao PostgreSQL (porta 5432) pode ou nao ter SSL proprio
+- Use `DATABASE_SSL=auto` (padrao) - o sistema tenta SSL primeiro e faz fallback automaticamente
+- Se voce sabe que o PostgreSQL tem SSL habilitado (ex: via Supavisor), use `DATABASE_SSL=true`
 
 ### Preparar banco no Supabase
 
@@ -374,7 +400,8 @@ psql -h localhost -p 5433 -U simulavoto -d simulavoto
 
 | Variavel | Obrigatoria | Descricao |
 |----------|-------------|-----------|
-| `DATABASE_URL` | Modo externo | URL completa do PostgreSQL (Supabase). Nao definir no modo local |
+| `DATABASE_URL` | Modo externo | URL completa do PostgreSQL. Usar IP direto: `postgresql://postgres:SENHA@72.60.255.204:5432/postgres` |
+| `DATABASE_SSL` | Nao | Controle de SSL: `auto` (padrao, tenta SSL com fallback), `true` (forcar), `false` (desabilitar) |
 | `POSTGRES_PASSWORD` | Modo local | Senha do PostgreSQL local. Ignorada se DATABASE_URL definida |
 | `SESSION_SECRET` | Sim | Segredo para criptografia de sessoes |
 | `OPENAI_API_KEY` | Nao* | Para recursos de IA (previsoes, analise, KPIs) |

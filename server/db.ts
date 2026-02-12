@@ -74,7 +74,18 @@ async function resolveToIPv4(connectionString: string): Promise<string> {
   return connectionString;
 }
 
-function buildPoolConfig(connectionString: string, isLocal: boolean): pg.PoolConfig {
+function getSSLMode(isLocal: boolean): "force" | "disable" | "auto" {
+  const sslEnv = process.env.DATABASE_SSL?.toLowerCase();
+  if (sslEnv === "true" || sslEnv === "1") return "force";
+  if (sslEnv === "false" || sslEnv === "0") return "disable";
+  if (sslEnv === "auto" || !sslEnv) {
+    if (isLocal) return "disable";
+    return "auto";
+  }
+  return "auto";
+}
+
+function buildPoolConfig(connectionString: string, isLocal: boolean, enableSSL: boolean): pg.PoolConfig {
   const config: pg.PoolConfig = {
     connectionString,
     max: 20,
@@ -82,14 +93,20 @@ function buildPoolConfig(connectionString: string, isLocal: boolean): pg.PoolCon
     connectionTimeoutMillis: isLocal ? 10000 : 30000,
   };
 
-  if (process.env.NODE_ENV === "production" && !isLocal) {
+  if (enableSSL) {
     config.ssl = { rejectUnauthorized: false };
-    console.log("SSL enabled for external database");
-  } else {
-    console.log("SSL disabled for local/internal database");
   }
 
   return config;
+}
+
+async function tryConnect(connectionString: string, isLocal: boolean, withSSL: boolean): Promise<pg.Pool> {
+  const config = buildPoolConfig(connectionString, isLocal, withSSL);
+  const testPool = new Pool(config);
+  const client = await testPool.connect();
+  await client.query("SELECT 1");
+  client.release();
+  return testPool;
 }
 
 let _pool: pg.Pool | null = null;
@@ -168,10 +185,33 @@ export async function initializeDatabase(): Promise<void> {
       connectionUrl = await resolveToIPv4(connectionUrl);
     }
 
-    console.log("Creating database pool...");
-    const config = buildPoolConfig(connectionUrl, isLocal);
-    console.log("Pool config SSL:", config.ssl ? "enabled" : "disabled");
-    _pool = new Pool(config);
+    const sslMode = getSSLMode(isLocal);
+    console.log(`SSL mode: ${sslMode} (DATABASE_SSL=${process.env.DATABASE_SSL || 'not set'})`);
+
+    if (sslMode === "force") {
+      console.log("SSL: forced ON (rejectUnauthorized: false)");
+      _pool = await tryConnect(connectionUrl, isLocal, true);
+    } else if (sslMode === "disable") {
+      console.log("SSL: disabled");
+      _pool = await tryConnect(connectionUrl, isLocal, false);
+    } else {
+      console.log("SSL: auto - trying with SSL first...");
+      try {
+        _pool = await tryConnect(connectionUrl, isLocal, true);
+        console.log("SSL: connected successfully WITH SSL");
+      } catch (sslErr) {
+        console.log("SSL: connection with SSL failed, trying without SSL...");
+        console.log("SSL error:", (sslErr as Error).message);
+        try {
+          _pool = await tryConnect(connectionUrl, isLocal, false);
+          console.log("SSL: connected successfully WITHOUT SSL");
+        } catch (noSslErr) {
+          console.error("SSL: connection without SSL also failed:", (noSslErr as Error).message);
+          throw noSslErr;
+        }
+      }
+    }
+
     _db = drizzle(_pool, { schema });
     _initialized = true;
     console.log("Database pool initialized successfully");
