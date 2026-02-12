@@ -200,11 +200,36 @@ postgresql://postgres:[SENHA]@72.60.255.204:6543/postgres
 Antes do primeiro deploy, execute no SQL Editor do Supabase (`https://supabase.bpxgroup.com.br`):
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "vector";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 ```
 
-A aplicacao cria as tabelas automaticamente via Drizzle ORM no primeiro inicio.
+A aplicacao tenta criar as tabelas automaticamente via `db:push` no inicio.
+
+### Se as tabelas NAO forem criadas automaticamente
+
+Se o `db:push` falhar (ex: timeout, DNS, SSL), crie as tabelas manualmente:
+
+**Opcao 1 - SQL Editor do Supabase:**
+1. Abra `https://supabase.bpxgroup.com.br`
+2. Va em **SQL Editor**
+3. Copie o conteudo do arquivo `scripts/create-tables.sql` do projeto
+4. Cole e execute
+
+**Opcao 2 - Via psql:**
+```bash
+psql "postgresql://postgres:SENHA@72.60.255.204:5432/postgres" -f scripts/create-tables.sql
+```
+
+**Opcao 3 - De dentro do container:**
+```bash
+docker exec -it simulavoto cat scripts/create-tables.sql | psql "postgresql://postgres:SENHA@72.60.255.204:5432/postgres"
+```
+
+> O script `create-tables.sql` usa `IF NOT EXISTS` em todos os comandos,
+> entao e seguro executa-lo varias vezes sem risco de perder dados.
 
 ---
 
@@ -360,9 +385,23 @@ Verifique:
 2. O Supabase esta acessivel na porta indicada
 3. As extensoes `vector` e `pg_trgm` estao criadas no banco
 
-### Erro ENETUNREACH com Supabase
-**Causa**: DNS retorna IPv6 e o container nao tem conectividade IPv6.
-**Solucao**: O `docker-compose.supabase.yml` ja configura DNS publico (8.8.8.8 e 1.1.1.1) e o app forca IPv4 via NODE_OPTIONS.
+### Tabelas nao foram criadas (db:push falhou)
+
+Se o `db:push` falhou no inicio do container, as tabelas nao existem. Solucoes:
+
+1. **Corrigir DATABASE_URL** - Use IP direto em vez de dominio com Cloudflare
+2. **Criar manualmente** - Execute `scripts/create-tables.sql` no SQL Editor do Supabase
+3. **Via psql**: `psql "postgresql://postgres:SENHA@72.60.255.204:5432/postgres" -f scripts/create-tables.sql`
+
+Depois de criar as tabelas, reinicie o container:
+```bash
+docker restart simulavoto
+```
+
+### Erro ENETUNREACH ou ETIMEDOUT com Supabase
+**Causa**: DNS retorna IPs do Cloudflare (172.67.x.x, 104.21.x.x) que nao redirecionam PostgreSQL.
+**Solucao**: Use o IP direto do servidor na DATABASE_URL (ex: `72.60.255.204`).
+O entrypoint agora resolve DNS automaticamente, mas IPs Cloudflare continuam inacessiveis na porta 5432.
 
 ### Health check falhando
 ```bash

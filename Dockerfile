@@ -25,6 +25,8 @@ COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/node_modules ./node_modules
 COPY docker-entrypoint.sh ./
+COPY scripts/create-tables.sql ./scripts/create-tables.sql
+COPY migrations ./migrations
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 expressjs && \

@@ -48,6 +48,82 @@ is_local_db() {
   esac
 }
 
+resolve_dns_to_ipv4() {
+  if echo "$DB_HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "Host is already an IPv4 address: ${DB_HOST}"
+    return
+  fi
+
+  echo "Resolving ${DB_HOST} to IPv4..."
+  RESOLVED_IP=$(node -e "
+    const dns = require('dns');
+    dns.setDefaultResultOrder('ipv4first');
+    dns.lookup('${DB_HOST}', { family: 4 }, (err, addr) => {
+      if (err) { console.error('DNS_FAIL:' + err.message); process.exit(1); }
+      console.log(addr);
+    });
+  " 2>&1)
+
+  if echo "$RESOLVED_IP" | grep -q "DNS_FAIL"; then
+    echo "WARNING: DNS resolution failed: ${RESOLVED_IP}"
+    echo "Continuing with original hostname..."
+    return
+  fi
+
+  if [ -n "$RESOLVED_IP" ] && echo "$RESOLVED_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "DNS resolved: ${DB_HOST} -> ${RESOLVED_IP}"
+    export DATABASE_URL=$(echo "$DATABASE_URL" | sed "s|@${DB_HOST}|@${RESOLVED_IP}|g")
+    DB_HOST="$RESOLVED_IP"
+    echo "DATABASE_URL updated to use resolved IP"
+  else
+    echo "WARNING: Could not resolve to IPv4, using original hostname"
+  fi
+}
+
+handle_ssl() {
+  SSL_VAL=$(echo "${DATABASE_SSL:-auto}" | tr '[:upper:]' '[:lower:]')
+  echo "DATABASE_SSL=${SSL_VAL}"
+
+  if [ "$SSL_VAL" = "false" ] || [ "$SSL_VAL" = "0" ]; then
+    echo "SSL: disabled via DATABASE_SSL=false"
+    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
+  elif [ "$SSL_VAL" = "true" ] || [ "$SSL_VAL" = "1" ]; then
+    echo "SSL: forced ON via DATABASE_SSL=true"
+    case "$DATABASE_URL" in
+      *sslmode=*) echo "SSL: sslmode already present in DATABASE_URL" ;;
+      *\?*) export DATABASE_URL="${DATABASE_URL}&sslmode=require" ;;
+      *) export DATABASE_URL="${DATABASE_URL}?sslmode=require" ;;
+    esac
+  else
+    echo "SSL: auto mode - trying with SSL first..."
+    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
+
+    SSL_URL="${DATABASE_URL}?sslmode=require"
+    if node -e "
+      const { Pool } = require('pg');
+      const pool = new Pool({ connectionString: '${SSL_URL}', ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 10000 });
+      pool.query('SELECT 1').then(() => { pool.end(); process.exit(0); }).catch(() => { pool.end(); process.exit(1); });
+    " 2>/dev/null; then
+      echo "SSL: connection with SSL successful"
+      export DATABASE_URL="${SSL_URL}"
+    else
+      echo "SSL: connection with SSL failed, using without SSL"
+    fi
+  fi
+}
+
+test_connection() {
+  echo "Testing database connection..."
+  node -e "
+    const { Pool } = require('pg');
+    const ssl = '${DATABASE_URL}'.includes('sslmode=require') ? { rejectUnauthorized: false } : false;
+    const pool = new Pool({ connectionString: '${DATABASE_URL}', ssl: ssl || undefined, connectionTimeoutMillis: 15000 });
+    pool.query('SELECT 1 as test')
+      .then(res => { console.log('CONNECTION_OK'); pool.end(); process.exit(0); })
+      .catch(err => { console.error('CONNECTION_FAIL:' + err.message); pool.end(); process.exit(1); });
+  " 2>&1
+}
+
 if is_local_db; then
   echo "Database mode: LOCAL (container/internal)"
   echo "Waiting for database at ${DB_HOST}:${DB_PORT}..."
@@ -71,34 +147,58 @@ if is_local_db; then
   done
 else
   echo "Database mode: EXTERNAL (Supabase/cloud)"
-  echo "Connecting to: ${DB_HOST}:${DB_PORT}"
-  echo "DNS resolution: IPv4 forced via NODE_OPTIONS"
+  echo "Original host: ${DB_HOST}:${DB_PORT}"
 
-  SSL_VAL=$(echo "${DATABASE_SSL:-auto}" | tr '[:upper:]' '[:lower:]')
-  if [ "$SSL_VAL" = "false" ] || [ "$SSL_VAL" = "0" ]; then
-    echo "SSL: disabled via DATABASE_SSL=false"
-    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
-  elif [ "$SSL_VAL" = "true" ] || [ "$SSL_VAL" = "1" ]; then
-    echo "SSL: forced ON via DATABASE_SSL=true"
-    case "$DATABASE_URL" in
-      *sslmode=*) echo "SSL: sslmode already present in DATABASE_URL" ;;
-      *\?*) export DATABASE_URL="${DATABASE_URL}&sslmode=require" ;;
-      *) export DATABASE_URL="${DATABASE_URL}?sslmode=require" ;;
-    esac
+  resolve_dns_to_ipv4
+
+  handle_ssl
+
+  echo "Final DATABASE_URL host: ${DB_HOST}"
+
+  CONN_RESULT=$(test_connection)
+  if echo "$CONN_RESULT" | grep -q "CONNECTION_OK"; then
+    echo "Database connection verified successfully!"
   else
-    echo "SSL: auto mode - app will try SSL first, fallback without"
-    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
+    echo "WARNING: Database connection test failed: ${CONN_RESULT}"
+    echo "db:push may fail. Check your DATABASE_URL and network connectivity."
+    echo ""
+    echo "DICA: Se o dominio usa Cloudflare, use o IP direto do servidor na DATABASE_URL"
+    echo "Exemplo: postgresql://postgres:SENHA@72.60.255.204:5432/postgres"
   fi
 fi
 
+echo ""
 echo "Running database schema sync (db:push)..."
-npm run db:push 2>&1 || {
-  echo "Retrying with --force flag..."
-  npm run db:push --force 2>&1 || {
-    echo "WARNING: db:push failed. Tables may need to be created manually."
+echo "DATABASE_URL (masked): postgresql://****@${DB_HOST}:${DB_PORT}/****"
+
+npm run db:push 2>&1 && {
+  echo "db:push completed successfully! Tables created/synced."
+} || {
+  echo ""
+  echo "First db:push attempt failed. Retrying with --force..."
+  npm run db:push --force 2>&1 && {
+    echo "db:push --force completed successfully!"
+  } || {
+    echo ""
+    echo "============================================"
+    echo "WARNING: db:push failed!"
+    echo "============================================"
+    echo "As tabelas podem nao ter sido criadas."
+    echo ""
+    echo "Solucoes:"
+    echo "1. Verifique a DATABASE_URL (use IP direto, nao dominio com Cloudflare)"
+    echo "2. Verifique se o PostgreSQL aceita conexoes externas"
+    echo "3. Execute manualmente no SQL Editor do Supabase:"
+    echo "   - Copie o conteudo de scripts/create-tables.sql"
+    echo "   - Cole e execute no SQL Editor"
+    echo "4. Ou rode via psql:"
+    echo "   psql \$DATABASE_URL -f scripts/create-tables.sql"
+    echo "============================================"
+    echo ""
     echo "The application will attempt to start anyway..."
   }
 }
 
+echo ""
 echo "Starting application..."
 exec npm start
