@@ -12,6 +12,13 @@ services:
       - simulavoto_pgdata:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
     restart: unless-stopped
+    networks:
+      - simulavoto-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -37,11 +44,19 @@ services:
       - PORT=5000
       - DATABASE_URL=postgresql://simulavoto:${POSTGRES_PASSWORD:-SimulaVoto2026!}@db:5432/simulavoto
       - SESSION_SECRET=${SESSION_SECRET}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - simulavoto-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -54,6 +69,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+networks:
+  simulavoto-net:
+    driver: bridge
 
 volumes:
   simulavoto_pgdata:

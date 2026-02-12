@@ -1,7 +1,8 @@
--- SimulaVoto - Database Initialization Script for Supabase/PostgreSQL
--- Este script cria todas as tabelas necessárias para o sistema
--- Atualizado: Janeiro 2026 - Versão completa com todas as 68 tabelas
--- Requer extensão pgvector para busca semântica
+-- SimulaVoto - Database Initialization Script for PostgreSQL (Docker Standalone)
+-- Este script cria todas as tabelas necessarias para o sistema
+-- Atualizado: Fevereiro 2026 - Versao completa com todas as tabelas
+-- Requer extensao pgvector para busca semantica
+-- Executado automaticamente pelo container PostgreSQL no primeiro deploy
 
 -- ===========================================
 -- EXTENSÕES
