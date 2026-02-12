@@ -1,42 +1,92 @@
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import dns from "dns";
+
+dns.setDefaultResultOrder("ipv4first");
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
+function getDatabaseUrl(): string {
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
+
+  const password = process.env.POSTGRES_PASSWORD;
+  if (password) {
+    const host = process.env.POSTGRES_HOST || "db";
+    const port = process.env.POSTGRES_PORT || "5432";
+    const user = process.env.POSTGRES_USER || "simulavoto";
+    const dbName = process.env.POSTGRES_DB || "simulavoto";
+    const url = `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${dbName}`;
+    console.log(`DATABASE_URL constructed from POSTGRES_PASSWORD (host: ${host}:${port})`);
+    return url;
+  }
+
   throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
+    "DATABASE_URL or POSTGRES_PASSWORD must be set. Did you forget to configure the database?",
   );
 }
 
-function buildPoolConfig(connectionString: string): pg.PoolConfig {
+const DATABASE_URL = getDatabaseUrl();
+
+function isLocalDatabase(connectionString: string): boolean {
+  try {
+    const url = new URL(connectionString);
+    const host = url.hostname;
+    return host === 'localhost' ||
+           host === '127.0.0.1' ||
+           host.startsWith('172.') ||
+           host.startsWith('192.168.') ||
+           host.startsWith('10.') ||
+           host.includes('.local') ||
+           !host.includes('.');
+  } catch {
+    return true;
+  }
+}
+
+async function resolveToIPv4(connectionString: string): Promise<string> {
+  try {
+    const url = new URL(connectionString);
+    const hostname = url.hostname;
+
+    if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      return connectionString;
+    }
+
+    const { promisify } = await import("util");
+    const lookup = promisify(dns.lookup);
+    try {
+      const result = await lookup(hostname, { family: 4 });
+      if (result.address) {
+        url.hostname = result.address;
+        console.log(`DNS resolved ${hostname} -> ${result.address}`);
+        return url.toString();
+      }
+    } catch (dnsErr) {
+      console.warn(`DNS resolution failed for ${hostname}:`, (dnsErr as Error).message);
+    }
+  } catch (err) {
+    console.warn("URL parse failed for DNS resolution:", (err as Error).message);
+  }
+
+  return connectionString;
+}
+
+function buildPoolConfig(connectionString: string, isLocal: boolean): pg.PoolConfig {
   const config: pg.PoolConfig = {
     connectionString,
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: isLocal ? 10000 : 30000,
   };
 
-  try {
-    const url = new URL(connectionString);
-    const host = url.hostname;
-    const isLocal = host === 'localhost' ||
-                    host === '127.0.0.1' ||
-                    host.startsWith('172.') ||
-                    host.startsWith('192.168.') ||
-                    host.startsWith('10.') ||
-                    host.includes('.local') ||
-                    !host.includes('.');
-
-    if (process.env.NODE_ENV === "production" && !isLocal) {
-      config.ssl = { rejectUnauthorized: false };
-      console.log("SSL enabled for external database");
-    } else {
-      console.log("SSL disabled for local/internal database");
-    }
-  } catch (e) {
-    console.log("Could not parse connection URL, SSL disabled");
+  if (process.env.NODE_ENV === "production" && !isLocal) {
+    config.ssl = { rejectUnauthorized: false };
+    console.log("SSL enabled for external database");
+  } else {
+    console.log("SSL disabled for local/internal database");
   }
 
   return config;
@@ -98,21 +148,28 @@ export async function initializeDatabase(): Promise<void> {
   console.log("NODE_ENV:", process.env.NODE_ENV);
   console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
 
-  const rawUrl = process.env.DATABASE_URL || "";
+  const isLocal = isLocalDatabase(DATABASE_URL);
+  console.log("Database mode:", isLocal ? "LOCAL (container/internal)" : "EXTERNAL (Supabase/cloud)");
+
   try {
-    const urlObj = new URL(rawUrl);
+    const urlObj = new URL(DATABASE_URL);
     console.log("DATABASE_URL host:", urlObj.hostname);
     console.log("DATABASE_URL port:", urlObj.port || "5432 (default)");
     console.log("DATABASE_URL protocol:", urlObj.protocol);
   } catch (e) {
-    console.error("DATABASE_URL is not a valid URL:", rawUrl.substring(0, 30) + "...");
+    console.error("DATABASE_URL is not a valid URL:", DATABASE_URL.substring(0, 30) + "...");
   }
 
   try {
-    const connectionUrl = process.env.DATABASE_URL!;
+    let connectionUrl = DATABASE_URL;
+
+    if (!isLocal && process.env.NODE_ENV === "production") {
+      console.log("Resolving external database hostname to IPv4...");
+      connectionUrl = await resolveToIPv4(connectionUrl);
+    }
 
     console.log("Creating database pool...");
-    const config = buildPoolConfig(connectionUrl);
+    const config = buildPoolConfig(connectionUrl, isLocal);
     console.log("Pool config SSL:", config.ssl ? "enabled" : "disabled");
     _pool = new Pool(config);
     _db = drizzle(_pool, { schema });

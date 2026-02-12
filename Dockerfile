@@ -16,6 +16,7 @@ RUN apk add --no-cache dumb-init wget
 
 ENV NODE_ENV=production
 ENV PORT=5000
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
