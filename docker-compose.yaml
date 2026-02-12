@@ -2,15 +2,12 @@ services:
   db:
     container_name: simulavoto-db
     image: pgvector/pgvector:pg16
-    profiles:
-      - local-db
-      - full
     ports:
       - "5433:5432"
     environment:
       - POSTGRES_DB=simulavoto
       - POSTGRES_USER=simulavoto
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-SimulaVoto2026!}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - simulavoto_pgdata:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
@@ -36,13 +33,13 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - DATABASE_URL=${DATABASE_URL:-postgresql://simulavoto:${POSTGRES_PASSWORD:-SimulaVoto2026!}@db:5432/simulavoto}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - SESSION_SECRET=${SESSION_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}

@@ -3,8 +3,8 @@
 Guia completo para deploy do SimulaVoto usando Portainer com Docker standalone.
 
 O sistema suporta dois modos de banco de dados:
-- **Modo Local**: PostgreSQL em container Docker (recomendado para simplicidade)
-- **Modo Externo**: Supabase ou qualquer PostgreSQL remoto (recomendado se ja possui infraestrutura)
+- **Modo Local**: PostgreSQL em container Docker (`docker-compose.portainer.yml`)
+- **Modo Externo**: Supabase self-hosted ou qualquer PostgreSQL remoto (`docker-compose.supabase.yml`)
 
 > **Atualizando uma instalacao existente?** Consulte [DEPLOY-UPDATE-PORTAINER.md](./DEPLOY-UPDATE-PORTAINER.md)
 
@@ -12,22 +12,22 @@ O sistema suporta dois modos de banco de dados:
 
 ## 1. Arquitetura
 
-### Modo Local (banco no Docker)
+### Modo Local (docker-compose.portainer.yml)
 
 | Container | Imagem | Descricao |
 |-----------|--------|-----------|
-| `simulavoto-db` | `pgvector/pgvector:pg16` | PostgreSQL 16 com pgvector (banco local) |
+| `simulavoto-db` | `pgvector/pgvector:pg16` | PostgreSQL 16 com pgvector |
 | `simulavoto` | Build local (Dockerfile) | Aplicacao Node.js |
 
 O banco e inicializado automaticamente com `init-db.sql` no primeiro deploy. Dados persistidos no volume `simulavoto_pgdata`.
 
-### Modo Externo (Supabase ou outro)
+### Modo Externo (docker-compose.supabase.yml)
 
 | Container | Imagem | Descricao |
 |-----------|--------|-----------|
 | `simulavoto` | Build local (Dockerfile) | Aplicacao Node.js |
 
-Apenas o container da aplicacao. O banco fica em servidor externo (Supabase, RDS, etc).
+Apenas o container da aplicacao. O banco fica no servidor Supabase externo.
 
 ---
 
@@ -51,16 +51,19 @@ OPENAI_API_KEY=sk-sua-chave-aqui
 EOF
 ```
 
-**Modo Externo (Supabase):**
+**Modo Externo (Supabase self-hosted em bpxgroup.com.br):**
 ```bash
 cat > .env << 'EOF'
-DATABASE_URL=postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres:SuaSenhaSupabase@supabase.bpxgroup.com.br:5432/postgres
 SESSION_SECRET=GERE_COM_openssl_rand_base64_32
 OPENAI_API_KEY=sk-sua-chave-aqui
 EOF
 ```
 
-> **IMPORTANTE (Supabase):** Use a URL do **Connection Pooler** (porta 6543) para compatibilidade com Docker.
+> **Supabase com Connection Pooler (PgBouncer):** Use porta 6543:
+> ```
+> DATABASE_URL=postgresql://postgres:SuaSenhaSupabase@supabase.bpxgroup.com.br:6543/postgres
+> ```
 
 Para gerar senhas seguras:
 ```bash
@@ -72,22 +75,30 @@ openssl rand -base64 32    # para SESSION_SECRET
 
 **Modo Local (com banco no Docker):**
 ```bash
-docker compose --profile local-db up -d --build
+docker compose -f docker-compose.portainer.yml up -d --build
 ```
 
-**Modo Externo (Supabase - apenas aplicacao):**
+**Modo Externo (Supabase):**
 ```bash
-docker compose up -d --build simulavoto
+docker compose -f docker-compose.supabase.yml up -d --build
 ```
 
 ### 2.4 Verificar Status
 ```bash
-docker compose logs -f
+docker compose logs -f simulavoto
 ```
 
 Deve mostrar:
 ```
-simulavoto     | Database mode: LOCAL (container/internal)    # ou EXTERNAL (Supabase/cloud)
+simulavoto     | Database mode: LOCAL (container/internal)
+simulavoto     | Database pool initialized successfully
+simulavoto     | Server running on port 5000
+```
+
+Ou para modo externo:
+```
+simulavoto     | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto     | Connecting to: supabase.bpxgroup.com.br:5432
 simulavoto     | Database pool initialized successfully
 simulavoto     | Server running on port 5000
 ```
@@ -97,7 +108,7 @@ simulavoto     | Server running on port 5000
 ## 3. Deploy via Portainer UI
 
 ### 3.1 Criar Stack
-1. Acesse Portainer
+1. Acesse o Portainer
 2. Va em **Stacks** > **Add Stack**
 3. Nome: `simulavoto`
 
@@ -105,11 +116,13 @@ simulavoto     | Server running on port 5000
 1. Selecione **Repository**
 2. **Repository URL**: `https://github.com/Erkondus/Eleicao`
 3. **Repository reference**: `refs/heads/main`
-4. **Compose path**: `docker-compose.portainer.yml`
+4. **Compose path**:
+   - Modo Local: `docker-compose.portainer.yml`
+   - Modo Externo (Supabase): `docker-compose.supabase.yml`
 
 ### 3.3 Adicionar Environment Variables
 
-**Modo Local:**
+**Modo Local (docker-compose.portainer.yml):**
 
 | Nome | Valor |
 |------|-------|
@@ -117,46 +130,93 @@ simulavoto     | Server running on port 5000
 | `SESSION_SECRET` | Resultado de `openssl rand -base64 32` |
 | `OPENAI_API_KEY` | `sk-sua-chave-aqui` |
 
-> A `DATABASE_URL` e gerada automaticamente usando a `POSTGRES_PASSWORD`.
+> A `DATABASE_URL` e construida automaticamente pelo entrypoint usando `POSTGRES_PASSWORD`.
 
-**Modo Externo (Supabase):**
+**Modo Externo (docker-compose.supabase.yml):**
 
 | Nome | Valor |
 |------|-------|
-| `DATABASE_URL` | `postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres` |
+| `DATABASE_URL` | `postgresql://postgres:SuaSenha@supabase.bpxgroup.com.br:5432/postgres` |
 | `SESSION_SECRET` | Resultado de `openssl rand -base64 32` |
 | `OPENAI_API_KEY` | `sk-sua-chave-aqui` |
-
-> Quando `DATABASE_URL` e definida, o container do banco local nao e necessario.
 
 ### 3.4 Deploy
 Clique em **Deploy the stack**
 
 ---
 
-## 4. Como Funciona a Deteccao de Modo
+## 4. Supabase Self-Hosted (bpxgroup.com.br)
 
-O sistema detecta automaticamente o modo com base no `DATABASE_URL`:
+### Configuracao de acesso
+
+| Servico | URL |
+|---------|-----|
+| Dashboard Supabase | `https://supabase.bpxgroup.com.br` |
+| API Supabase | `https://supabaseapi.bpxgroup.com.br` |
+| PostgreSQL direto | `supabase.bpxgroup.com.br:5432` |
+
+### Formato da DATABASE_URL
+
+**Conexao direta (porta 5432):**
+```
+postgresql://postgres:[SENHA]@supabase.bpxgroup.com.br:5432/postgres
+```
+
+**Via Connection Pooler/PgBouncer (porta 6543, recomendado para producao):**
+```
+postgresql://postgres:[SENHA]@supabase.bpxgroup.com.br:6543/postgres
+```
+
+> **Dica**: Se o Supabase estiver no mesmo servidor ou rede Docker que o SimulaVoto, voce pode usar o IP interno (ex: `172.x.x.x`) na DATABASE_URL. Nesse caso o sistema detecta como modo LOCAL automaticamente (sem SSL).
+
+### Preparar banco no Supabase
+
+Antes do primeiro deploy, execute no SQL Editor do Supabase (`https://supabase.bpxgroup.com.br`):
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+```
+
+A aplicacao cria as tabelas automaticamente via Drizzle ORM no primeiro inicio.
+
+---
+
+## 5. Como Funciona a Deteccao de Modo
+
+O sistema detecta automaticamente o modo com base no hostname da `DATABASE_URL`:
 
 | Hostname | Modo | SSL | DNS IPv4 |
 |----------|------|-----|----------|
 | `db`, `localhost`, `127.0.0.1` | LOCAL | Desabilitado | Nao necessario |
 | `172.x`, `192.168.x`, `10.x` | LOCAL | Desabilitado | Nao necessario |
 | Hostname sem ponto (ex: `postgres-server`) | LOCAL | Desabilitado | Nao necessario |
-| Qualquer outro (ex: `*.supabase.com`) | EXTERNO | Habilitado | Forcado IPv4 |
+| Qualquer dominio (ex: `supabase.bpxgroup.com.br`) | EXTERNO | Habilitado | Forcado IPv4 |
 
-Nao precisa configurar nada - basta fornecer a `DATABASE_URL` correta.
+Nao precisa configurar nada alem da `DATABASE_URL` correta.
 
 ---
 
-## 5. Configurar Nginx Proxy Manager
+## 6. Qual arquivo compose usar?
 
-### 5.1 Adicionar Proxy Host
+| Cenario | Arquivo | Variaveis obrigatorias |
+|---------|---------|----------------------|
+| Banco no Docker (local) | `docker-compose.portainer.yml` | `POSTGRES_PASSWORD`, `SESSION_SECRET` |
+| Supabase bpxgroup.com.br | `docker-compose.supabase.yml` | `DATABASE_URL`, `SESSION_SECRET` |
+| Supabase Cloud (supabase.com) | `docker-compose.supabase.yml` | `DATABASE_URL`, `SESSION_SECRET` |
+| Outro PostgreSQL externo | `docker-compose.supabase.yml` | `DATABASE_URL`, `SESSION_SECRET` |
+| Dev local (sem Docker) | `docker-compose.yaml` | `POSTGRES_PASSWORD`, `SESSION_SECRET` |
+
+---
+
+## 7. Configurar Nginx Proxy Manager
+
+### 7.1 Adicionar Proxy Host
 
 1. Acesse o painel do **Nginx Proxy Manager**
 2. Va em **Hosts** > **Proxy Hosts** > **Add Proxy Host**
 
-### 5.2 Configurar o Host
+### 7.2 Configurar o Host
 
 **Aba Details:**
 | Campo | Valor |
@@ -171,7 +231,7 @@ Nao precisa configurar nada - basta fornecer a `DATABASE_URL` correta.
 
 > Se o Nginx Proxy Manager estiver em outro stack/contexto Docker, use o IP do servidor ao inves do nome do container.
 
-### 5.3 Configurar SSL
+### 7.3 Configurar SSL
 
 **Aba SSL:**
 | Campo | Valor |
@@ -185,47 +245,48 @@ Nao precisa configurar nada - basta fornecer a `DATABASE_URL` correta.
 
 Clique em **Save**.
 
-### 5.4 Alternativa: Acesso Direto (sem proxy)
+### 7.4 Alternativa: Acesso Direto (sem proxy)
 Acesse: `http://IP_DO_SERVIDOR:5000`
 
 ---
 
-## 6. Comandos Uteis
+## 8. Comandos Uteis
 
 ### Ver logs
 ```bash
-docker compose logs -f simulavoto
-docker compose logs -f db          # apenas modo local
+docker compose -f docker-compose.supabase.yml logs -f simulavoto    # modo externo
+docker compose -f docker-compose.portainer.yml logs -f simulavoto   # modo local
+docker compose -f docker-compose.portainer.yml logs -f db           # banco local
 ```
 
 ### Reiniciar aplicacao
 ```bash
-docker compose restart simulavoto
+docker compose -f docker-compose.supabase.yml restart simulavoto
 ```
 
 ### Atualizar (nova versao)
 ```bash
 git pull
-docker compose --profile local-db up -d --build   # modo local
-docker compose up -d --build simulavoto            # modo externo
+docker compose -f docker-compose.supabase.yml up -d --build     # modo externo
+docker compose -f docker-compose.portainer.yml up -d --build     # modo local
 ```
 
 ### Parar
 ```bash
-docker compose --profile local-db down    # modo local
-docker compose down                       # modo externo
+docker compose -f docker-compose.supabase.yml down    # modo externo
+docker compose -f docker-compose.portainer.yml down    # modo local
 ```
 
 ### Remover tudo (incluindo dados do banco local)
 ```bash
-docker compose --profile local-db down -v
+docker compose -f docker-compose.portainer.yml down -v
 ```
 
-> **CUIDADO**: `docker compose down -v` remove o volume com todos os dados do banco local!
+> **CUIDADO**: `-v` remove o volume com todos os dados do banco local!
 
 ---
 
-## 7. Backup e Restauracao
+## 9. Backup e Restauracao
 
 ### Backup do banco local
 ```bash
@@ -234,7 +295,7 @@ docker exec simulavoto-db pg_dump -U simulavoto simulavoto > backup_$(date +%Y%m
 
 ### Backup do banco Supabase
 ```bash
-pg_dump "$DATABASE_URL" > backup_supabase_$(date +%Y%m%d).sql
+pg_dump "postgresql://postgres:SENHA@supabase.bpxgroup.com.br:5432/postgres" > backup_supabase_$(date +%Y%m%d).sql
 ```
 
 ### Restaurar backup (banco local)
@@ -249,29 +310,37 @@ docker run --rm -v simulavoto_pgdata:/data -v $(pwd):/backup alpine tar czf /bac
 
 ---
 
-## 8. Troubleshooting
+## 10. Troubleshooting
+
+### "unable to deploy stack" no Portainer
+**Causa mais comum**: Variaveis de ambiente nao definidas ou arquivo compose errado.
+- Verifique se todas as variaveis obrigatorias estao definidas (secao 3.3)
+- Verifique se o **Compose path** aponta para o arquivo correto (secao 3.2)
+- Modo local: use `docker-compose.portainer.yml`
+- Modo externo: use `docker-compose.supabase.yml`
 
 ### Container da aplicacao nao inicia
 ```bash
-docker compose logs simulavoto
+docker compose -f docker-compose.supabase.yml logs simulavoto
 ```
 
-### Container do banco nao inicia (modo local)
+### Erro de conexao com Supabase
 ```bash
-docker compose logs db
+docker exec simulavoto wget -qO- http://localhost:5000/api/health
 ```
 
-### Verificar se o banco esta acessivel (modo local)
-```bash
-docker exec simulavoto-db pg_isready -U simulavoto -d simulavoto
-```
+Verifique:
+1. A `DATABASE_URL` esta correta (usuario, senha, host, porta, banco)
+2. O Supabase esta acessivel na porta indicada
+3. As extensoes `vector` e `pg_trgm` estao criadas no banco
 
 ### Erro ENETUNREACH com Supabase
-**Causa**: DNS retorna IPv6 e o container nao tem conectividade IPv6
-**Solucao**: O sistema ja forca IPv4 automaticamente. Se persistir, adicione DNS publico:
+**Causa**: DNS retorna IPv6 e o container nao tem conectividade IPv6.
+**Solucao**: O `docker-compose.supabase.yml` ja configura DNS publico (8.8.8.8 e 1.1.1.1) e o app forca IPv4 via NODE_OPTIONS.
+
+### Health check falhando
 ```bash
-docker compose up -d --build simulavoto
-# O docker-compose ja configura DNS 8.8.8.8 e 1.1.1.1
+docker exec simulavoto wget -qO- http://localhost:5000/api/health
 ```
 
 ### Acessar o banco via psql (modo local)
@@ -279,20 +348,9 @@ docker compose up -d --build simulavoto
 docker exec -it simulavoto-db psql -U simulavoto -d simulavoto
 ```
 
-### Health check falhando
-```bash
-docker exec simulavoto wget -qO- http://localhost:5000/api/health
-```
-
-### Reinicializar banco local (apagar tudo)
-```bash
-docker compose --profile local-db down -v
-docker compose --profile local-db up -d --build
-```
-
 ---
 
-## 9. Credenciais Padrao
+## 11. Credenciais Padrao
 
 - **Usuario**: `admin`
 - **Senha**: `admin123`
@@ -301,7 +359,7 @@ docker compose --profile local-db up -d --build
 
 ---
 
-## 10. Acesso ao Banco de Dados (modo local)
+## 12. Acesso ao Banco de Dados (modo local)
 
 O PostgreSQL esta exposto na porta **5433** do host (para evitar conflito com PostgreSQL local na porta 5432).
 
@@ -310,29 +368,23 @@ Para conectar de fora do Docker:
 psql -h localhost -p 5433 -U simulavoto -d simulavoto
 ```
 
-A senha e a definida em `POSTGRES_PASSWORD` no `.env`.
-
 ---
 
-## 11. Variaveis de Ambiente
+## 13. Variaveis de Ambiente
 
 | Variavel | Obrigatoria | Descricao |
 |----------|-------------|-----------|
-| `DATABASE_URL` | Nao* | URL completa do PostgreSQL externo (Supabase). Se nao definida, usa banco local |
-| `POSTGRES_PASSWORD` | Modo local | Senha do PostgreSQL local (ignorada se DATABASE_URL definida) |
+| `DATABASE_URL` | Modo externo | URL completa do PostgreSQL (Supabase). Nao definir no modo local |
+| `POSTGRES_PASSWORD` | Modo local | Senha do PostgreSQL local. Ignorada se DATABASE_URL definida |
 | `SESSION_SECRET` | Sim | Segredo para criptografia de sessoes |
-| `OPENAI_API_KEY` | Nao** | Para recursos de IA (previsoes, analise, KPIs) |
+| `OPENAI_API_KEY` | Nao* | Para recursos de IA (previsoes, analise, KPIs) |
 | `RESEND_API_KEY` | Nao | Para envio de relatorios por email |
 
-*Se `DATABASE_URL` nao for definida, o sistema gera automaticamente usando `POSTGRES_PASSWORD` e conecta ao container `db`.
-
-**Recursos de IA requerem OPENAI_API_KEY para funcionar completamente.
-
-> `NODE_ENV` e `PORT` sao configurados automaticamente pelo docker-compose.
+*Recursos de IA requerem OPENAI_API_KEY para funcionar completamente.
 
 ---
 
-## 12. Funcionalidades Disponiveis
+## 14. Funcionalidades Disponiveis
 
 | Modulo | Descricao |
 |--------|-----------|
