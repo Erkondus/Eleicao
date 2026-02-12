@@ -51,7 +51,7 @@ is_local_db() {
 if is_local_db; then
   echo "Database mode: LOCAL (container/internal)"
   echo "Waiting for database at ${DB_HOST}:${DB_PORT}..."
-  MAX_RETRIES=30
+  MAX_RETRIES=60
   RETRY_COUNT=0
 
   while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -69,13 +69,33 @@ if is_local_db; then
     echo "Waiting for database... (attempt ${RETRY_COUNT}/${MAX_RETRIES})"
     sleep 2
   done
-
-  echo "Tables are initialized via init-db.sql on first run"
 else
   echo "Database mode: EXTERNAL (Supabase/cloud)"
   echo "Connecting to: ${DB_HOST}:${DB_PORT}"
   echo "DNS resolution: IPv4 forced via NODE_OPTIONS"
+
+  case "$DATABASE_URL" in
+    *sslmode=*)
+      ;;
+    *\?*)
+      export DATABASE_URL="${DATABASE_URL}&sslmode=require"
+      echo "SSL: appended sslmode=require"
+      ;;
+    *)
+      export DATABASE_URL="${DATABASE_URL}?sslmode=require"
+      echo "SSL: appended sslmode=require"
+      ;;
+  esac
 fi
+
+echo "Running database schema sync (db:push)..."
+npm run db:push 2>&1 || {
+  echo "Retrying with --force flag..."
+  npm run db:push --force 2>&1 || {
+    echo "WARNING: db:push failed. Tables may need to be created manually."
+    echo "The application will attempt to start anyway..."
+  }
+}
 
 echo "Starting application..."
 exec npm start
