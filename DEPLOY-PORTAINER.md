@@ -411,7 +411,95 @@ psql -h localhost -p 5433 -U simulavoto -d simulavoto
 
 ---
 
-## 14. Funcionalidades Disponiveis
+## 14. Nginx Proxy Manager (NPM)
+
+O SimulaVoto ja esta configurado para funcionar com Nginx Proxy Manager. Os compose files incluem a rede `npm_network` e a porta 5000 nao e exposta externamente.
+
+### 14.1 Pre-requisito: rede Docker
+
+Verifique se a rede do NPM existe:
+```bash
+docker network ls | grep npm
+```
+
+Se a rede tiver outro nome (ex: `nginx-proxy-manager_default`), edite o compose e altere o nome em:
+```yaml
+networks:
+  npm_network:
+    external: true
+    name: nginx-proxy-manager_default  # ajuste para o nome real
+```
+
+Se a rede nao existir, crie manualmente:
+```bash
+docker network create npm_network
+```
+
+### 14.2 Configurar Proxy Host no NPM
+
+1. Acesse o painel do NPM (ex: `http://seu-servidor:81`)
+2. Va em **Hosts** > **Proxy Hosts** > **Add Proxy Host**
+3. Na aba **Details**:
+
+| Campo | Valor |
+|-------|-------|
+| Domain Names | `simulavoto.seudominio.com.br` |
+| Scheme | `http` |
+| Forward Hostname / IP | `simulavoto` |
+| Forward Port | `5000` |
+| Block Common Exploits | Ativado |
+| Websockets Support | **Ativado** (necessario para importacoes em tempo real) |
+
+4. Na aba **SSL**:
+
+| Campo | Valor |
+|-------|-------|
+| SSL Certificate | Request a new SSL Certificate |
+| Force SSL | Ativado |
+| HTTP/2 Support | Ativado |
+| Email Address | seu email para Let's Encrypt |
+
+5. Clique em **Save**
+
+### 14.3 Configuracao avancada (opcional)
+
+Na aba **Advanced** do Proxy Host, adicione para melhor suporte a WebSocket e headers:
+
+```nginx
+location /ws/ {
+    proxy_pass http://simulavoto:5000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 86400;
+}
+
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+### 14.4 Expor porta diretamente (sem NPM)
+
+Se preferir acessar sem NPM, descomente as linhas de ports no compose:
+```yaml
+services:
+  simulavoto:
+    ports:
+      - "5000:5000"
+```
+
+### 14.5 Fluxo de acesso
+
+```
+Usuario → HTTPS (443) → Nginx Proxy Manager → HTTP (5000) → SimulaVoto
+                         (Let's Encrypt SSL)    (rede Docker interna)
+```
+
+---
+
+## 15. Funcionalidades Disponiveis
 
 | Modulo | Descricao |
 |--------|-----------|

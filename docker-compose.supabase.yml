@@ -6,8 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
+    # ports:
+    #   - "5000:5000"  # Nao expor porta - NPM acessa internamente
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -20,6 +20,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
     restart: unless-stopped
+    networks:
+      - npm_network
     logging:
       driver: "json-file"
       options:
@@ -31,3 +33,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+
+networks:
+  npm_network:
+    external: true
