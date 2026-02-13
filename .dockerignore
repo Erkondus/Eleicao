@@ -12,7 +12,5 @@ replit.nix
 .upm
 .cache
 .local
-scripts/
 docker-compose*.yml
 docker-compose*.yaml
-DEPLOY*.md

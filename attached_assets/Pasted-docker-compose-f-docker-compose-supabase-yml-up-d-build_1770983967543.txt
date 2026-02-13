@@ -1,0 +1,49 @@
+docker compose -f docker-compose.supabase.yml up -d --build
+[+] Building 50.2s (20/23)                                                                                                                                                                                                                 
+ => [internal] load local bake definitions                                                                                                                                                                                            0.0s
+ => => reading from stdin 504B                                                                                                                                                                                                        0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                                                  0.0s
+ => => transferring dockerfile: 1.14kB                                                                                                                                                                                                0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                                                     0.8s
+ => [internal] load .dockerignore                                                                                                                                                                                                     0.0s
+ => => transferring context: 220B                                                                                                                                                                                                     0.0s
+ => [internal] load build context                                                                                                                                                                                                     0.0s
+ => => transferring context: 25.02kB                                                                                                                                                                                                  0.0s
+ => [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8                                                                                                       0.0s
+ => => resolve docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8                                                                                                               0.0s
+ => CACHED [builder 2/6] WORKDIR /app                                                                                                                                                                                                 0.0s
+ => CACHED [builder 3/6] COPY package*.json ./                                                                                                                                                                                        0.0s
+ => CACHED [builder 4/6] RUN npm ci                                                                                                                                                                                                   0.0s 
+ => [builder 5/6] COPY . .                                                                                                                                                                                                            0.3s
+ => [builder 6/6] RUN npm run build                                                                                                                                                                                                  30.7s
+ => CACHED [runner  3/14] RUN apk add --no-cache dumb-init wget                                                                                                                                                                       0.0s
+ => CACHED [runner  4/14] COPY --from=builder /app/dist ./dist                                                                                                                                                                        0.0s
+ => CACHED [runner  5/14] COPY --from=builder /app/package*.json ./                                                                                                                                                                   0.0s
+ => CACHED [runner  6/14] COPY --from=builder /app/drizzle.config.ts ./                                                                                                                                                               0.0s
+ => CACHED [runner  7/14] COPY --from=builder /app/shared ./shared                                                                                                                                                                    0.0s
+ => CACHED [runner  8/14] COPY --from=builder /app/server ./server                                                                                                                                                                    0.0s
+ => CACHED [runner  9/14] COPY --from=builder /app/node_modules ./node_modules                                                                                                                                                        0.0s
+ => CACHED [runner 10/14] COPY --from=builder /app/docker-entrypoint.sh ./                                                                                                                                                            0.0s
+ => ERROR [runner 11/14] COPY --from=builder /app/scripts ./scripts                                                                                                                                                                   0.0s
+------
+ > [runner 11/14] COPY --from=builder /app/scripts ./scripts:
+------
+[+] up 0/1
+ ⠙ Image simulavoto-simulavoto Building                                                                                                                                                                                               50.4s
+Dockerfile:28
+
+--------------------
+
+  26 |     COPY --from=builder /app/node_modules ./node_modules
+
+  27 |     COPY --from=builder /app/docker-entrypoint.sh ./
+
+  28 | >>> COPY --from=builder /app/scripts ./scripts
+
+  29 |     COPY --from=builder /app/migrations ./migrations
+
+  30 |     
+
+--------------------
+
+failed to solve: failed to compute cache key: failed to calculate checksum of ref w67u0e1zc82etir6rrf15xeoe::u2ca2sgpn4hplu1p9ym0t0vom: "/app/scripts": not found
