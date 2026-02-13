@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   simulavoto:
     container_name: simulavoto
