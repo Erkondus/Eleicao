@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
     networks:
       - simulavoto-net
-      - npm_network
+      - nginx-proxy-manager-network
     logging:
       driver: "json-file"
       options:
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
     networks:
       - simulavoto-net
-      - npm_network
+      - nginx-proxy-manager-network
     logging:
       driver: "json-file"
       options:
@@ -63,7 +63,7 @@ services:
 networks:
   simulavoto-net:
     driver: bridge
-  npm_network:
+  nginx-proxy-manager-network:
     external: true
 
 volumes:

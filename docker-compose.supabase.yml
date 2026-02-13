@@ -19,7 +19,7 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY:-}
     restart: unless-stopped
     networks:
-      - npm_network
+      - nginx-proxy-manager-network
     logging:
       driver: "json-file"
       options:
@@ -33,5 +33,5 @@ services:
       start_period: 120s
 
 networks:
-  npm_network:
+  nginx-proxy-manager-network:
     external: true
