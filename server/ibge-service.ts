@@ -273,15 +273,13 @@ export class IBGEService {
           errorDetails: { 
             progress: { 
               phase: "import", 
-              phaseDescription: `Limpando dados antigos e importando ${municipios.length} municípios...`,
+              phaseDescription: `Importando ${municipios.length} municípios (upsert - preserva dados de população)...`,
               totalBatches: Math.ceil(municipios.length / batchSize),
               skippedIncomplete: skippedCount
             } 
           }
         })
         .where(eq(ibgeImportJobs.id, jobId));
-
-      await db.delete(ibgeMunicipios);
 
       const allValues: InsertIbgeMunicipio[] = [];
       for (const mun of municipios) {
@@ -334,34 +332,47 @@ export class IBGEService {
         const batch = allValues.slice(i, i + batchSize);
 
         try {
-          await db.insert(ibgeMunicipios).values(batch);
+          await db.insert(ibgeMunicipios).values(batch)
+            .onConflictDoUpdate({
+              target: ibgeMunicipios.codigoIbge,
+              set: {
+                nome: sql`excluded.nome`,
+                uf: sql`excluded.uf`,
+                ufNome: sql`excluded.uf_nome`,
+                regiaoNome: sql`excluded.regiao_nome`,
+                mesorregiao: sql`excluded.mesorregiao`,
+                microrregiao: sql`excluded.microrregiao`,
+              },
+            });
           imported += batch.length;
         } catch (err) {
           const error = err as Error;
           console.warn(`[IBGE Municipios] Batch of ${batch.length} failed at ${i}, splitting:`, error.message);
-          const halfSize = Math.ceil(batch.length / 2);
-          for (const subBatch of [batch.slice(0, halfSize), batch.slice(halfSize)]) {
-            if (subBatch.length === 0) continue;
+          for (const val of batch) {
             try {
-              await db.insert(ibgeMunicipios).values(subBatch);
-              imported += subBatch.length;
-            } catch (subErr) {
-              for (const val of subBatch) {
-                try {
-                  await db.insert(ibgeMunicipios).values(val);
-                  imported++;
-                } catch (innerErr) {
-                  const innerError = innerErr as Error & { code?: string };
-                  errorList.push({
-                    timestamp: new Date().toISOString(),
-                    record: `${val.nome} (${val.codigoIbge})`,
-                    errorType: innerError.code || "DATABASE_ERROR",
-                    errorMessage: innerError.message || "Erro desconhecido",
-                    errorCode: innerError.code,
-                  });
-                  errors++;
-                }
-              }
+              await db.insert(ibgeMunicipios).values(val)
+                .onConflictDoUpdate({
+                  target: ibgeMunicipios.codigoIbge,
+                  set: {
+                    nome: sql`excluded.nome`,
+                    uf: sql`excluded.uf`,
+                    ufNome: sql`excluded.uf_nome`,
+                    regiaoNome: sql`excluded.regiao_nome`,
+                    mesorregiao: sql`excluded.mesorregiao`,
+                    microrregiao: sql`excluded.microrregiao`,
+                  },
+                });
+              imported++;
+            } catch (innerErr) {
+              const innerError = innerErr as Error & { code?: string };
+              errorList.push({
+                timestamp: new Date().toISOString(),
+                record: `${val.nome} (${val.codigoIbge})`,
+                errorType: innerError.code || "DATABASE_ERROR",
+                errorMessage: innerError.message || "Erro desconhecido",
+                errorCode: innerError.code,
+              });
+              errors++;
             }
           }
         }
@@ -495,8 +506,6 @@ export class IBGEService {
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
-      await db.delete(ibgePopulacao).where(eq(ibgePopulacao.ano, targetYear));
-      
       for (let i = 0; i < validPopulationData.length; i += batchSize) {
         if (this.isJobCancelled(jobId)) {
           await db.update(ibgeImportJobs)
@@ -556,14 +565,32 @@ export class IBGEService {
 
         if (batchValues.length > 0) {
           try {
-            await db.insert(ibgePopulacao).values(batchValues);
+            await db.insert(ibgePopulacao).values(batchValues)
+              .onConflictDoUpdate({
+                target: [ibgePopulacao.codigoIbge, ibgePopulacao.ano],
+                set: {
+                  municipioId: sql`excluded.municipio_id`,
+                  populacao: sql`excluded.populacao`,
+                  fonte: sql`excluded.fonte`,
+                  tabelaSidra: sql`excluded.tabela_sidra`,
+                },
+              });
             imported += batchValues.length;
           } catch (err) {
             const error = err as Error;
             console.warn(`[IBGE Population] Batch failed at ${i}, falling back:`, error.message);
             for (const val of batchValues) {
               try {
-                await db.insert(ibgePopulacao).values(val);
+                await db.insert(ibgePopulacao).values(val)
+                  .onConflictDoUpdate({
+                    target: [ibgePopulacao.codigoIbge, ibgePopulacao.ano],
+                    set: {
+                      municipioId: sql`excluded.municipio_id`,
+                      populacao: sql`excluded.populacao`,
+                      fonte: sql`excluded.fonte`,
+                      tabelaSidra: sql`excluded.tabela_sidra`,
+                    },
+                  });
                 imported++;
               } catch (innerErr) {
                 const innerError = innerErr as Error & { code?: string };

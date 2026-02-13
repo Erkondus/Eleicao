@@ -1553,7 +1553,7 @@ export const ibgePopulacao = pgTable("ibge_populacao", {
 }, (table) => [
   index("populacao_municipio_idx").on(table.municipioId),
   index("populacao_ano_idx").on(table.ano),
-  index("populacao_codigo_ano_idx").on(table.codigoIbge, table.ano),
+  uniqueIndex("populacao_codigo_ano_unique_idx").on(table.codigoIbge, table.ano),
 ]);
 
 export const insertIbgePopulacaoSchema = createInsertSchema(ibgePopulacao).omit({ id: true, createdAt: true });
