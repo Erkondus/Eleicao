@@ -506,6 +506,25 @@ export class IBGEService {
         })
         .where(eq(ibgeImportJobs.id, jobId));
 
+      let useUpsert = false;
+      try {
+        await db.execute(sql`DROP INDEX IF EXISTS "populacao_codigo_ano_idx"`);
+        await db.execute(sql`
+          DELETE FROM "ibge_populacao" a USING "ibge_populacao" b
+          WHERE a.id > b.id AND a.codigo_ibge = b.codigo_ibge AND a.ano = b.ano
+        `);
+        await db.execute(sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS "populacao_codigo_ano_unique_idx" 
+          ON "ibge_populacao" ("codigo_ibge", "ano")
+        `);
+        useUpsert = true;
+        console.log("[IBGE Population] Unique index confirmed, using upsert mode");
+      } catch (idxErr) {
+        console.warn("[IBGE Population] Could not create unique index, using delete+insert mode:", (idxErr as Error).message);
+        await db.delete(ibgePopulacao).where(eq(ibgePopulacao.ano, targetYear));
+        useUpsert = false;
+      }
+
       for (let i = 0; i < validPopulationData.length; i += batchSize) {
         if (this.isJobCancelled(jobId)) {
           await db.update(ibgeImportJobs)
@@ -564,44 +583,70 @@ export class IBGEService {
         }
 
         if (batchValues.length > 0) {
-          try {
-            await db.insert(ibgePopulacao).values(batchValues)
-              .onConflictDoUpdate({
-                target: [ibgePopulacao.codigoIbge, ibgePopulacao.ano],
-                set: {
-                  municipioId: sql`excluded.municipio_id`,
-                  populacao: sql`excluded.populacao`,
-                  fonte: sql`excluded.fonte`,
-                  tabelaSidra: sql`excluded.tabela_sidra`,
-                },
-              });
-            imported += batchValues.length;
-          } catch (err) {
-            const error = err as Error;
-            console.warn(`[IBGE Population] Batch failed at ${i}, falling back:`, error.message);
-            for (const val of batchValues) {
-              try {
-                await db.insert(ibgePopulacao).values(val)
-                  .onConflictDoUpdate({
-                    target: [ibgePopulacao.codigoIbge, ibgePopulacao.ano],
-                    set: {
-                      municipioId: sql`excluded.municipio_id`,
-                      populacao: sql`excluded.populacao`,
-                      fonte: sql`excluded.fonte`,
-                      tabelaSidra: sql`excluded.tabela_sidra`,
-                    },
-                  });
-                imported++;
-              } catch (innerErr) {
-                const innerError = innerErr as Error & { code?: string };
-                errorList.push({
-                  timestamp: new Date().toISOString(),
-                  record: val.codigoIbge,
-                  errorType: innerError.code || "DATABASE_ERROR",
-                  errorMessage: innerError.message || "Erro desconhecido",
-                  errorCode: innerError.code,
+          if (useUpsert) {
+            try {
+              await db.insert(ibgePopulacao).values(batchValues)
+                .onConflictDoUpdate({
+                  target: [ibgePopulacao.codigoIbge, ibgePopulacao.ano],
+                  set: {
+                    municipioId: sql`excluded.municipio_id`,
+                    populacao: sql`excluded.populacao`,
+                    fonte: sql`excluded.fonte`,
+                    tabelaSidra: sql`excluded.tabela_sidra`,
+                  },
                 });
-                errors++;
+              imported += batchValues.length;
+            } catch (err) {
+              const error = err as Error;
+              console.warn(`[IBGE Population] Upsert batch failed at ${i}, falling back to individual:`, error.message);
+              for (const val of batchValues) {
+                try {
+                  await db.insert(ibgePopulacao).values(val)
+                    .onConflictDoUpdate({
+                      target: [ibgePopulacao.codigoIbge, ibgePopulacao.ano],
+                      set: {
+                        municipioId: sql`excluded.municipio_id`,
+                        populacao: sql`excluded.populacao`,
+                        fonte: sql`excluded.fonte`,
+                        tabelaSidra: sql`excluded.tabela_sidra`,
+                      },
+                    });
+                  imported++;
+                } catch (innerErr) {
+                  const innerError = innerErr as Error & { code?: string };
+                  errorList.push({
+                    timestamp: new Date().toISOString(),
+                    record: val.codigoIbge,
+                    errorType: innerError.code || "DATABASE_ERROR",
+                    errorMessage: innerError.message || "Erro desconhecido",
+                    errorCode: innerError.code,
+                  });
+                  errors++;
+                }
+              }
+            }
+          } else {
+            try {
+              await db.insert(ibgePopulacao).values(batchValues);
+              imported += batchValues.length;
+            } catch (err) {
+              const error = err as Error;
+              console.warn(`[IBGE Population] Batch insert failed at ${i}, falling back:`, error.message);
+              for (const val of batchValues) {
+                try {
+                  await db.insert(ibgePopulacao).values(val);
+                  imported++;
+                } catch (innerErr) {
+                  const innerError = innerErr as Error & { code?: string };
+                  errorList.push({
+                    timestamp: new Date().toISOString(),
+                    record: val.codigoIbge,
+                    errorType: innerError.code || "DATABASE_ERROR",
+                    errorMessage: innerError.message || "Erro desconhecido",
+                    errorCode: innerError.code,
+                  });
+                  errors++;
+                }
               }
             }
           }
