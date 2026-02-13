@@ -1,5 +1,4 @@
 #!/bin/sh
-set -e
 
 echo "=== SimulaVoto - Sistema Eleitoral Brasileiro ==="
 echo "Environment: ${NODE_ENV:-production}"
@@ -34,6 +33,10 @@ if [ -z "$DB_PORT" ]; then
   DB_PORT="5432"
 fi
 
+strip_sslmode() {
+  echo "$1" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/?$//' | sed 's/&$//'
+}
+
 is_local_db() {
   case "$DB_HOST" in
     localhost|127.0.0.1|db|172.*|192.168.*|10.*)
@@ -62,7 +65,7 @@ resolve_dns_to_ipv4() {
       if (err) { console.error('DNS_FAIL:' + err.message); process.exit(1); }
       console.log(addr);
     });
-  " 2>&1)
+  " 2>&1) || true
 
   if echo "$RESOLVED_IP" | grep -q "DNS_FAIL"; then
     echo "WARNING: DNS resolution failed: ${RESOLVED_IP}"
@@ -85,43 +88,53 @@ handle_ssl() {
   echo "DATABASE_SSL=${SSL_VAL}"
 
   if [ "$SSL_VAL" = "false" ] || [ "$SSL_VAL" = "0" ]; then
-    echo "SSL: disabled via DATABASE_SSL=false"
-    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
+    echo "SSL: disabled"
+    export DATABASE_URL=$(strip_sslmode "$DATABASE_URL")
+
   elif [ "$SSL_VAL" = "true" ] || [ "$SSL_VAL" = "1" ]; then
-    echo "SSL: forced ON via DATABASE_SSL=true"
+    echo "SSL: forced ON"
     case "$DATABASE_URL" in
-      *sslmode=*) echo "SSL: sslmode already present in DATABASE_URL" ;;
-      *\?*) export DATABASE_URL="${DATABASE_URL}&sslmode=require" ;;
+      *sslmode=*) echo "SSL: sslmode already in URL" ;;
+      *"?"*) export DATABASE_URL="${DATABASE_URL}&sslmode=require" ;;
       *) export DATABASE_URL="${DATABASE_URL}?sslmode=require" ;;
     esac
-  else
-    echo "SSL: auto mode - trying with SSL first..."
-    export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/[?&]sslmode=[^&]*//g' | sed 's/\?$//')
 
-    SSL_URL="${DATABASE_URL}?sslmode=require"
+  else
+    echo "SSL: auto mode - testing connection..."
+    export DATABASE_URL=$(strip_sslmode "$DATABASE_URL")
+
     if node -e "
       const { Pool } = require('pg');
-      const pool = new Pool({ connectionString: '${SSL_URL}', ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 10000 });
-      pool.query('SELECT 1').then(() => { pool.end(); process.exit(0); }).catch(() => { pool.end(); process.exit(1); });
+      const p = new Pool({
+        connectionString: process.env.DATABASE_URL + '?sslmode=require',
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 10000
+      });
+      p.query('SELECT 1')
+        .then(() => { p.end(); process.exit(0); })
+        .catch(() => { p.end(); process.exit(1); });
     " 2>/dev/null; then
-      echo "SSL: connection with SSL successful"
-      export DATABASE_URL="${SSL_URL}"
+      echo "SSL: connected WITH SSL"
+      export DATABASE_URL="${DATABASE_URL}?sslmode=require"
     else
-      echo "SSL: connection with SSL failed, using without SSL"
+      echo "SSL: SSL failed, testing without SSL..."
+      if node -e "
+        const { Pool } = require('pg');
+        const p = new Pool({
+          connectionString: process.env.DATABASE_URL,
+          connectionTimeoutMillis: 10000
+        });
+        p.query('SELECT 1')
+          .then(() => { p.end(); process.exit(0); })
+          .catch(() => { p.end(); process.exit(1); });
+      " 2>/dev/null; then
+        echo "SSL: connected WITHOUT SSL"
+      else
+        echo "SSL: both SSL and non-SSL connections failed"
+        echo "WARNING: Database may be unreachable. Check DATABASE_URL."
+      fi
     fi
   fi
-}
-
-test_connection() {
-  echo "Testing database connection..."
-  node -e "
-    const { Pool } = require('pg');
-    const ssl = '${DATABASE_URL}'.includes('sslmode=require') ? { rejectUnauthorized: false } : false;
-    const pool = new Pool({ connectionString: '${DATABASE_URL}', ssl: ssl || undefined, connectionTimeoutMillis: 15000 });
-    pool.query('SELECT 1 as test')
-      .then(res => { console.log('CONNECTION_OK'); pool.end(); process.exit(0); })
-      .catch(err => { console.error('CONNECTION_FAIL:' + err.message); pool.end(); process.exit(1); });
-  " 2>&1
 }
 
 if is_local_db; then
@@ -138,8 +151,8 @@ if is_local_db; then
 
     RETRY_COUNT=$((RETRY_COUNT + 1))
     if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-      echo "WARNING: Could not verify database connectivity after ${MAX_RETRIES} attempts"
-      echo "Proceeding anyway - the application will retry on its own..."
+      echo "WARNING: Could not reach database after ${MAX_RETRIES} attempts"
+      echo "Proceeding anyway..."
       break
     fi
     echo "Waiting for database... (attempt ${RETRY_COUNT}/${MAX_RETRIES})"
@@ -147,57 +160,36 @@ if is_local_db; then
   done
 else
   echo "Database mode: EXTERNAL (Supabase/cloud)"
-  echo "Original host: ${DB_HOST}:${DB_PORT}"
+  echo "Host: ${DB_HOST}:${DB_PORT}"
 
   resolve_dns_to_ipv4
-
   handle_ssl
 
-  echo "Final DATABASE_URL host: ${DB_HOST}"
-
-  CONN_RESULT=$(test_connection)
-  if echo "$CONN_RESULT" | grep -q "CONNECTION_OK"; then
-    echo "Database connection verified successfully!"
-  else
-    echo "WARNING: Database connection test failed: ${CONN_RESULT}"
-    echo "db:push may fail. Check your DATABASE_URL and network connectivity."
-    echo ""
-    echo "DICA: Se o dominio usa Cloudflare, use o IP direto do servidor na DATABASE_URL"
-    echo "Exemplo: postgresql://postgres:SENHA@72.60.255.204:5432/postgres"
-  fi
+  echo "Final host: ${DB_HOST}"
 fi
 
 echo ""
 echo "Running database schema sync (db:push)..."
-echo "DATABASE_URL (masked): postgresql://****@${DB_HOST}:${DB_PORT}/****"
 
-npm run db:push 2>&1 && {
-  echo "db:push completed successfully! Tables created/synced."
-} || {
-  echo ""
-  echo "First db:push attempt failed. Retrying with --force..."
-  npm run db:push --force 2>&1 && {
+if npm run db:push 2>&1; then
+  echo "db:push completed successfully!"
+else
+  echo "db:push failed, retrying..."
+  if npm run db:push --force 2>&1; then
     echo "db:push --force completed successfully!"
-  } || {
+  else
     echo ""
     echo "============================================"
     echo "WARNING: db:push failed!"
     echo "============================================"
-    echo "As tabelas podem nao ter sido criadas."
+    echo "Tabelas podem nao ter sido criadas."
     echo ""
-    echo "Solucoes:"
-    echo "1. Verifique a DATABASE_URL (use IP direto, nao dominio com Cloudflare)"
-    echo "2. Verifique se o PostgreSQL aceita conexoes externas"
-    echo "3. Execute manualmente no SQL Editor do Supabase:"
-    echo "   - Copie o conteudo de scripts/create-tables.sql"
-    echo "   - Cole e execute no SQL Editor"
-    echo "4. Ou rode via psql:"
-    echo "   psql \$DATABASE_URL -f scripts/create-tables.sql"
+    echo "Para criar manualmente:"
+    echo "1. SQL Editor do Supabase: cole scripts/create-tables.sql"
+    echo "2. psql: psql \$DATABASE_URL -f scripts/create-tables.sql"
     echo "============================================"
-    echo ""
-    echo "The application will attempt to start anyway..."
-  }
-}
+  fi
+fi
 
 echo ""
 echo "Starting application..."

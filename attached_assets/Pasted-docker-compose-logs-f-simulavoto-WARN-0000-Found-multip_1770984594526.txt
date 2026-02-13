@@ -1,0 +1,91 @@
+docker compose logs -f simulavoto
+WARN[0000] Found multiple config files with supported names: /opt/simulavoto/docker-compose.yml, /opt/simulavoto/docker-compose.yaml 
+WARN[0000] Using /opt/simulavoto/docker-compose.yml     
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Original host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - trying with SSL first...
+simulavoto  | sed: bad regex '\?$': Repetition not preceded by valid expression
+simulavoto  | SSL: connection with SSL failed, using without SSL
+simulavoto  | Final DATABASE_URL host: 72.60.255.204
