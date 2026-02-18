@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import passport from "passport";
-import { getSessionConfig } from "./session-config";
+import { getSessionConfig, initSessionStore } from "./session-config";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
 import multer from "multer";
@@ -281,6 +281,7 @@ export async function registerRoutes(
     app.set("trust proxy", 1);
   }
 
+  await initSessionStore();
   app.use(session(getSessionConfig(sessionSecret)));
 
   app.use(passport.initialize());
