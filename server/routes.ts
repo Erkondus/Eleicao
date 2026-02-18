@@ -387,11 +387,22 @@ export async function registerRoutes(
       }
       req.login(user, async (loginErr) => {
         if (loginErr) {
-          return res.status(500).json({ error: "Login failed" });
+          console.error(`[Auth] req.login() failed for user '${user.username}':`, loginErr);
+          console.log(`[Auth] Debug: protocol=${req.protocol}, secure=${req.secure}, x-forwarded-proto=${req.headers['x-forwarded-proto']}, trust-proxy=${req.app.get('trust proxy')}`);
+          if (!res.headersSent) {
+            return res.status(500).json({ error: "Login failed" });
+          }
+          return;
         }
-        await logAudit(req, "login", "session", user.id);
+        try {
+          await logAudit(req, "login", "session", user.id);
+        } catch (auditErr) {
+          console.error(`[Auth] Audit log failed:`, auditErr);
+        }
         const { password, ...safeUser } = user;
-        return res.json(safeUser);
+        if (!res.headersSent) {
+          return res.json(safeUser);
+        }
       });
     })(req, res, next);
   });

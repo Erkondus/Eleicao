@@ -1,0 +1,22 @@
+simulavoto  | WebSocket server initialized
+simulavoto  | 5:49:34 PM [express] serving on port 5000
+simulavoto  | Report scheduler started (checking every 5 minutes)
+simulavoto  | 5:49:38 PM [express] HEAD /api/health 200 in 13ms :: {"status":"healthy","timestamp":"2026-02-18T17:49:38.994Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":4}}
+simulavoto  | 5:50:09 PM [express] HEAD /api/health 200 in 33ms :: {"status":"healthy","timestamp":"2026-02-18T17:50:09.109Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":4}}
+simulavoto  | 5:50:39 PM [express] HEAD /api/health 200 in 30ms :: {"status":"healthy","timestamp":"2026-02-18T17:50:39.215Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":4}}
+simulavoto  | 5:51:09 PM [express] HEAD /api/health 200 in 23ms :: {"status":"healthy","timestamp":"2026-02-18T17:51:09.308Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":4}}
+simulavoto  | [Auth] Login successful: user 'admin' (role: admin)
+simulavoto  | 5:51:25 PM [express] POST /api/auth/login 500 in 73ms :: {"error":"Login failed"}
+simulavoto  | Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client
+simulavoto  |     at ServerResponse.setHeader (node:_http_outgoing:655:11)
+simulavoto  |     at zt.set.zt.header (/app/dist/index.cjs:41:170727)
+simulavoto  |     at zt.send (/app/dist/index.cjs:41:166266)
+simulavoto  |     at zt.json (/app/dist/index.cjs:41:167396)
+simulavoto  |     at e.json (/app/dist/index.cjs:1236:13942)
+simulavoto  |     at /app/dist/index.cjs:1236:14500
+simulavoto  |     at Xo.handle_error (/app/dist/index.cjs:19:3060)
+simulavoto  |     at M (/app/dist/index.cjs:26:3700)
+simulavoto  |     at /app/dist/index.cjs:26:3314
+simulavoto  |     at As.process_params (/app/dist/index.cjs:26:3840)
+simulavoto  |     at Immediate.N (/app/dist/index.cjs:26:3241)
+simulavoto  |     at process.processImmediate (node:internal/timers:485:21)
