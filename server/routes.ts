@@ -93,7 +93,7 @@ import { campaignInsightsService } from "./campaign-insights-service";
 
 const upload = multer({ 
   dest: "/tmp/uploads/",
-  limits: { fileSize: 10 * 1024 * 1024 * 1024 }
+  limits: { fileSize: 1 * 1024 * 1024 * 1024 }
 });
 
 // Track active import jobs for cancellation
@@ -245,6 +245,30 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  try {
+    console.log("[Startup] Checking for stuck import jobs from previous crash...");
+    const stuckJobs = await db.select().from(tseImportJobs)
+      .where(sql`${tseImportJobs.status} IN ('downloading', 'extracting', 'processing')`);
+
+    if (stuckJobs.length > 0) {
+      console.log(`[Startup] Found ${stuckJobs.length} stuck jobs. Resetting to failed...`);
+      for (const job of stuckJobs) {
+        await db.update(tseImportJobs)
+          .set({ 
+            status: "failed", 
+            errorMessage: "Job interrompido por reinicialização do servidor",
+            updatedAt: new Date() 
+          })
+          .where(eq(tseImportJobs.id, job.id));
+      }
+      console.log(`[Startup] Reset ${stuckJobs.length} stuck jobs to failed.`);
+    } else {
+      console.log("[Startup] No stuck import jobs found.");
+    }
+  } catch (cleanupError) {
+    console.error("[Startup] Failed to cleanup stuck jobs:", cleanupError);
+  }
+
   await (storage as any).seedDefaultAdmin?.();
 
   const sessionSecret = process.env.SESSION_SECRET;
@@ -523,28 +547,49 @@ export async function registerRoutes(
     }
   });
 
+  const partyInsertSchema = z.object({
+    name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+    abbreviation: z.string().min(2, "Sigla deve ter pelo menos 2 caracteres").max(15),
+    number: z.number().int().min(0).max(99),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Cor deve ser hexadecimal (#RRGGBB)").optional().default("#003366"),
+    coalition: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    tags: z.array(z.string()).optional().nullable(),
+    active: z.boolean().optional().default(true),
+  });
+
+  const partyUpdateSchema = partyInsertSchema.partial();
+
   app.post("/api/parties", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
+      const validatedData = partyInsertSchema.parse(req.body);
       const party = await storage.createParty({
-        ...req.body,
+        ...validatedData,
         createdBy: req.user!.id,
       });
       await logAudit(req, "create", "party", String(party.id), { name: party.name });
       res.json(party);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Dados inválidos", details: error.errors });
+      }
       res.status(500).json({ error: "Failed to create party" });
     }
   });
 
   app.patch("/api/parties/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
-      const updated = await storage.updateParty(parseInt(req.params.id), req.body);
+      const validatedData = partyUpdateSchema.parse(req.body);
+      const updated = await storage.updateParty(parseInt(req.params.id), validatedData);
       if (!updated) {
         return res.status(404).json({ error: "Party not found" });
       }
       await logAudit(req, "update", "party", req.params.id);
       res.json(updated);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Dados inválidos", details: error.errors });
+      }
       res.status(500).json({ error: "Failed to update party" });
     }
   });
@@ -4085,7 +4130,7 @@ Analise o impacto dessa mudança hipotética e forneça:
     let filteredCount = 0;
     let insertedCount = 0;
     let errorCount = 0;
-    const BATCH_SIZE = 5000; // Increased for better bulk insert performance
+    const BATCH_SIZE = 10000;
 
     // Read first row to detect CSV structure (column count varies by year)
     const firstRowPromise = new Promise<string[]>((resolve, reject) => {
@@ -4283,17 +4328,19 @@ Analise o impacto dessa mudança hipotética e forneça:
         });
       }
 
-      // Update job progress
-      const totalSkipped = filteredCount + duplicateCount;
-      await storage.updateTseImportJob(jobId, { 
-        processedRows: insertedCount,
-        skippedRows: totalSkipped,
-        errorCount,
-        updatedAt: new Date()
-      });
+      // Update job progress every 5 batches to reduce DB overhead
+      if ((batchIndex + 1) % 5 === 0) {
+        const totalSkipped = filteredCount + duplicateCount;
+        await storage.updateTseImportJob(jobId, { 
+          processedRows: insertedCount,
+          skippedRows: totalSkipped,
+          errorCount,
+          updatedAt: new Date()
+        });
+      }
 
       // Log progress
-      if ((batchIndex + 1) % 10 === 0) {
+      if ((batchIndex + 1) % 5 === 0) {
         console.log(`[CANDIDATO] Batch ${batchIndex + 1}: ${insertedCount} inserted, ${duplicateCount} duplicates, ${filteredCount} filtered, ${errorCount} errors`);
       }
 
@@ -4528,7 +4575,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       let duplicateCount = 0;       // Rows that already exist in DB
       let insertedCount = 0;        // Actually inserted rows
       let errorCount = 0;
-      const BATCH_SIZE = 5000; // Increased for better bulk insert performance
+      const BATCH_SIZE = 10000;
 
       // Field mapping for DETALHE_VOTACAO_MUNZONA
       const fieldMap: { [key: number]: string } = {
@@ -4677,17 +4724,15 @@ Analise o impacto dessa mudança hipotética e forneça:
           });
         }
         
-        // Update job progress
-        const totalSkipped = cargoFilteredCount + duplicateCount;
-        await storage.updateTseImportJob(jobId, { 
-          processedRows: insertedCount,
-          skippedRows: totalSkipped,
-          errorCount,
-          updatedAt: new Date()
-        });
-        
-        // Log progress every 10 batches
-        if ((batchIndex + 1) % 10 === 0 || batchIndex === totalBatches - 1) {
+        // Update job progress every 5 batches to reduce DB overhead
+        if ((batchIndex + 1) % 5 === 0 || batchIndex === totalBatches - 1) {
+          const totalSkipped = cargoFilteredCount + duplicateCount;
+          await storage.updateTseImportJob(jobId, { 
+            processedRows: insertedCount,
+            skippedRows: totalSkipped,
+            errorCount,
+            updatedAt: new Date()
+          });
           console.log(`[DETALHE] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
         }
         
@@ -4821,7 +4866,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       let duplicateCount = 0;       // Rows that already exist in DB
       let insertedCount = 0;        // Actually inserted rows
       let errorCount = 0;
-      const BATCH_SIZE = 5000; // Increased for better bulk insert performance
+      const BATCH_SIZE = 10000;
 
       // Read first row to detect CSV structure (column count varies by year)
       const firstRowPromise = new Promise<string[]>((resolve, reject) => {
@@ -5076,17 +5121,15 @@ Analise o impacto dessa mudança hipotética e forneça:
           });
         }
         
-        // Update job progress
-        const totalSkipped = cargoFilteredCount + duplicateCount;
-        await storage.updateTseImportJob(jobId, { 
-          processedRows: insertedCount,
-          skippedRows: totalSkipped,
-          errorCount,
-          updatedAt: new Date()
-        });
-        
-        // Log progress every 10 batches
-        if ((batchIndex + 1) % 10 === 0 || batchIndex === totalBatches - 1) {
+        // Update job progress every 5 batches to reduce DB overhead
+        if ((batchIndex + 1) % 5 === 0 || batchIndex === totalBatches - 1) {
+          const totalSkipped = cargoFilteredCount + duplicateCount;
+          await storage.updateTseImportJob(jobId, { 
+            processedRows: insertedCount,
+            skippedRows: totalSkipped,
+            errorCount,
+            updatedAt: new Date()
+          });
           console.log(`[PARTIDO] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
         }
         
@@ -5188,7 +5231,7 @@ Analise o impacto dessa mudança hipotética e forneça:
       let rowCount = 0;
       let filteredCount = 0;
       let errorCount = 0;
-      const BATCH_SIZE = 5000; // Increased for better bulk insert performance
+      const BATCH_SIZE = 10000;
 
       const parser = createReadStream(filePath)
         .pipe(iconv.decodeStream("latin1"))

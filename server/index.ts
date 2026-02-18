@@ -11,8 +11,14 @@ const app = express();
 // Report scheduler - runs every 5 minutes to check for due schedules
 function startReportScheduler() {
   const SCHEDULER_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  let isSchedulerRunning = false;
   
   async function checkSchedules() {
+    if (isSchedulerRunning) {
+      console.log("Report scheduler: Pulando execução (job anterior ainda em andamento)");
+      return;
+    }
+    isSchedulerRunning = true;
     try {
       const dueSchedules = await storage.getDueSchedules();
       
@@ -62,6 +68,8 @@ function startReportScheduler() {
       }
     } catch (error) {
       console.error("Report scheduler error:", error);
+    } finally {
+      isSchedulerRunning = false;
     }
   }
 
@@ -121,20 +129,7 @@ function startReportScheduler() {
 }
 const httpServer = createServer(app);
 
-declare module "http" {
-  interface IncomingMessage {
-    rawBody: unknown;
-  }
-}
-
-app.use(
-  express.json({
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
-
+app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 export function log(message: string, source = "express") {

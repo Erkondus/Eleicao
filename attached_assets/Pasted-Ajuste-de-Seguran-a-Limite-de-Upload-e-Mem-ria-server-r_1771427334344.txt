@@ -1,0 +1,213 @@
+Ajuste de Segurança: Limite de Upload e Memória (server/routes.ts) 
+
+Vamos reduzir o limite de upload para evitar ataques e remover o rawBody para economizar memória. 
+
+Localize e altere as seguintes linhas no início do arquivo: 
+typescript
+ 
+  
+ 
+// ANTIGO (Inseguro e gastador de memória)
+/*
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
+app.use(express.urlencoded({ extended: false }));
+
+const upload = multer({ 
+  dest: "/tmp/uploads/",
+  limits: { fileSize: 10 * 1024 * 1024 * 1024 } // 10GB - MUITO PERIGOSO
+});
+*/
+
+// NOVO (Seguro e Otimizado)
+app.use(express.json()); // Removemos o verify/rawBody para economizar RAM
+app.use(express.urlencoded({ extended: false }));
+
+const upload = multer({ 
+  dest: "/tmp/uploads/",
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB - Limite seguro. Para arquivos maiores, use importação por URL.
+});
+ 
+ 
+ 
+2. Confiabilidade: Proteção do Scheduler (server/index.ts) 
+
+Vamos impedir que o scheduler execute duas vezes ao mesmo tempo se o servidor ficar lento. 
+
+Substitua a função startReportScheduler inteira por esta: 
+typescript
+ 
+  
+ 
+// Report scheduler - runs every 5 minutes to check for due schedules
+      console.log("Report scheduler: Pulando execução (job anterior ainda em andamento)");
+      return;
+    }
+
+    isSchedulerRunning = true;
+    
+    try {
+      const dueSchedules = await storage.getDueSchedules();
+      
+      for (const schedule of dueSchedules) {
+        try {
+          const template = await storage.getReportTemplate(schedule.templateId);
+          if (!template) {
+            console.log(`Report scheduler: Template ${schedule.templateId} not found for schedule ${schedule.id}`);
+            continue;
+          }
+
+          const run = await storage.createReportRun({
+            templateId: schedule.templateId,
+            scheduleId: schedule.id,
+            triggeredBy: "scheduled",
+            status: "pending",
+          });
+
+          console.log(`Report scheduler: Starting scheduled run ${run.id} for schedule ${schedule.name}`);
+          
+          const recipients = Array.isArray(schedule.recipients) 
+            ? (schedule.recipients as string[]) 
+            : [];
+          
+          executeReportRun(run.id, template, recipients)
+            .then(() => console.log(`Report scheduler: Run ${run.id} completed`))
+            .catch(err => console.error(`Report scheduler: Run ${run.id} failed:`, err));
+          
+          const nextRunAt = calculateNextScheduleRun(
+            schedule.frequency, 
+            schedule.dayOfWeek, 
+            schedule.dayOfMonth, 
+            schedule.timeOfDay || "08:00"
+          );
+          
+          await storage.updateReportSchedule(schedule.id, { nextRunAt });
+          
+        } catch (err) {
+          console.error(`Report scheduler: Error processing schedule ${schedule.id}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error("Report scheduler error:", error);
+    } finally {
+      // Libera a trava sempre, mesmo se der erro
+      isSchedulerRunning = false;
+    }
+  }
+
+  // ... (mantenha a função calculateNextScheduleRun como está, ela não precisa mudar) ...
+  function calculateNextScheduleRun(...) { ... }
+
+  console.log("Report scheduler started (checking every 5 minutes)");
+  setInterval(checkSchedules, SCHEDULER_INTERVAL);
+  // Executa imediatamente na inicialização (opcional, remova se não quiser)
+  checkSchedules(); 
+}
+ 
+ 
+ 
+3. Confiabilidade: Recuperação de Importações Interrompidas (server/routes.ts) 
+
+Se o servidor cair durante uma importação, o job fica "travado" para sempre no banco de dados como "processing". Vamos adicionar uma rotina de limpeza no início do registerRoutes. 
+
+Adicione este bloco logo no início da função registerRoutes (antes de await (storage as any).seedDefaultAdmin...): 
+typescript
+ 
+  
+ 
+export async function registerRoutes(
+  httpServer: Server,
+  app: Express
+): Promise<Server> {
+  
+  // NOVO: Rotina de limpeza para recuperação de crash
+  // Marca como 'failed' qualquer job que ficou preso em 'processing' ou 'downloading' 
+  // devido a uma reinicialização inesperada do servidor.
+  try {
+    console.log("[Startup] Checking for stuck import jobs from previous crash...");
+    const activeStatuses = ["pending", "queued", "downloading", "extracting", "processing"];
+    // Nota: Você precisará implementar storage.getTseImportJobs com filtro de status se não tiver,
+    // ou usar acesso direto ao DB se preferir. Assumindo que storage tenha um método genérico ou
+    // você pode usar o db.select().from(tseImportJobs).where(...) diretamente aqui.
+    
+    // Exemplo usando db direto (já que você importa db e tseImportJobs no topo do arquivo):
+    const stuckJobs = await db.select().from(tseImportJobs)
+      .where(sql`${tseImportJobs.status} IN ('downloading', 'extracting', 'processing')`);
+
+    if (stuckJobs.length > 0) {
+      console.log(`[Startup] Found ${stuckJobs.length} stuck jobs. Resetting to failed...`);
+      for (const job of stuckJobs) {
+        await db.update(tseImportJobs)
+          .set({ 
+            status: "failed", 
+            errorMessage: "Job interrompido por reinicialização do servidor",
+            updatedAt: new Date() 
+          })
+          .where(eq(tseImportJobs.id, job.id));
+      }
+    }
+  } catch (cleanupError) {
+    console.error("[Startup] Failed to cleanup stuck jobs:", cleanupError);
+    // Não quebra a inicialização se isso falhar
+  }
+
+  // Resto do código existente...
+  await (storage as any).seedDefaultAdmin?.();
+  // ...
+ 
+ 
+ 
+4. Qualidade: Validação de Dados nas Rotas de Partidos (server/routes.ts) 
+
+Vamos adicionar validação Zod para evitar dados inválidos entrando no sistema. 
+
+Encontre a rota app.post("/api/parties", ...) e altere para: 
+typescript
+ 
+  
+ 
+// Defina o schema no topo do arquivo (perto das outras importações do Zod)
+const partyInsertSchema = z.object({
+  name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
+  abbreviation: z.string().min(2).max(10),
+  number: z.number().int().positive(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Cor inválida").optional(),
+  coalition: z.string().optional().nullable(),
+  active: z.boolean().optional().default(true),
+});
+
+// ... dentro do registerRoutes:
+
+app.post("/api/parties", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+  try {
+    // Validação Zod
+    const validatedData = partyInsertSchema.parse(req.body);
+    
+    const party = await storage.createParty({
+      ...validatedData,
+      createdBy: req.user!.id,
+    });
+    await logAudit(req, "create", "party", String(party.id), { name: party.name });
+    res.json(party);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Dados inválidos", details: error.errors });
+    }
+    console.error("Create party error:", error);
+    res.status(500).json({ error: "Failed to create party" });
+  }
+});
+ 
+ 
+ 
+Resumo das Mudanças Feitas: 
+
+    Segurança: O limite de 10GB foi reduzido para 500MB. Isso impede que um usuário malicioso (ou erro) derrube seu servidor. Use a importação por URL para arquivos grandes. 
+    Performance: Removemos o rawBody do middleware global. O servidor agora consome menos memória RAM por requisição. 
+    Estabilidade: O Scheduler agora tem uma "trava" (isSchedulerRunning). Se o processamento demorar mais que o intervalo de 5 minutos, ele não tentará rodar outro por cima. 
+    Resiliência: Adicionei uma limpeza na inicialização. Se o servidor cair e reiniciar, os jobs que estavam "travados" serão marcados como falhos, permitindo que o usuário tente novamente, em vez de ficarem eternamente "carregando". 

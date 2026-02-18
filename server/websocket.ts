@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
 import type { IncomingMessage } from "http";
 import { parse as parseCookie } from "cookie";
-import { sessionStore } from "./session-config";
+import { getSessionStore } from "./session-config";
 import cookieSignature from "cookie-signature";
 
 export interface ImportEvent {
@@ -66,7 +66,7 @@ export function initWebSocketServer(server: Server): WebSocketServer {
     }
     
     // Validate session against the session store
-    sessionStore.get(sessionId, (err, session) => {
+    getSessionStore().get(sessionId, (err, session) => {
       if (err || !session) {
         console.log("WebSocket connection rejected - session not found in store");
         ws.close(4001, "Session expired");

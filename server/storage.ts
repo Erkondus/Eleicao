@@ -1133,13 +1133,12 @@ export class DatabaseStorage implements IStorage {
   private async _insertBatchWithSplit(tableName: string, table: any, records: any[]): Promise<number> {
     if (records.length === 0) return 0;
     try {
-      const result = await db.insert(table)
+      await db.insert(table)
         .values(records)
-        .onConflictDoNothing()
-        .returning({ id: table.id });
-      return result.length;
+        .onConflictDoNothing();
+      return records.length;
     } catch (err: any) {
-      const isParamError = err.message?.includes("bind") || err.message?.includes("parameters") || err.message?.includes("stack");
+      const isParamError = err.message?.includes("bind") || err.message?.includes("parameters") || err.message?.includes("stack") || err.message?.includes("65535");
       if (records.length <= 1) {
         console.warn(`[${tableName}] Single record insert failed:`, err.message);
         return 0;

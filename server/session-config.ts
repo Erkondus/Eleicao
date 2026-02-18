@@ -1,23 +1,37 @@
 import session from "express-session";
-// @ts-ignore - memorystore doesn't have types
-import MemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStoreSession = MemoryStore(session);
+const PgStore = connectPgSimple(session);
 
-export const sessionStore = new MemoryStoreSession({
-  checkPeriod: 86400000
-}) as session.Store;
+let _sessionStore: session.Store | null = null;
+
+export function getSessionStore(): session.Store {
+  if (!_sessionStore) {
+    _sessionStore = new PgStore({
+      pool: pool,
+      tableName: "user_sessions",
+      pruneSessionInterval: 60 * 60,
+      createTableIfMissing: true,
+    }) as session.Store;
+  }
+  return _sessionStore;
+}
 
 export function getSessionConfig(sessionSecret: string | undefined): session.SessionOptions {
+  if (!sessionSecret && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET deve ser definido em produção");
+  }
+
   return {
-    store: sessionStore,
-    secret: sessionSecret || "dev-only-secret-do-not-use-in-production",
+    store: getSessionStore(),
+    secret: sessionSecret || (process.env.NODE_ENV !== "production" ? "dev-secret-inseguro" : undefined!),
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "lax" as const : "lax" as const,
+      sameSite: "lax" as const,
       maxAge: 24 * 60 * 60 * 1000,
     },
   };

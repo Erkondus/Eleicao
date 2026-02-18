@@ -1,0 +1,118 @@
+Performance Crítica: Índice Vetorial (IVFFlat) 
+
+Na tabela semanticDocuments, você tem a coluna embedding para busca semântica, mas não definiu um índice vetorial.
+Sem isso, qualquer busca por similaridade fará um "Sequential Scan" (ler todas as linhas), o que é inviável para grandes volumes de dados. 
+
+Como resolver:
+O Drizzle ORM não suporta nativamente a criação de índices especializados (ivfflat ou hnsw) via definição de schema ainda. Você precisa criar isso via migração SQL bruta. 
+
+Adicione isso ao seu arquivo de migração ou execute no banco: 
+sql
+ 
+  
+ 
+-- Cria índice para acelerar busca vetorial (escala com ~1000+ linhas)
+-- 'lists' deve ser ajustado conforme o volume de dados. 
+-- Para começar, 100 é seguro para até 100k vetores.
+CREATE INDEX IF NOT EXISTS semantic_documents_embedding_idx 
+ON semantic_documents 
+USING ivfflat (embedding vector_cosine_ops) 
+WITH (lists = 100);
+ 
+ 
+ 
+2. ⚠️ Segurança e Integridade: Deleção em Cascata (TSE Data) 
+
+Nas tabelas de importação TSE (tseCandidateVotes, tseElectoralStatistics), você usou: 
+typescript
+ 
+  
+ 
+importJobId: integer("import_job_id").references(() => tseImportJobs.id, { onDelete: "cascade" })
+ 
+ 
+ 
+
+O Risco:
+Se um administrador clicar em "Excluir Importação" de um arquivo com 5 milhões de linhas, o banco tentará deletar 5 milhões de linhas em uma única transação. 
+
+     Isso vai travar o banco por segundos ou minutos.
+     Pode estourar o espaço em disco (bloat) do PostgreSQL.
+     Vai derrubar outras requisições.
+     
+
+Recomendação:
+Remova o onDelete: "cascade" do schema para essas tabelas gigantes.
+No código (routes.ts), quando o usuário pedir para deletar, faça a exclusão em lotes (batches) no backend antes de deletar o Job principal, ou simplesmente marque o Job como "Deletado" e tenha um processo de limpeza em background (cron job) que apaga aos poucos. 
+3. Sugestão de Ajuste no Schema (shared/schema.ts) 
+
+Para garantir que updatedAt funcione automaticamente sem depender que o backend lembre de passar a data, e para organizar a busca vetorial, aqui estão pequenos ajustes sugeridos. 
+
+Ajuste na tabela semanticDocuments (Adicionar comentário sobre índice): 
+typescript
+ 
+  
+ 
+export const semanticDocuments = pgTable("semantic_documents", {
+  id: serial("id").primaryKey(),
+  // ... outras colunas ...
+  embedding: vector("embedding", { dimensions: 1536 }),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  // Índices normais para filtros
+  index("semantic_documents_year_idx").on(table.year),
+  index("semantic_documents_state_idx").on(table.state),
+  // NOTA: O índice vetorial (ivfflat) deve ser criado via SQL manual 
+  // conforme instrução acima, pois o Drizzle ainda não suporta sintaxe nativa para isso.
+]);
+ 
+ 
+ 
+
+Ajuste na tabela campaigns (Trigger de Atualização Automática): 
+
+O Drizzle não atualiza updatedAt automaticamente. Você pode usar um default dinâmico ou garantir que seu código sempre passe updatedAt: new Date().
+Para garantir no banco: 
+typescript
+ 
+  
+ 
+// No topo do arquivo, adicione uma função SQL helper
+const onUpdateTrigger = (tableName: string) => 
+  sql`CREATE TRIGGER update_${tableName}_updated_at
+      BEFORE UPDATE ON ${sql.identifier(tableName)}
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`;
+      
+// Nota: Você precisará criar a função update_updated_at_column() no banco uma vez:
+// CREATE OR REPLACE FUNCTION update_updated_at_column()
+// RETURNS TRIGGER AS $$ // BEGIN
+//    NEW.updated_at = NOW();
+//    RETURN NEW;
+// END;
+// $$ language 'plpgsql';
+ 
+ 
+ 
+
+Se não quiser usar triggers (o que é válido para manter a lógica no Node), apenas certifique-se de que no seu storage.ts ou routes.ts, todos os updates passem updatedAt: new Date() (o que parece que você já faz em alguns lugares, mas não todos). 
+4. Otimização de JSONB (Análise de Sentimento) 
+
+Na tabela sentimentAnalysisResults, você guarda sourceBreakdown e topKeywords. Se você fizer queries frequentes do tipo "Select onde topKeywords contém 'Lula'", um índice GIN é recomendado. 
+typescript
+ 
+  
+ 
+export const sentimentAnalysisResults = pgTable("sentiment_analysis_results", {
+   // ...
+}, (table) => [
+  index("sentiment_entity_idx").on(table.entityType, table.entityId),
+  // Adicionar índice GIN para busca dentro do JSON
+  // index("sentiment_keywords_gin_idx").using("gin", table.topKeywords), // Se topKeywords for jsonb
+]);
+ 
+ 
+ 
+Resumo Final 
+
+Seu schema está sólido. O único ponto que vai causar dor de cabeça real em produção é a falta do índice vetorial e o risco do Delete Cascade nas tabelas grandes. 
+
