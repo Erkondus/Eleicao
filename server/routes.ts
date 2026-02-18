@@ -291,17 +291,22 @@ export async function registerRoutes(
       try {
         const user = await storage.getUserByUsername(username);
         if (!user) {
+          console.log(`[Auth] Login failed: user '${username}' not found`);
           return done(null, false, { message: "Invalid credentials" });
         }
         if (!user.active) {
+          console.log(`[Auth] Login failed: user '${username}' is disabled`);
           return done(null, false, { message: "Account disabled" });
         }
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
+          console.log(`[Auth] Login failed: wrong password for user '${username}' (hash prefix: ${user.password.substring(0, 7)})`);
           return done(null, false, { message: "Invalid credentials" });
         }
+        console.log(`[Auth] Login successful: user '${username}' (role: ${user.role})`);
         return done(null, user);
       } catch (error) {
+        console.error(`[Auth] Login error for user '${username}':`, error);
         return done(error);
       }
     })
@@ -340,6 +345,35 @@ export async function registerRoutes(
         database: "disconnected",
         error: error instanceof Error ? error.message : "Unknown error"
       });
+    }
+  });
+
+  app.post("/api/auth/reset-admin", async (req, res) => {
+    try {
+      const { secret, newPassword } = req.body;
+      const resetSecret = process.env.ADMIN_RESET_SECRET;
+      if (!resetSecret || secret !== resetSecret) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const admin = await storage.getUserByUsername("admin");
+      if (!admin) {
+        await storage.createUser({
+          username: "admin",
+          password: newPassword || "admin123",
+          name: "Administrador",
+          email: "admin@simulavoto.gov.br",
+          role: "admin",
+          active: true,
+        });
+        console.log("[Auth] Admin user re-created with new password");
+        return res.json({ success: true, action: "created" });
+      }
+      await storage.updateUser(admin.id, { password: newPassword || "admin123" });
+      console.log("[Auth] Admin password reset successfully");
+      return res.json({ success: true, action: "reset" });
+    } catch (error: any) {
+      console.error("[Auth] Admin reset error:", error);
+      return res.status(500).json({ error: "Reset failed" });
     }
   });
 
