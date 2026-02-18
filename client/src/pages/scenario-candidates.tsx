@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Plus, Trash2, Users, Search, Database, Loader2, ArrowLeft } from "lucide-react";
@@ -56,6 +56,38 @@ type TseStats = {
   ufs: string[];
   cargos: { code: number; name: string }[];
 };
+
+function DebouncedVoteInput({ initialValue, onCommit, testId }: { initialValue: number; onCommit: (value: number) => void; testId: string }) {
+  const [localValue, setLocalValue] = useState(String(initialValue));
+  const committedRef = useRef(initialValue);
+
+  useEffect(() => {
+    if (initialValue !== committedRef.current) {
+      setLocalValue(String(initialValue));
+      committedRef.current = initialValue;
+    }
+  }, [initialValue]);
+
+  const commitValue = useCallback(() => {
+    const parsed = parseInt(localValue, 10) || 0;
+    if (parsed !== committedRef.current) {
+      committedRef.current = parsed;
+      onCommit(parsed);
+    }
+  }, [localValue, onCommit]);
+
+  return (
+    <Input
+      type="number"
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={commitValue}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+      className="w-28 font-mono"
+      data-testid={testId}
+    />
+  );
+}
 
 export default function ScenarioCandidates() {
   const { scenarioId } = useParams<{ scenarioId: string }>();
@@ -304,15 +336,10 @@ export default function ScenarioCandidates() {
       header: "Votos",
       sortable: true,
       cell: (sc: ScenarioCandidateWithDetails) => (
-        <Input
-          type="number"
-          value={sc.votes}
-          onChange={(e) => {
-            const newVotes = parseInt(e.target.value, 10) || 0;
-            updateMutation.mutate({ id: sc.id, data: { votes: newVotes } });
-          }}
-          className="w-28 font-mono"
-          data-testid={`input-votes-${sc.id}`}
+        <DebouncedVoteInput
+          initialValue={sc.votes}
+          onCommit={(newVotes) => updateMutation.mutate({ id: sc.id, data: { votes: newVotes } })}
+          testId={`input-votes-${sc.id}`}
         />
       ),
     },
