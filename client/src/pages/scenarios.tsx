@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, FileText, PlayCircle, Eye, Handshake, Users, History, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, FileText, PlayCircle, Eye, Handshake, Users, History, Loader2, Copy } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,16 +116,26 @@ export default function Scenarios() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<InsertScenario> }) => {
-      return apiRequest("PATCH", `/api/scenarios/${id}`, data);
+    mutationFn: async ({ id, data, expectedUpdatedAt }: { id: number; data: Partial<InsertScenario>; expectedUpdatedAt?: string }) => {
+      return apiRequest("PATCH", `/api/scenarios/${id}`, { ...data, expectedUpdatedAt });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenarios"] });
       toast({ title: "Sucesso", description: "Cenário atualizado" });
       resetForm();
     },
-    onError: () => {
-      toast({ title: "Erro", description: "Falha ao atualizar cenário", variant: "destructive" });
+    onError: (error: Error) => {
+      if (error.message.startsWith("409")) {
+        queryClient.invalidateQueries({ queryKey: ["/api/scenarios"] });
+        toast({
+          title: "Conflito detectado",
+          description: "Outro usuário modificou este cenário. Os dados foram recarregados. Tente novamente.",
+          variant: "destructive",
+        });
+        resetForm();
+      } else {
+        toast({ title: "Erro", description: "Falha ao atualizar cenário", variant: "destructive" });
+      }
     },
   });
 
@@ -141,6 +151,21 @@ export default function Scenarios() {
     },
     onError: () => {
       toast({ title: "Erro", description: "Falha ao excluir cenário", variant: "destructive" });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("POST", `/api/scenarios/${id}/duplicate`);
+    },
+    onSuccess: async (response) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenarios"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      const data = await response.json();
+      toast({ title: "Sucesso", description: `Cenário duplicado: "${data.name}"` });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao duplicar cenário", variant: "destructive" });
     },
   });
 
@@ -209,7 +234,11 @@ export default function Scenarios() {
     }
 
     if (editingScenario) {
-      updateMutation.mutate({ id: editingScenario.id, data: payload });
+      updateMutation.mutate({
+        id: editingScenario.id,
+        data: payload,
+        expectedUpdatedAt: editingScenario.updatedAt ? new Date(editingScenario.updatedAt).toISOString() : undefined,
+      });
     } else {
       createMutation.mutate(payload as InsertScenario);
     }
@@ -339,6 +368,22 @@ export default function Scenarios() {
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Federações e Coligações</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => duplicateMutation.mutate(scenario.id)}
+                          disabled={!hasPermission("manage_scenarios") || duplicateMutation.isPending}
+                          data-testid={`button-duplicate-scenario-${scenario.id}`}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Duplicar Cenário</p>
                       </TooltipContent>
                     </Tooltip>
                     <Button

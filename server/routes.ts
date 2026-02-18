@@ -944,7 +944,26 @@ export async function registerRoutes(
 
   app.patch("/api/scenarios/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
-      const updated = await storage.updateScenario(parseInt(req.params.id), req.body);
+      const id = parseInt(req.params.id);
+      const { expectedUpdatedAt, ...data } = req.body;
+
+      if (expectedUpdatedAt) {
+        const current = await storage.getScenario(id);
+        if (!current) {
+          return res.status(404).json({ error: "Scenario not found" });
+        }
+        const currentTs = new Date(current.updatedAt).getTime();
+        const expectedTs = new Date(expectedUpdatedAt).getTime();
+        if (currentTs !== expectedTs) {
+          return res.status(409).json({
+            error: "conflict",
+            message: "Este cenário foi modificado por outro usuário. Recarregue os dados antes de salvar.",
+            currentData: current,
+          });
+        }
+      }
+
+      const updated = await storage.updateScenario(id, data);
       if (!updated) {
         return res.status(404).json({ error: "Scenario not found" });
       }
@@ -962,6 +981,39 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete scenario" });
+    }
+  });
+
+  app.post("/api/scenarios/:id/duplicate", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const original = await storage.getScenario(id);
+      if (!original) {
+        return res.status(404).json({ error: "Scenario not found" });
+      }
+
+      const existingScenarios = await storage.getScenarios();
+      const baseName = original.name;
+      let copyNumber = 1;
+      const copyPattern = new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(cópia\\s*(\\d+)?\\)$`);
+      for (const s of existingScenarios) {
+        if (s.name === baseName || copyPattern.test(s.name)) {
+          const match = s.name.match(copyPattern);
+          if (match && match[1]) {
+            copyNumber = Math.max(copyNumber, parseInt(match[1]) + 1);
+          } else if (s.name !== baseName) {
+            copyNumber = Math.max(copyNumber, 2);
+          }
+        }
+      }
+      const newName = `${baseName} (cópia ${copyNumber})`;
+
+      const newScenario = await storage.duplicateScenario(id, newName);
+      await logAudit(req, "duplicate", "scenario", String(newScenario.id), { originalId: id, originalName: baseName });
+      res.json(newScenario);
+    } catch (error: any) {
+      console.error("Failed to duplicate scenario:", error);
+      res.status(500).json({ error: "Failed to duplicate scenario" });
     }
   });
 

@@ -114,6 +114,7 @@ export interface IStorage {
   createScenario(scenario: InsertScenario): Promise<Scenario>;
   updateScenario(id: number, data: Partial<InsertScenario>): Promise<Scenario | undefined>;
   deleteScenario(id: number): Promise<boolean>;
+  duplicateScenario(id: number, newName: string): Promise<Scenario>;
 
   getSimulations(scenarioId?: number): Promise<Simulation[]>;
   getRecentSimulations(limit?: number): Promise<Simulation[]>;
@@ -875,6 +876,69 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
+  async duplicateScenario(id: number, newName: string): Promise<Scenario> {
+    const original = await this.getScenario(id);
+    if (!original) throw new Error("Scenario not found");
+
+    const [newScenario] = await db.insert(scenarios).values({
+      name: newName,
+      description: original.description,
+      totalVoters: original.totalVoters,
+      validVotes: original.validVotes,
+      availableSeats: original.availableSeats,
+      position: original.position,
+      status: "draft",
+      historicalYear: original.historicalYear,
+      historicalUf: original.historicalUf,
+      historicalMunicipio: original.historicalMunicipio,
+    }).returning();
+
+    const originalCandidates = await db.select().from(scenarioCandidates).where(eq(scenarioCandidates.scenarioId, id));
+    if (originalCandidates.length > 0) {
+      await db.insert(scenarioCandidates).values(
+        originalCandidates.map(c => ({
+          scenarioId: newScenario.id,
+          candidateId: c.candidateId,
+          partyId: c.partyId,
+          ballotNumber: c.ballotNumber,
+          nickname: c.nickname,
+          votes: c.votes,
+          status: c.status,
+        }))
+      );
+    }
+
+    const originalAlliances = await db.select().from(alliances).where(eq(alliances.scenarioId, id));
+    for (const alliance of originalAlliances) {
+      const [newAlliance] = await db.insert(alliances).values({
+        scenarioId: newScenario.id,
+        name: alliance.name,
+        type: alliance.type,
+      }).returning();
+
+      const parties = await db.select().from(allianceParties).where(eq(allianceParties.allianceId, alliance.id));
+      if (parties.length > 0) {
+        await db.insert(allianceParties).values(
+          parties.map(p => ({ allianceId: newAlliance.id, partyId: p.partyId }))
+        );
+      }
+    }
+
+    const originalVotes = await db.select().from(scenarioVotes).where(eq(scenarioVotes.scenarioId, id));
+    if (originalVotes.length > 0) {
+      await db.insert(scenarioVotes).values(
+        originalVotes.map(v => ({
+          scenarioId: newScenario.id,
+          partyId: v.partyId,
+          candidateId: v.candidateId,
+          votes: v.votes,
+        }))
+      );
+    }
+
+    return newScenario;
+  }
+
   async getSimulations(scenarioId?: number): Promise<Simulation[]> {
     if (scenarioId) {
       return db.select().from(simulations).where(eq(simulations.scenarioId, scenarioId)).orderBy(desc(simulations.createdAt));
@@ -964,10 +1028,52 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveScenarioVotes(scenarioId: number, votes: InsertScenarioVote[]): Promise<ScenarioVote[]> {
-    await db.delete(scenarioVotes).where(eq(scenarioVotes.scenarioId, scenarioId));
-    if (votes.length === 0) return [];
-    const created = await db.insert(scenarioVotes).values(votes).returning();
-    return created;
+    return db.transaction(async (tx) => {
+      if (votes.length === 0) {
+        await tx.delete(scenarioVotes).where(eq(scenarioVotes.scenarioId, scenarioId));
+        return [];
+      }
+
+      const results: ScenarioVote[] = [];
+      for (const vote of votes) {
+        const existing = await tx.select().from(scenarioVotes).where(
+          and(
+            eq(scenarioVotes.scenarioId, scenarioId),
+            eq(scenarioVotes.partyId, vote.partyId),
+            vote.candidateId
+              ? eq(scenarioVotes.candidateId, vote.candidateId)
+              : sql`${scenarioVotes.candidateId} IS NULL`
+          )
+        );
+
+        if (existing.length > 0) {
+          const [updated] = await tx.update(scenarioVotes)
+            .set({ votes: vote.votes })
+            .where(eq(scenarioVotes.id, existing[0].id))
+            .returning();
+          results.push(updated);
+        } else {
+          const [created] = await tx.insert(scenarioVotes)
+            .values({ scenarioId, ...vote })
+            .returning();
+          results.push(created);
+        }
+      }
+
+      const incomingKeys = new Set(votes.map(v =>
+        `${v.partyId}-${v.candidateId ?? 'null'}`
+      ));
+      const allExisting = await tx.select().from(scenarioVotes)
+        .where(eq(scenarioVotes.scenarioId, scenarioId));
+      for (const row of allExisting) {
+        const key = `${row.partyId}-${row.candidateId ?? 'null'}`;
+        if (!incomingKeys.has(key)) {
+          await tx.delete(scenarioVotes).where(eq(scenarioVotes.id, row.id));
+        }
+      }
+
+      return results;
+    });
   }
 
   async deleteScenarioVotes(scenarioId: number): Promise<boolean> {
@@ -1004,11 +1110,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async setAllianceParties(allianceId: number, partyIds: number[]): Promise<AllianceParty[]> {
-    await db.delete(allianceParties).where(eq(allianceParties.allianceId, allianceId));
-    if (partyIds.length === 0) return [];
-    const toInsert = partyIds.map((partyId) => ({ allianceId, partyId }));
-    const created = await db.insert(allianceParties).values(toInsert).returning();
-    return created;
+    return db.transaction(async (tx) => {
+      const existing = await tx.select().from(allianceParties).where(eq(allianceParties.allianceId, allianceId));
+      const existingPartyIds = new Set(existing.map(e => e.partyId));
+      const desiredPartyIds = new Set(partyIds);
+
+      const toRemove = existing.filter(e => !desiredPartyIds.has(e.partyId));
+      for (const item of toRemove) {
+        await tx.delete(allianceParties).where(eq(allianceParties.id, item.id));
+      }
+
+      const toAdd = partyIds.filter(pid => !existingPartyIds.has(pid));
+      if (toAdd.length > 0) {
+        await tx.insert(allianceParties).values(toAdd.map(partyId => ({ allianceId, partyId }))).returning();
+      }
+
+      return tx.select().from(allianceParties).where(eq(allianceParties.allianceId, allianceId));
+    });
   }
 
   async getPartyAlliance(scenarioId: number, partyId: number): Promise<Alliance | undefined> {
