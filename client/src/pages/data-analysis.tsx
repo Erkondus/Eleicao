@@ -638,7 +638,7 @@ export default function DataAnalysis() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Ano da Eleição</label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -650,6 +650,22 @@ export default function DataAnalysis() {
                   {(years ?? []).map((year) => (
                     <SelectItem key={year} value={String(year)}>
                       {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Cargo</label>
+              <Select value={selectedPosition} onValueChange={setSelectedPosition}>
+                <SelectTrigger data-testid="select-position">
+                  <SelectValue placeholder="Selecione o cargo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os cargos</SelectItem>
+                  {(positions ?? []).map((pos) => (
+                    <SelectItem key={pos} value={pos}>
+                      {pos}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -698,23 +714,7 @@ export default function DataAnalysis() {
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4 space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Cargo</label>
-                  <Select value={selectedPosition} onValueChange={setSelectedPosition}>
-                    <SelectTrigger data-testid="select-position">
-                      <SelectValue placeholder="Selecione o cargo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os cargos</SelectItem>
-                      {(positions ?? []).map((pos) => (
-                        <SelectItem key={pos} value={pos}>
-                          {pos}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Partido</label>
                   <Select value={selectedParty} onValueChange={setSelectedParty}>
