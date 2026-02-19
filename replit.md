@@ -39,6 +39,7 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
 - **Real-time Notification System:** In-app notifications with WebSocket delivery and email alerts for critical events.
 - **Campaign Insights AI Module:** AI-powered module for campaign strategy analysis including high-impact segment identification, message strategy generation, campaign impact prediction, and executive report generation.
 - **Campaign Management Module:** Comprehensive management with team roles, calendar visualization, AI-powered KPI goal tracking, and activity assignment.
+- **Real-time Collaborative Editing:** Multi-user scenario editing with optimistic locking (expectedUpdatedAt on PUT/DELETE for scenario candidates), WebSocket broadcast of scenario.candidate.added/updated/deleted events, and automatic React Query cache invalidation via `useScenarioWebSocket` hook. 409 conflict detection with user-friendly toast messages and automatic data refresh.
 
 ## External Dependencies
 - **OpenAI:** GPT-4o for AI integrations (validation, insights, sentiment, predictions, suggestions) and `text-embedding-3-small` for semantic search.

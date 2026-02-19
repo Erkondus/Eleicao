@@ -83,6 +83,7 @@ export const scenarioCandidates = pgTable("scenario_candidates", {
   status: text("status").notNull().default("active"),
   votes: integer("votes").notNull().default(0),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const simulations = pgTable("simulations", {

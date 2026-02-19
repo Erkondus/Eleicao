@@ -1054,7 +1054,7 @@ export class DatabaseStorage implements IStorage {
           results.push(updated);
         } else {
           const [created] = await tx.insert(scenarioVotes)
-            .values({ scenarioId, ...vote })
+            .values({ ...vote, scenarioId })
             .returning();
           results.push(created);
         }
@@ -1628,7 +1628,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateScenarioCandidate(id: number, data: Partial<InsertScenarioCandidate>): Promise<ScenarioCandidate | undefined> {
-    const [updated] = await db.update(scenarioCandidates).set(data).where(eq(scenarioCandidates.id, id)).returning();
+    const [updated] = await db.update(scenarioCandidates).set({
+      ...data,
+      updatedAt: new Date(),
+    }).where(eq(scenarioCandidates.id, id)).returning();
     return updated;
   }
 

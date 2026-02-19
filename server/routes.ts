@@ -23,7 +23,8 @@ import {
   emitBatchStatus, 
   emitBatchError,
   emitJobCompleted,
-  emitJobFailed
+  emitJobFailed,
+  broadcastScenarioEvent
 } from "./websocket";
 import { sql } from "drizzle-orm";
 import type { User, InsertTseCandidateVote, TseImportBatch } from "@shared/schema";
@@ -1165,6 +1166,14 @@ export async function registerRoutes(
         votes
       );
       await logAudit(req, "create", "scenario_candidate", String(scenarioCandidate.id), { scenarioId, candidateId, ballotNumber, votes });
+
+      broadcastScenarioEvent({
+        type: "scenario.candidate.added",
+        scenarioId,
+        candidateId: scenarioCandidate.id,
+        updatedBy: req.user?.username || "unknown",
+      });
+
       res.json(scenarioCandidate);
     } catch (error) {
       res.status(500).json({ error: "Failed to add candidate to scenario" });
@@ -1174,12 +1183,38 @@ export async function registerRoutes(
   app.put("/api/scenario-candidates/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { ballotNumber, nickname, status, votes } = req.body;
+      const { ballotNumber, nickname, status, votes, expectedUpdatedAt } = req.body;
+
+      if (expectedUpdatedAt) {
+        const current = await storage.getScenarioCandidate(id);
+        if (!current) {
+          return res.status(404).json({ error: "Scenario candidate not found" });
+        }
+        const currentTs = new Date(current.updatedAt).getTime();
+        const expectedTs = new Date(expectedUpdatedAt).getTime();
+        if (currentTs !== expectedTs) {
+          return res.status(409).json({
+            error: "conflict",
+            message: "Este candidato foi modificado por outro usuário.",
+            currentData: current,
+          });
+        }
+      }
+
       const updated = await storage.updateScenarioCandidate(id, { ballotNumber, nickname, status, votes });
       if (!updated) {
         return res.status(404).json({ error: "Scenario candidate not found" });
       }
       await logAudit(req, "update", "scenario_candidate", String(id), { ballotNumber, nickname, status, votes });
+
+      broadcastScenarioEvent({
+        type: "scenario.candidate.updated",
+        scenarioId: updated.scenarioId,
+        candidateId: id,
+        updatedAt: updated.updatedAt.toISOString(),
+        updatedBy: req.user?.username || "unknown",
+      });
+
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update scenario candidate" });
@@ -1189,8 +1224,36 @@ export async function registerRoutes(
   app.delete("/api/scenario-candidates/:id", requireAuth, requireRole("admin"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const expectedUpdatedAt = req.query.expectedUpdatedAt as string | undefined;
+      const current = await storage.getScenarioCandidate(id);
+      if (!current) {
+        return res.status(404).json({ error: "Scenario candidate not found" });
+      }
+
+      if (expectedUpdatedAt) {
+        const currentTs = new Date(current.updatedAt).getTime();
+        const expectedTs = new Date(expectedUpdatedAt).getTime();
+        if (currentTs !== expectedTs) {
+          return res.status(409).json({
+            error: "conflict",
+            message: "Este candidato foi modificado por outro usuário desde que você carregou os dados.",
+            currentData: current,
+          });
+        }
+      }
+
+      const scenarioId = current.scenarioId;
+
       await storage.deleteScenarioCandidate(id);
       await logAudit(req, "delete", "scenario_candidate", String(id), {});
+
+      broadcastScenarioEvent({
+        type: "scenario.candidate.deleted",
+        scenarioId,
+        candidateId: id,
+        updatedBy: req.user?.username || "unknown",
+      });
+
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to remove candidate from scenario" });

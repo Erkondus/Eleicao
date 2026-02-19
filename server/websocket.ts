@@ -157,6 +157,30 @@ export function broadcastImportEvent(event: ImportEvent): void {
   });
 }
 
+export interface ScenarioEvent {
+  type: "scenario.candidate.added" | "scenario.candidate.updated" | "scenario.candidate.deleted";
+  scenarioId: number;
+  candidateId: number;
+  updatedAt?: string;
+  updatedBy: string;
+}
+
+export function broadcastScenarioEvent(event: ScenarioEvent): void {
+  if (!wss || clients.size === 0) return;
+
+  const message = JSON.stringify(event);
+
+  clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN && client.authenticated) {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error("Error sending scenario event:", error);
+      }
+    }
+  });
+}
+
 export function emitJobStatus(
   jobId: number, 
   status: string, 

@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/empty-state";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useScenarioWebSocket } from "@/hooks/use-scenario-websocket";
 import type { Scenario, Candidate, Party, ScenarioCandidate } from "@shared/schema";
 
 type ScenarioCandidateWithDetails = ScenarioCandidate & {
@@ -94,7 +95,7 @@ export default function ScenarioCandidates() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; updatedAt?: string } | null>(null);
 
   const [tseSearchQuery, setTseSearchQuery] = useState("");
   const [tseSearchResults, setTseSearchResults] = useState<TseCandidate[]>([]);
@@ -109,6 +110,8 @@ export default function ScenarioCandidates() {
     nickname: "",
     votes: "0",
   });
+
+  useScenarioWebSocket(scenarioId || null);
 
   const { data: scenario } = useQuery<Scenario>({
     queryKey: ["/api/scenarios", scenarioId],
@@ -147,29 +150,43 @@ export default function ScenarioCandidates() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: { votes?: number; status?: string } }) => {
-      return apiRequest("PUT", `/api/scenario-candidates/${id}`, data);
+    mutationFn: async ({ id, data, expectedUpdatedAt }: { id: number; data: { votes?: number; status?: string }; expectedUpdatedAt?: string }) => {
+      return apiRequest("PUT", `/api/scenario-candidates/${id}`, { ...data, expectedUpdatedAt });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenarios", scenarioId, "candidates"] });
       toast({ title: "Sucesso", description: "Candidato atualizado" });
     },
-    onError: () => {
-      toast({ title: "Erro", description: "Falha ao atualizar candidato", variant: "destructive" });
+    onError: (error: Error) => {
+      if (error.message.startsWith("409")) {
+        queryClient.invalidateQueries({ queryKey: ["/api/scenarios", scenarioId, "candidates"] });
+        toast({ title: "Conflito detectado", description: "Outro usuário modificou este candidato. Os dados foram atualizados.", variant: "destructive" });
+      } else {
+        toast({ title: "Erro", description: "Falha ao atualizar candidato", variant: "destructive" });
+      }
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return apiRequest("DELETE", `/api/scenario-candidates/${id}`);
+    mutationFn: async ({ id, expectedUpdatedAt }: { id: number; expectedUpdatedAt?: string }) => {
+      const url = expectedUpdatedAt
+        ? `/api/scenario-candidates/${id}?expectedUpdatedAt=${encodeURIComponent(expectedUpdatedAt)}`
+        : `/api/scenario-candidates/${id}`;
+      return apiRequest("DELETE", url);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenarios", scenarioId, "candidates"] });
       toast({ title: "Sucesso", description: "Candidato removido do cenário" });
-      setDeleteConfirmId(null);
+      setDeleteConfirm(null);
     },
-    onError: () => {
-      toast({ title: "Erro", description: "Falha ao remover candidato", variant: "destructive" });
+    onError: (error: Error) => {
+      if (error.message.startsWith("409")) {
+        queryClient.invalidateQueries({ queryKey: ["/api/scenarios", scenarioId, "candidates"] });
+        toast({ title: "Conflito detectado", description: "Este candidato foi modificado por outro usuário. Os dados foram atualizados.", variant: "destructive" });
+        setDeleteConfirm(null);
+      } else {
+        toast({ title: "Erro", description: "Falha ao remover candidato", variant: "destructive" });
+      }
     },
   });
 
@@ -338,7 +355,7 @@ export default function ScenarioCandidates() {
       cell: (sc: ScenarioCandidateWithDetails) => (
         <DebouncedVoteInput
           initialValue={sc.votes}
-          onCommit={(newVotes) => updateMutation.mutate({ id: sc.id, data: { votes: newVotes } })}
+          onCommit={(newVotes) => updateMutation.mutate({ id: sc.id, data: { votes: newVotes }, expectedUpdatedAt: sc.updatedAt ? new Date(sc.updatedAt).toISOString() : undefined })}
           testId={`input-votes-${sc.id}`}
         />
       ),
@@ -360,7 +377,7 @@ export default function ScenarioCandidates() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setDeleteConfirmId(sc.id)}
+          onClick={() => setDeleteConfirm({ id: sc.id, updatedAt: sc.updatedAt ? new Date(sc.updatedAt).toISOString() : undefined })}
           disabled={!hasPermission("manage_scenarios")}
           data-testid={`button-delete-sc-${sc.id}`}
         >
@@ -623,7 +640,7 @@ export default function ScenarioCandidates() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
+      <Dialog open={deleteConfirm !== null} onOpenChange={() => setDeleteConfirm(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Confirmar Remoção</DialogTitle>
@@ -632,12 +649,12 @@ export default function ScenarioCandidates() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               Cancelar
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+              onClick={() => deleteConfirm && deleteMutation.mutate({ id: deleteConfirm.id, expectedUpdatedAt: deleteConfirm.updatedAt })}
               disabled={deleteMutation.isPending}
               data-testid="button-confirm-delete-sc"
             >
