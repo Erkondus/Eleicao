@@ -221,10 +221,26 @@ export async function initializeDatabase(): Promise<void> {
   }
 }
 
+async function createIndexesInBackground(indexes: { name: string; sql: string }[], pool: any): Promise<void> {
+  (async () => {
+    for (const idx of indexes) {
+      try {
+        console.log(`[Migration/BG] Creating index ${idx.name}...`);
+        await pool.query(idx.sql);
+        console.log(`[Migration/BG] Index ${idx.name} created.`);
+      } catch (e: any) {
+        console.warn(`[Migration/BG] Index ${idx.name} failed (non-fatal): ${e.message}`);
+      }
+    }
+    console.log("[Migration/BG] Background index creation complete.");
+  })();
+}
+
 export async function runSafeMigrations(): Promise<void> {
   if (!_pool) return;
   try {
     const client = await _pool.connect();
+    let clientReleased = false;
     try {
       const check = await client.query(`
         SELECT column_name FROM information_schema.columns 
@@ -251,34 +267,41 @@ export async function runSafeMigrations(): Promise<void> {
         SELECT 1 FROM information_schema.tables WHERE table_name = 'tse_candidate_votes' LIMIT 1
       `);
       if (tableCheck.rows.length > 0) {
-        console.log("[Migration] Ensuring performance indexes on tse_candidate_votes...");
-        const btreeIndexes = [
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_ano_eleicao ON tse_candidate_votes (ano_eleicao)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_sg_uf ON tse_candidate_votes (sg_uf)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_cd_cargo ON tse_candidate_votes (cd_cargo)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_sg_partido ON tse_candidate_votes (sg_partido)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_ano_uf ON tse_candidate_votes (ano_eleicao, sg_uf)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_ano_uf_cargo ON tse_candidate_votes (ano_eleicao, sg_uf, cd_cargo)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_tipo_eleicao ON tse_candidate_votes (nm_tipo_eleicao)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_uf_municipio ON tse_candidate_votes (sg_uf, cd_municipio, nm_municipio)`,
-          `CREATE INDEX IF NOT EXISTS idx_tse_cv_sq_candidato ON tse_candidate_votes (sq_candidato)`,
+        const existingIndexes = await client.query(`
+          SELECT indexname FROM pg_indexes WHERE tablename = 'tse_candidate_votes'
+        `);
+        const existingSet = new Set(existingIndexes.rows.map((r: any) => r.indexname));
+
+        const allIndexes: { name: string; sql: string }[] = [
+          { name: "idx_tse_cv_ano_eleicao", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_ano_eleicao ON tse_candidate_votes (ano_eleicao)` },
+          { name: "idx_tse_cv_sg_uf", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sg_uf ON tse_candidate_votes (sg_uf)` },
+          { name: "idx_tse_cv_cd_cargo", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_cd_cargo ON tse_candidate_votes (cd_cargo)` },
+          { name: "idx_tse_cv_sg_partido", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sg_partido ON tse_candidate_votes (sg_partido)` },
+          { name: "idx_tse_cv_ano_uf", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_ano_uf ON tse_candidate_votes (ano_eleicao, sg_uf)` },
+          { name: "idx_tse_cv_ano_uf_cargo", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_ano_uf_cargo ON tse_candidate_votes (ano_eleicao, sg_uf, cd_cargo)` },
+          { name: "idx_tse_cv_nm_tipo_eleicao", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_tipo_eleicao ON tse_candidate_votes (nm_tipo_eleicao)` },
+          { name: "idx_tse_cv_uf_municipio", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_uf_municipio ON tse_candidate_votes (sg_uf, cd_municipio, nm_municipio)` },
+          { name: "idx_tse_cv_sq_candidato", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sq_candidato ON tse_candidate_votes (sq_candidato)` },
         ];
-        for (const idx of btreeIndexes) {
-          try { await client.query(idx); } catch (e) { /* index may already exist */ }
-        }
         if (hasTrgm) {
-          const trgmIndexes = [
-            `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_candidato_trgm ON tse_candidate_votes USING gin (nm_candidato gin_trgm_ops)`,
-            `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_trgm ON tse_candidate_votes USING gin (nm_urna_candidato gin_trgm_ops)`,
-          ];
-          for (const idx of trgmIndexes) {
-            try { await client.query(idx); } catch (e) { /* index may already exist */ }
-          }
+          allIndexes.push(
+            { name: "idx_tse_cv_nm_candidato_trgm", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_candidato_trgm ON tse_candidate_votes USING gin (nm_candidato gin_trgm_ops)` },
+            { name: "idx_tse_cv_nm_urna_trgm", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_urna_trgm ON tse_candidate_votes USING gin (nm_urna_candidato gin_trgm_ops)` },
+          );
         }
-        console.log("[Migration] Performance indexes ensured.");
+
+        const missing = allIndexes.filter(i => !existingSet.has(i.name));
+        if (missing.length === 0) {
+          console.log("[Migration] All performance indexes already exist. Skipping.");
+        } else {
+          console.log(`[Migration] ${missing.length} indexes missing, creating in background (server will start now)...`);
+          client.release();
+          clientReleased = true;
+          createIndexesInBackground(missing, _pool!);
+        }
       }
     } finally {
-      client.release();
+      if (!clientReleased) client.release();
     }
   } catch (err) {
     console.error("[Migration] Safe migration failed (non-fatal):", err);
