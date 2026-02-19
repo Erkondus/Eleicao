@@ -2080,3 +2080,11 @@ export const campaignNotificationsRelations = relations(campaignNotifications, (
   kpiGoal: one(aiKpiGoals, { fields: [campaignNotifications.relatedKpiGoalId], references: [aiKpiGoals.id] }),
   inAppNotification: one(inAppNotifications, { fields: [campaignNotifications.inAppNotificationId], references: [inAppNotifications.id] }),
 }));
+
+export const userSessions = pgTable("user_sessions", {
+  sid: varchar("sid").primaryKey(),
+  sess: jsonb("sess").notNull(),
+  expire: timestamp("expire", { precision: 6 }).notNull(),
+}, (table) => [
+  index("IDX_user_sessions_expire").on(table.expire),
+]);
