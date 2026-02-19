@@ -349,6 +349,15 @@ export const tseCandidateVotes = pgTable("tse_candidate_votes", {
     table.nrCandidato,
     table.stVotoEmTransito
   ),
+  idxAnoEleicao: index("idx_tse_cv_ano_eleicao").on(table.anoEleicao),
+  idxSgUf: index("idx_tse_cv_sg_uf").on(table.sgUf),
+  idxCdCargo: index("idx_tse_cv_cd_cargo").on(table.cdCargo),
+  idxSgPartido: index("idx_tse_cv_sg_partido").on(table.sgPartido),
+  idxAnoUf: index("idx_tse_cv_ano_uf").on(table.anoEleicao, table.sgUf),
+  idxAnoUfCargo: index("idx_tse_cv_ano_uf_cargo").on(table.anoEleicao, table.sgUf, table.cdCargo),
+  idxNmTipoEleicao: index("idx_tse_cv_nm_tipo_eleicao").on(table.nmTipoEleicao),
+  idxUfMunicipio: index("idx_tse_cv_uf_municipio").on(table.sgUf, table.cdMunicipio, table.nmMunicipio),
+  idxSqCandidato: index("idx_tse_cv_sq_candidato").on(table.sqCandidato),
 }));
 
 export const tseImportErrors = pgTable("tse_import_errors", {

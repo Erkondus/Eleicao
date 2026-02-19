@@ -5750,12 +5750,16 @@ Analise o impacto dessa mudança hipotética e forneça:
   // Data Analysis endpoints
   app.get("/api/analytics/summary", requireAuth, async (req, res) => {
     try {
-      const { year, uf, electionType, position } = req.query;
+      const { year, uf, electionType, position, party, municipality, minVotes, maxVotes } = req.query;
       const summary = await storage.getAnalyticsSummary({
         year: year ? parseInt(year as string) : undefined,
         uf: uf as string | undefined,
         electionType: electionType as string | undefined,
         position: position as string | undefined,
+        party: party as string | undefined,
+        municipality: municipality as string | undefined,
+        minVotes: minVotes ? parseInt(minVotes as string) : undefined,
+        maxVotes: maxVotes ? parseInt(maxVotes as string) : undefined,
       });
       res.json(summary);
     } catch (error) {
@@ -5766,12 +5770,14 @@ Analise o impacto dessa mudança hipotética e forneça:
 
   app.get("/api/analytics/votes-by-party", requireAuth, async (req, res) => {
     try {
-      const { year, uf, electionType, position, limit } = req.query;
+      const { year, uf, electionType, position, party, municipality, limit } = req.query;
       const data = await storage.getVotesByParty({
         year: year ? parseInt(year as string) : undefined,
         uf: uf as string | undefined,
         electionType: electionType as string | undefined,
         position: position as string | undefined,
+        party: party as string | undefined,
+        municipality: municipality as string | undefined,
         limit: limit ? parseInt(limit as string) : 20,
       });
       res.json(data);
@@ -5783,12 +5789,14 @@ Analise o impacto dessa mudança hipotética e forneça:
 
   app.get("/api/analytics/top-candidates", requireAuth, async (req, res) => {
     try {
-      const { year, uf, electionType, position, limit } = req.query;
+      const { year, uf, electionType, position, party, municipality, limit } = req.query;
       const data = await storage.getTopCandidates({
         year: year ? parseInt(year as string) : undefined,
         uf: uf as string | undefined,
         electionType: electionType as string | undefined,
         position: position as string | undefined,
+        party: party as string | undefined,
+        municipality: municipality as string | undefined,
         limit: limit ? parseInt(limit as string) : 20,
       });
       res.json(data);
@@ -5800,11 +5808,14 @@ Analise o impacto dessa mudança hipotética e forneça:
 
   app.get("/api/analytics/votes-by-state", requireAuth, async (req, res) => {
     try {
-      const { year, electionType, position } = req.query;
+      const { year, uf, electionType, position, party, municipality } = req.query;
       const data = await storage.getVotesByState({
         year: year ? parseInt(year as string) : undefined,
+        uf: uf as string | undefined,
         electionType: electionType as string | undefined,
         position: position as string | undefined,
+        party: party as string | undefined,
+        municipality: municipality as string | undefined,
       });
       res.json(data);
     } catch (error) {
@@ -5815,11 +5826,14 @@ Analise o impacto dessa mudança hipotética e forneça:
 
   app.get("/api/analytics/votes-by-municipality", requireAuth, async (req, res) => {
     try {
-      const { year, uf, electionType, limit } = req.query;
+      const { year, uf, electionType, position, party, municipality, limit } = req.query;
       const data = await storage.getVotesByMunicipality({
         year: year ? parseInt(year as string) : undefined,
         uf: uf as string | undefined,
         electionType: electionType as string | undefined,
+        position: position as string | undefined,
+        party: party as string | undefined,
+        municipality: municipality as string | undefined,
         limit: limit ? parseInt(limit as string) : 50,
       });
       res.json(data);
@@ -5942,23 +5956,6 @@ Analise o impacto dessa mudança hipotética e forneça:
     } catch (error) {
       console.error("Municipalities error:", error);
       res.status(500).json({ error: "Failed to fetch municipalities" });
-    }
-  });
-
-  app.get("/api/analytics/votes-by-municipality", requireAuth, async (req, res) => {
-    try {
-      const { year, uf, position, party, municipality } = req.query;
-      const votes = await storage.getVotesByMunicipality({
-        year: year ? parseInt(year as string) : undefined,
-        uf: uf as string | undefined,
-        position: position as string | undefined,
-        party: party as string | undefined,
-        municipality: municipality as string | undefined,
-      });
-      res.json(votes);
-    } catch (error) {
-      console.error("Votes by municipality error:", error);
-      res.status(500).json({ error: "Failed to fetch votes by municipality" });
     }
   });
 

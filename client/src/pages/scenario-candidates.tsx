@@ -236,7 +236,7 @@ export default function ScenarioCandidates() {
         setTseSearchResults([]);
         setShowTseResults(false);
       }
-    }, 300);
+    }, 500);
     return () => clearTimeout(debounce);
   }, [tseSearchQuery, selectedYear, searchTseCandidates]);
 

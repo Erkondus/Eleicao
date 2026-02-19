@@ -88,9 +88,11 @@ function CustomTooltip({ active, payload, label, type }: any) {
       <p className="font-semibold text-sm border-b pb-2 mb-2">{label || data.party || data.name || data.state}</p>
       {type === "party" && (
         <>
-          <p className="text-sm"><span className="text-muted-foreground">Votos:</span> {formatNumber(data.votes)}</p>
+          <p className="text-sm"><span className="text-muted-foreground">Total:</span> {formatNumber(data.votesTotal ?? data.votes)}</p>
+          {data.votesNominais !== undefined && <p className="text-sm"><span className="text-muted-foreground">Nominais:</span> {formatNumber(data.votesNominais)}</p>}
+          {data.votesLegenda !== undefined && data.votesLegenda > 0 && <p className="text-sm"><span className="text-muted-foreground">Legenda:</span> {formatNumber(data.votesLegenda)}</p>}
           <p className="text-sm"><span className="text-muted-foreground">Candidatos:</span> {formatNumber(data.candidateCount)}</p>
-          {data.partyNumber && <p className="text-sm"><span className="text-muted-foreground">Número:</span> {data.partyNumber}</p>}
+          {data.partyNumber && <p className="text-sm"><span className="text-muted-foreground">N&uacute;mero:</span> {data.partyNumber}</p>}
         </>
       )}
       {type === "candidate" && (
@@ -269,6 +271,9 @@ export default function DataAnalysis() {
 
   const { data: summary, isLoading: summaryLoading } = useQuery<{
     totalVotes: number;
+    totalVotesNominais: number;
+    totalVotesLegenda: number;
+    totalVotesValidos: number;
     totalCandidates: number;
     totalParties: number;
     totalMunicipalities: number;
@@ -280,6 +285,9 @@ export default function DataAnalysis() {
     party: string;
     partyNumber: number | null;
     votes: number;
+    votesNominais: number;
+    votesLegenda: number;
+    votesTotal: number;
     candidateCount: number;
   }[]>({
     queryKey: [`/api/analytics/votes-by-party${queryString}`],
@@ -1000,13 +1008,23 @@ export default function DataAnalysis() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total de Votos</p>
+                <p className="text-sm text-muted-foreground">Votos V&aacute;lidos</p>
                 {summaryLoading ? (
                   <Skeleton className="h-8 w-24 mt-1" />
                 ) : (
-                  <p className="text-2xl font-bold" data-testid="text-total-votes">
-                    {formatNumber(summary?.totalVotes ?? 0)}
-                  </p>
+                  <>
+                    <p className="text-2xl font-bold" data-testid="text-total-votes">
+                      {formatNumber(summary?.totalVotesValidos ?? summary?.totalVotes ?? 0)}
+                    </p>
+                    <div className="flex gap-2 mt-1 flex-wrap">
+                      <span className="text-xs text-muted-foreground" data-testid="text-votes-nominais">
+                        Nominais: {formatNumber(summary?.totalVotesNominais ?? 0)}
+                      </span>
+                      <span className="text-xs text-muted-foreground" data-testid="text-votes-legenda">
+                        Legenda: {formatNumber(summary?.totalVotesLegenda ?? 0)}
+                      </span>
+                    </div>
+                  </>
                 )}
               </div>
               <div className="p-3 rounded-full bg-primary/10">

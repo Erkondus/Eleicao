@@ -238,6 +238,45 @@ export async function runSafeMigrations(): Promise<void> {
         `);
         console.log("[Migration] updated_at column added successfully.");
       }
+
+      let hasTrgm = false;
+      try {
+        await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+        hasTrgm = true;
+      } catch (e) {
+        console.warn("[Migration] pg_trgm extension not available (managed DB restriction). Trigram indexes will be skipped.");
+      }
+
+      const tableCheck = await client.query(`
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'tse_candidate_votes' LIMIT 1
+      `);
+      if (tableCheck.rows.length > 0) {
+        console.log("[Migration] Ensuring performance indexes on tse_candidate_votes...");
+        const btreeIndexes = [
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_ano_eleicao ON tse_candidate_votes (ano_eleicao)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_sg_uf ON tse_candidate_votes (sg_uf)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_cd_cargo ON tse_candidate_votes (cd_cargo)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_sg_partido ON tse_candidate_votes (sg_partido)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_ano_uf ON tse_candidate_votes (ano_eleicao, sg_uf)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_ano_uf_cargo ON tse_candidate_votes (ano_eleicao, sg_uf, cd_cargo)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_tipo_eleicao ON tse_candidate_votes (nm_tipo_eleicao)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_uf_municipio ON tse_candidate_votes (sg_uf, cd_municipio, nm_municipio)`,
+          `CREATE INDEX IF NOT EXISTS idx_tse_cv_sq_candidato ON tse_candidate_votes (sq_candidato)`,
+        ];
+        for (const idx of btreeIndexes) {
+          try { await client.query(idx); } catch (e) { /* index may already exist */ }
+        }
+        if (hasTrgm) {
+          const trgmIndexes = [
+            `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_candidato_trgm ON tse_candidate_votes USING gin (nm_candidato gin_trgm_ops)`,
+            `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_trgm ON tse_candidate_votes USING gin (nm_urna_candidato gin_trgm_ops)`,
+          ];
+          for (const idx of trgmIndexes) {
+            try { await client.query(idx); } catch (e) { /* index may already exist */ }
+          }
+        }
+        console.log("[Migration] Performance indexes ensured.");
+      }
     } finally {
       client.release();
     }
