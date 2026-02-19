@@ -1653,7 +1653,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Analytics methods
-  async getAnalyticsSummary(filters: { year?: number; uf?: string; electionType?: string }): Promise<{
+  async getAnalyticsSummary(filters: { year?: number; uf?: string; electionType?: string; position?: string }): Promise<{
     totalVotes: number;
     totalCandidates: number;
     totalParties: number;
@@ -1663,6 +1663,7 @@ export class DatabaseStorage implements IStorage {
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
     if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -1684,7 +1685,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getVotesByParty(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+  async getVotesByParty(filters: { year?: number; uf?: string; electionType?: string; position?: string; limit?: number }): Promise<{
     party: string;
     partyNumber: number | null;
     votes: number;
@@ -1694,6 +1695,7 @@ export class DatabaseStorage implements IStorage {
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
     if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -1718,7 +1720,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getTopCandidates(filters: { year?: number; uf?: string; electionType?: string; limit?: number }): Promise<{
+  async getTopCandidates(filters: { year?: number; uf?: string; electionType?: string; position?: string; limit?: number }): Promise<{
     name: string;
     nickname: string | null;
     party: string | null;
@@ -1731,6 +1733,7 @@ export class DatabaseStorage implements IStorage {
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
     if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -1768,7 +1771,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getVotesByState(filters: { year?: number; electionType?: string }): Promise<{
+  async getVotesByState(filters: { year?: number; electionType?: string; position?: string }): Promise<{
     state: string;
     votes: number;
     candidateCount: number;
@@ -1776,10 +1779,11 @@ export class DatabaseStorage implements IStorage {
   }[]> {
     const conditions: any[] = [
       sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
-      sql`${tseCandidateVotes.sgUf} != 'ZZ'` // Exclude exterior votes
+      sql`${tseCandidateVotes.sgUf} != 'ZZ'`
     ];
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.electionType) conditions.push(eq(tseCandidateVotes.nmTipoEleicao, filters.electionType));
+    if (filters.position) conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
 
     const whereClause = and(...conditions);
 

@@ -5568,11 +5568,12 @@ Analise o impacto dessa mudança hipotética e forneça:
   // Data Analysis endpoints
   app.get("/api/analytics/summary", requireAuth, async (req, res) => {
     try {
-      const { year, uf, electionType } = req.query;
+      const { year, uf, electionType, position } = req.query;
       const summary = await storage.getAnalyticsSummary({
         year: year ? parseInt(year as string) : undefined,
         uf: uf as string | undefined,
         electionType: electionType as string | undefined,
+        position: position as string | undefined,
       });
       res.json(summary);
     } catch (error) {
@@ -5583,11 +5584,12 @@ Analise o impacto dessa mudança hipotética e forneça:
 
   app.get("/api/analytics/votes-by-party", requireAuth, async (req, res) => {
     try {
-      const { year, uf, electionType, limit } = req.query;
+      const { year, uf, electionType, position, limit } = req.query;
       const data = await storage.getVotesByParty({
         year: year ? parseInt(year as string) : undefined,
         uf: uf as string | undefined,
         electionType: electionType as string | undefined,
+        position: position as string | undefined,
         limit: limit ? parseInt(limit as string) : 20,
       });
       res.json(data);
@@ -5599,11 +5601,12 @@ Analise o impacto dessa mudança hipotética e forneça:
 
   app.get("/api/analytics/top-candidates", requireAuth, async (req, res) => {
     try {
-      const { year, uf, electionType, limit } = req.query;
+      const { year, uf, electionType, position, limit } = req.query;
       const data = await storage.getTopCandidates({
         year: year ? parseInt(year as string) : undefined,
         uf: uf as string | undefined,
         electionType: electionType as string | undefined,
+        position: position as string | undefined,
         limit: limit ? parseInt(limit as string) : 20,
       });
       res.json(data);
@@ -5615,10 +5618,11 @@ Analise o impacto dessa mudança hipotética e forneça:
 
   app.get("/api/analytics/votes-by-state", requireAuth, async (req, res) => {
     try {
-      const { year, electionType } = req.query;
+      const { year, electionType, position } = req.query;
       const data = await storage.getVotesByState({
         year: year ? parseInt(year as string) : undefined,
         electionType: electionType as string | undefined,
+        position: position as string | undefined,
       });
       res.json(data);
     } catch (error) {
