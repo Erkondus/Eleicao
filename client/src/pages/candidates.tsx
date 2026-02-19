@@ -222,16 +222,31 @@ export default function Candidates() {
     return () => clearTimeout(debounce);
   }, [tseSearchQuery, searchTseCandidates]);
 
+  function mapTseCargoToPosition(dsCargo: string | null): string {
+    if (!dsCargo) return "vereador";
+    const cargo = dsCargo.toUpperCase().trim();
+    if (cargo.includes("PRESIDENTE")) return "presidente";
+    if (cargo.includes("GOVERNADOR")) return "governador";
+    if (cargo.includes("SENADOR")) return "senador";
+    if (cargo.includes("DEPUTADO FEDERAL")) return "deputado_federal";
+    if (cargo.includes("DEPUTADO DISTRITAL")) return "deputado_distrital";
+    if (cargo.includes("DEPUTADO ESTADUAL")) return "deputado_estadual";
+    if (cargo.includes("PREFEITO")) return "prefeito";
+    if (cargo.includes("VEREADOR")) return "vereador";
+    return "vereador";
+  }
+
   function selectTseCandidate(tse: TseCandidate) {
     const matchingParty = parties?.find(
       (p) => p.abbreviation === tse.sgPartido || p.number === tse.nrPartido
     );
+    const mappedPosition = mapTseCargoToPosition(tse.dsCargo);
     setFormData({
       name: tse.nmCandidato || "",
       nickname: tse.nmUrnaCandidato || "",
       number: tse.nrCandidato?.toString() || "",
       partyId: matchingParty ? String(matchingParty.id) : "",
-      position: "vereador",
+      position: mappedPosition,
       biography: "",
       notes: "",
       tags: [],
@@ -324,8 +339,13 @@ export default function Candidates() {
 
   const positions = [
     { value: "vereador", label: "Vereador" },
+    { value: "prefeito", label: "Prefeito" },
     { value: "deputado_estadual", label: "Deputado Estadual" },
+    { value: "deputado_distrital", label: "Deputado Distrital" },
     { value: "deputado_federal", label: "Deputado Federal" },
+    { value: "senador", label: "Senador" },
+    { value: "governador", label: "Governador" },
+    { value: "presidente", label: "Presidente" },
   ];
 
   const candidates = paginatedData?.data || [];
