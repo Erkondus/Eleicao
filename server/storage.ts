@@ -1630,6 +1630,7 @@ export class DatabaseStorage implements IStorage {
       status: scenarioCandidates.status,
       votes: scenarioCandidates.votes,
       createdAt: scenarioCandidates.createdAt,
+      updatedAt: scenarioCandidates.updatedAt,
     };
   }
 

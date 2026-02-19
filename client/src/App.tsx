@@ -36,6 +36,7 @@ import SentimentAnalysis from "@/pages/sentiment-analysis";
 import CampaignInsights from "@/pages/campaign-insights";
 import Campaigns from "@/pages/campaigns";
 import IBGEData from "@/pages/ibge-data";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
 
 function Router() {
@@ -107,7 +108,9 @@ function AuthenticatedApp() {
             </div>
           </header>
           <main className="flex-1 overflow-auto p-6 bg-muted/30">
-            <Router />
+            <ErrorBoundary>
+              <Router />
+            </ErrorBoundary>
           </main>
         </div>
       </div>

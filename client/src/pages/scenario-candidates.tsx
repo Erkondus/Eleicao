@@ -48,7 +48,7 @@ type TseCandidate = {
   anoEleicao: number | null;
   sgUf: string | null;
   dsCargo: string | null;
-  qtVotosNominais: number | null;
+  qtVotosNominais: number | string | null;
 };
 
 type TseStats = {
@@ -241,56 +241,67 @@ export default function ScenarioCandidates() {
   }, [tseSearchQuery, selectedYear, searchTseCandidates]);
 
   async function selectTseCandidate(tse: TseCandidate) {
-    const matchingParty = parties?.find(
-      (p) => p.abbreviation === tse.sgPartido || p.number === tse.nrPartido
-    );
+    try {
+      (document.activeElement as HTMLElement)?.blur();
 
-    let matchingCandidate = allCandidates?.find(
-      (c) => c.number === tse.nrCandidato || c.name === tse.nmCandidato
-    );
+      const matchingParty = parties?.find(
+        (p) => p.abbreviation === tse.sgPartido || p.number === tse.nrPartido
+      );
 
-    if (!matchingCandidate && matchingParty) {
-      try {
-        const res = await apiRequest("POST", "/api/candidates", {
-          name: tse.nmCandidato || "",
-          nickname: tse.nmUrnaCandidato || null,
-          number: tse.nrCandidato || 0,
-          partyId: matchingParty.id,
-          position: scenario?.position || "vereador",
-        });
-        const newCandidate = await res.json();
-        matchingCandidate = newCandidate;
-        queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
-      } catch {
-        toast({ title: "Erro", description: "Falha ao criar candidato", variant: "destructive" });
-        return;
+      let matchingCandidate = allCandidates?.find(
+        (c) => c.number === tse.nrCandidato || c.name === tse.nmCandidato
+      );
+
+      if (!matchingCandidate && matchingParty) {
+        try {
+          const res = await apiRequest("POST", "/api/candidates", {
+            name: tse.nmCandidato || "",
+            nickname: tse.nmUrnaCandidato || null,
+            number: tse.nrCandidato || 0,
+            partyId: matchingParty.id,
+            position: scenario?.position || "vereador",
+          });
+          const newCandidate = await res.json();
+          matchingCandidate = newCandidate;
+          queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+        } catch {
+          toast({ title: "Erro", description: "Falha ao criar candidato", variant: "destructive" });
+          return;
+        }
       }
-    }
 
-    if (matchingCandidate && matchingParty) {
-      // Os votos já vêm somados do backend (agregado por candidato/ano)
-      const totalVotes = tse.qtVotosNominais || 0;
+      if (matchingCandidate && matchingParty) {
+        const totalVotes = typeof tse.qtVotosNominais === "string"
+          ? parseInt(tse.qtVotosNominais, 10) || 0
+          : tse.qtVotosNominais || 0;
 
-      setFormData({
-        candidateId: String(matchingCandidate.id),
-        partyId: String(matchingParty.id),
-        ballotNumber: String(tse.nrCandidato || matchingCandidate.number),
-        nickname: tse.nmUrnaCandidato || "",
-        votes: String(totalVotes),
-      });
-      toast({
-        title: "Dados importados",
-        description: `Candidato ${tse.nmUrnaCandidato || tse.nmCandidato} selecionado com ${totalVotes.toLocaleString("pt-BR")} votos em ${tse.anoEleicao}`,
-      });
-    } else {
-      toast({
-        title: "Partido não encontrado",
-        description: `O partido ${tse.sgPartido} não está cadastrado. Cadastre-o primeiro.`,
-        variant: "destructive",
-      });
+        setFormData({
+          candidateId: String(matchingCandidate.id),
+          partyId: String(matchingParty.id),
+          ballotNumber: String(tse.nrCandidato || matchingCandidate.number),
+          nickname: tse.nmUrnaCandidato || "",
+          votes: String(totalVotes),
+        });
+        toast({
+          title: "Dados importados",
+          description: `Candidato ${tse.nmUrnaCandidato || tse.nmCandidato} selecionado com ${totalVotes.toLocaleString("pt-BR")} votos em ${tse.anoEleicao}`,
+        });
+      } else {
+        toast({
+          title: "Partido não encontrado",
+          description: `O partido ${tse.sgPartido} não está cadastrado. Cadastre-o primeiro.`,
+          variant: "destructive",
+        });
+      }
+
+      setShowTseResults(false);
+      setTseSearchQuery("");
+    } catch (error) {
+      console.error("[selectTseCandidate] Erro inesperado:", error);
+      toast({ title: "Erro", description: "Falha inesperada ao selecionar candidato do TSE", variant: "destructive" });
+      setShowTseResults(false);
+      setTseSearchQuery("");
     }
-    setShowTseResults(false);
-    setTseSearchQuery("");
   }
 
   function resetForm() {
@@ -333,21 +344,26 @@ export default function ScenarioCandidates() {
       key: "name",
       header: "Candidato",
       sortable: true,
-      cell: (sc: ScenarioCandidateWithDetails) => (
-        <div className="flex items-center gap-3">
-          <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-primary/10 text-primary text-sm">
-              {sc.candidate.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col">
-            <span className="font-medium">{sc.nickname || sc.candidate.nickname || sc.candidate.name}</span>
-            {(sc.nickname || sc.candidate.nickname) && (
-              <span className="text-sm text-muted-foreground">{sc.candidate.name}</span>
-            )}
+      cell: (sc: ScenarioCandidateWithDetails) => {
+        const candidateName = sc.candidate?.name || "Candidato";
+        const initials = candidateName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
+        const displayName = sc.nickname || sc.candidate?.nickname || candidateName;
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar className="h-9 w-9">
+              <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col">
+              <span className="font-medium">{displayName}</span>
+              {(sc.nickname || sc.candidate?.nickname) && (
+                <span className="text-sm text-muted-foreground">{candidateName}</span>
+              )}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "party",
@@ -356,9 +372,9 @@ export default function ScenarioCandidates() {
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-full shrink-0"
-            style={{ backgroundColor: sc.party.color }}
+            style={{ backgroundColor: sc.party?.color || "#999" }}
           />
-          <Badge variant="outline">{sc.party.abbreviation}</Badge>
+          <Badge variant="outline">{sc.party?.abbreviation || "?"}</Badge>
         </div>
       ),
     },
@@ -547,10 +563,10 @@ export default function ScenarioCandidates() {
                             <span>{tse.dsCargo}</span>
                             <span>-</span>
                             <span>{tse.sgUf} {tse.anoEleicao}</span>
-                            {tse.qtVotosNominais && (
+                            {tse.qtVotosNominais != null && Number(tse.qtVotosNominais) > 0 && (
                               <>
                                 <span>-</span>
-                                <span>{tse.qtVotosNominais.toLocaleString("pt-BR")} votos</span>
+                                <span>{Number(tse.qtVotosNominais).toLocaleString("pt-BR")} votos</span>
                               </>
                             )}
                           </div>

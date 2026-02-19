@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch } from "wouter";
-import { Calculator, PlayCircle, Save, Download, Trophy, Users } from "lucide-react";
+import { Calculator, PlayCircle, Save, Download, Trophy, Users, AlertTriangle, Info, Shield, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -90,7 +90,7 @@ export default function Simulations() {
         candidateVotes,
       });
       
-      const result = response as unknown as SimulationResult;
+      const result: SimulationResult = await response.json();
       setSimulationResult({
         ...result,
         partyResults: result.partyResults ?? [],
@@ -167,30 +167,31 @@ export default function Simulations() {
                 </SelectContent>
               </Select>
             </div>
-            {selectedScenario && (
-              <>
-                <div className="space-y-2">
-                  <Label>Quociente Eleitoral</Label>
-                  <div className="p-3 bg-muted rounded-md">
-                    <span className="text-2xl font-mono font-bold">
-                      {calculateElectoralQuotient(selectedScenario.validVotes, selectedScenario.availableSeats).toLocaleString("pt-BR")}
-                    </span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {selectedScenario.validVotes.toLocaleString("pt-BR")} votos / {selectedScenario.availableSeats} vagas
-                    </p>
+            {selectedScenario && (() => {
+              const qe = calculateElectoralQuotient(selectedScenario.validVotes, selectedScenario.availableSeats);
+              return (
+                <>
+                  <div className="space-y-2">
+                    <Label>Quociente Eleitoral (QE)</Label>
+                    <div className="p-3 bg-muted rounded-md">
+                      <span className="text-2xl font-mono font-bold">{qe.toLocaleString("pt-BR")}</span>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {selectedScenario.validVotes.toLocaleString("pt-BR")} / {selectedScenario.availableSeats} vagas
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Vagas Disponíveis</Label>
-                  <div className="p-3 bg-muted rounded-md">
-                    <span className="text-2xl font-mono font-bold">{selectedScenario.availableSeats}</span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Total de vagas a serem preenchidas
-                    </p>
+                  <div className="space-y-2">
+                    <Label>Vagas Disponíveis</Label>
+                    <div className="p-3 bg-muted rounded-md">
+                      <span className="text-2xl font-mono font-bold">{selectedScenario.availableSeats}</span>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Barreira: {Math.floor(qe * 0.8).toLocaleString("pt-BR")} | Mín. ind.: {Math.floor(qe * 0.2).toLocaleString("pt-BR")}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              );
+            })()}
           </div>
 
           {selectedScenario && parties && parties.length > 0 && (
@@ -310,42 +311,65 @@ export default function Simulations() {
               Resultados da Simulação
             </CardTitle>
             <CardDescription>
-              Distribuição de vagas pelo sistema proporcional brasileiro
+              Distribuição de vagas pelo sistema proporcional brasileiro (regras TSE vigentes)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {(simulationResult as any).noPartyReachedQE && (
+              <div className="flex items-start gap-2 p-3 mb-4 bg-destructive/10 border border-destructive/20 rounded-md" data-testid="warning-no-qe">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-destructive">Nenhum partido/federação atingiu o Quociente Eleitoral</p>
+                  <p className="text-sm text-muted-foreground">Todas as vagas foram distribuídas pelo método D'Hondt entre todos os partidos com votos.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
               <div className="p-4 bg-primary/10 rounded-lg text-center">
-                <p className="text-3xl font-mono font-bold text-primary">
+                <p className="text-2xl font-mono font-bold text-primary" data-testid="text-qe-value">
                   {simulationResult.electoralQuotient.toLocaleString("pt-BR")}
                 </p>
-                <p className="text-sm text-muted-foreground">Quociente Eleitoral</p>
+                <p className="text-xs text-muted-foreground">QE (Art. 106)</p>
               </div>
               <div className="p-4 bg-muted rounded-lg text-center">
-                <p className="text-3xl font-mono font-bold">
+                <p className="text-2xl font-mono font-bold" data-testid="text-valid-votes">
                   {simulationResult.totalValidVotes.toLocaleString("pt-BR")}
                 </p>
-                <p className="text-sm text-muted-foreground">Votos Válidos</p>
+                <p className="text-xs text-muted-foreground">Votos Válidos</p>
+              </div>
+              <div className="p-4 bg-muted rounded-lg text-center">
+                <p className="text-2xl font-mono font-bold" data-testid="text-barrier">
+                  {((simulationResult as any).barrierThreshold || 0).toLocaleString("pt-BR")}
+                </p>
+                <p className="text-xs text-muted-foreground">Barreira 80% QE</p>
+              </div>
+              <div className="p-4 bg-muted rounded-lg text-center">
+                <p className="text-2xl font-mono font-bold" data-testid="text-candidate-min">
+                  {((simulationResult as any).candidateMinVotes || 0).toLocaleString("pt-BR")}
+                </p>
+                <p className="text-xs text-muted-foreground">Mín. Individual 20% QE</p>
               </div>
               <div className="p-4 bg-success/10 rounded-lg text-center">
-                <p className="text-3xl font-mono font-bold text-success">
+                <p className="text-2xl font-mono font-bold text-success" data-testid="text-seats-quotient">
                   {simulationResult.seatsDistributedByQuotient}
                 </p>
-                <p className="text-sm text-muted-foreground">Vagas por Quociente</p>
+                <p className="text-xs text-muted-foreground">Vagas por QP</p>
               </div>
               <div className="p-4 bg-accent/10 rounded-lg text-center">
-                <p className="text-3xl font-mono font-bold text-accent-foreground">
+                <p className="text-2xl font-mono font-bold text-accent-foreground" data-testid="text-seats-remainder">
                   {simulationResult.seatsDistributedByRemainder}
                 </p>
-                <p className="text-sm text-muted-foreground">Vagas por Sobras</p>
+                <p className="text-xs text-muted-foreground">Vagas por Sobras</p>
               </div>
             </div>
 
             <Tabs defaultValue="table" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="table" data-testid="tab-results-table">Tabela</TabsTrigger>
                 <TabsTrigger value="chart" data-testid="tab-results-chart">Gráfico</TabsTrigger>
                 <TabsTrigger value="elected" data-testid="tab-results-elected">Eleitos</TabsTrigger>
+                <TabsTrigger value="rules" data-testid="tab-results-rules">Regras TSE</TabsTrigger>
               </TabsList>
 
               <TabsContent value="table" className="mt-4">
@@ -356,42 +380,58 @@ export default function Simulations() {
                         <TableHead className="w-12">#</TableHead>
                         <TableHead>Partido</TableHead>
                         <TableHead className="text-right">Votos</TableHead>
-                        <TableHead className="text-right">Quociente</TableHead>
-                        <TableHead className="text-right">Vagas QE</TableHead>
-                        <TableHead className="text-right">Vagas Sobras</TableHead>
+                        <TableHead className="text-right">QP</TableHead>
+                        <TableHead className="text-center">Barreira</TableHead>
+                        <TableHead className="text-right">Vagas QP</TableHead>
+                        <TableHead className="text-right">Sobras</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(simulationResult.partyResults ?? []).map((pr, idx) => (
-                        <TableRow key={pr.partyId}>
-                          <TableCell className="font-mono">{idx + 1}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="w-3 h-3 rounded-full shrink-0"
-                                style={{ backgroundColor: (pr as any).color || "#003366" }}
-                              />
-                              <Badge variant="outline">{(pr as any).abbreviation || pr.partyName}</Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {pr.totalVotes.toLocaleString("pt-BR")}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {pr.partyQuotient.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-bold text-success">
-                            {pr.seatsFromQuotient}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-bold text-accent-foreground">
-                            {pr.seatsFromRemainder}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge className="font-mono text-lg">{pr.totalSeats}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {(simulationResult.partyResults ?? []).map((pr, idx) => {
+                        const meetsBarrier = (pr as any).meetsBarrier;
+                        return (
+                          <TableRow key={pr.partyId} data-testid={`row-party-${pr.partyId}`}>
+                            <TableCell className="font-mono">{idx + 1}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div
+                                  className="w-3 h-3 rounded-full shrink-0"
+                                  style={{ backgroundColor: (pr as any).color || "#003366" }}
+                                />
+                                <Badge variant="outline">{(pr as any).abbreviation || pr.partyName}</Badge>
+                                {(pr as any).federationName && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {(pr as any).federationName}
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {pr.totalVotes.toLocaleString("pt-BR")}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {pr.partyQuotient.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {meetsBarrier ? (
+                                <Shield className="h-4 w-4 text-success inline-block" />
+                              ) : (
+                                <AlertTriangle className="h-4 w-4 text-destructive inline-block" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-bold text-success">
+                              {pr.seatsFromQuotient}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-bold text-accent-foreground">
+                              {pr.seatsFromRemainder}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge className="font-mono text-lg">{pr.totalSeats}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -428,13 +468,16 @@ export default function Simulations() {
                 <div className="space-y-4">
                   {(simulationResult.partyResults ?? []).filter((pr) => pr.totalSeats > 0).map((pr) => (
                     <div key={pr.partyId} className="border rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
                         <div
                           className="w-4 h-4 rounded-full"
                           style={{ backgroundColor: (pr as any).color || "#003366" }}
                         />
                         <h4 className="font-semibold">{pr.partyName}</h4>
                         <Badge>{pr.totalSeats} {pr.totalSeats === 1 ? "vaga" : "vagas"}</Badge>
+                        {(pr as any).federationName && (
+                          <Badge variant="secondary">{(pr as any).federationName}</Badge>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                         {pr.electedCandidates.filter((c) => c.elected).map((c) => (
@@ -454,9 +497,77 @@ export default function Simulations() {
                             </Badge>
                           </div>
                         ))}
+                        {pr.electedCandidates.filter((c: any) => c.belowMinThreshold && !c.elected).length > 0 && (
+                          <div className="col-span-full mt-2 p-2 bg-destructive/5 rounded-md">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              {pr.electedCandidates.filter((c: any) => c.belowMinThreshold).length} candidato(s) abaixo do mínimo individual (20% QE)
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="rules" className="mt-4">
+                <div className="space-y-4">
+                  {(simulationResult as any).tseRulesApplied && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Scale className="h-4 w-4" />
+                          Regras TSE Aplicadas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {((simulationResult as any).tseRulesApplied as string[]).map((rule: string, i: number) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                              <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                              <span>{rule}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {(simulationResult as any).calculationLog && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Calculator className="h-4 w-4" />
+                          Detalhamento do Cálculo
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 font-mono text-sm">
+                          {Object.entries((simulationResult as any).calculationLog as Record<string, any>)
+                            .filter(([key]) => key.startsWith("step"))
+                            .map(([key, value]) => (
+                              <div key={key} className="flex items-start gap-2 p-2 bg-muted/50 rounded-md">
+                                <Badge variant="outline" className="shrink-0 font-mono">
+                                  {key.replace("step", "").replace("_", ".")}
+                                </Badge>
+                                <span className="text-sm">{String(value)}</span>
+                              </div>
+                            ))}
+                        </div>
+                        {((simulationResult as any).calculationLog?.warnings as string[] || []).length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            {((simulationResult as any).calculationLog.warnings as string[]).map((w: string, i: number) => (
+                              <div key={i} className="flex items-start gap-2 p-2 bg-destructive/10 rounded-md">
+                                <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                                <span className="text-sm">{w}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

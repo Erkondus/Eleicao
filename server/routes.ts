@@ -1309,6 +1309,8 @@ export async function registerRoutes(
       }
       
       const electoralQuotient = Math.floor(validVotes / availableSeats);
+      const barrierThreshold = Math.floor(electoralQuotient * 0.80);
+      const candidateMinVotes = Math.floor(electoralQuotient * 0.20);
       
       if (electoralQuotient <= 0) {
         return res.status(400).json({ error: "Electoral quotient must be greater than zero" });
@@ -1316,8 +1318,9 @@ export async function registerRoutes(
 
       const allianceMembers: Record<number, number[]> = {};
       const partyToAlliance: Record<number, number> = {};
+      const federationAlliances = scenarioAlliances.filter(a => a.type === "federation");
       
-      for (const alliance of scenarioAlliances) {
+      for (const alliance of federationAlliances) {
         const members = await storage.getAllianceParties(alliance.id);
         allianceMembers[alliance.id] = members.map(m => m.partyId);
         members.forEach(m => { partyToAlliance[m.partyId] = alliance.id; });
@@ -1330,7 +1333,7 @@ export async function registerRoutes(
 
       type EntityResult = {
         entityId: string;
-        entityType: "party" | "alliance";
+        entityType: "party" | "federation";
         name: string;
         abbreviation: string;
         totalVotes: number;
@@ -1340,39 +1343,45 @@ export async function registerRoutes(
         totalSeats: number;
         color: string;
         memberPartyIds?: number[];
-        allianceType?: string;
+        meetsBarrier: boolean;
+        barrierDetail: string;
       };
 
       const entityResults: EntityResult[] = [];
-      const partiesInAlliances = new Set(Object.keys(partyToAlliance).map(Number));
+      const partiesInFederations = new Set(Object.keys(partyToAlliance).map(Number));
 
-      for (const alliance of scenarioAlliances) {
-        const memberPartyIds = allianceMembers[alliance.id] || [];
+      for (const federation of federationAlliances) {
+        const memberPartyIds = allianceMembers[federation.id] || [];
         const totalVotes = memberPartyIds.reduce((sum, pid) => sum + (partyVotes[pid] || 0), 0);
         const quotient = totalVotes / electoralQuotient;
         const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
+        const meetsBarrier = totalVotes >= barrierThreshold;
 
         entityResults.push({
-          entityId: `alliance-${alliance.id}`,
-          entityType: "alliance",
-          name: alliance.name,
-          abbreviation: alliance.name.substring(0, 10),
+          entityId: `federation-${federation.id}`,
+          entityType: "federation",
+          name: federation.name,
+          abbreviation: federation.name.substring(0, 10),
           totalVotes,
           quotient,
           seatsFromQuotient,
           seatsFromRemainder: 0,
           totalSeats: 0,
-          color: alliance.color,
+          color: federation.color,
           memberPartyIds,
-          allianceType: alliance.type,
+          meetsBarrier,
+          barrierDetail: meetsBarrier 
+            ? `Atingiu barreira: ${totalVotes.toLocaleString("pt-BR")} votos >= ${barrierThreshold.toLocaleString("pt-BR")} (80% QE)`
+            : `NÃO atingiu barreira: ${totalVotes.toLocaleString("pt-BR")} votos < ${barrierThreshold.toLocaleString("pt-BR")} (80% QE)`,
         });
       }
 
       for (const party of allParties) {
-        if (partiesInAlliances.has(party.id)) continue;
+        if (partiesInFederations.has(party.id)) continue;
         const totalVotes = partyVotes[party.id] || 0;
         const quotient = totalVotes / electoralQuotient;
         const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
+        const meetsBarrier = totalVotes >= barrierThreshold;
 
         entityResults.push({
           entityId: `party-${party.id}`,
@@ -1385,33 +1394,52 @@ export async function registerRoutes(
           seatsFromRemainder: 0,
           totalSeats: 0,
           color: party.color,
+          meetsBarrier,
+          barrierDetail: meetsBarrier 
+            ? `Atingiu barreira: ${totalVotes.toLocaleString("pt-BR")} votos >= ${barrierThreshold.toLocaleString("pt-BR")} (80% QE)`
+            : `NÃO atingiu barreira: ${totalVotes.toLocaleString("pt-BR")} votos < ${barrierThreshold.toLocaleString("pt-BR")} (80% QE)`,
         });
       }
 
-      const qualifiedEntities = entityResults.filter(e => e.totalVotes >= electoralQuotient);
+      const entitiesReachingQE = entityResults.filter(e => e.totalVotes >= electoralQuotient);
+      const barrierEligible = entityResults.filter(e => e.meetsBarrier);
 
-      let seatsDistributedByQuotient = qualifiedEntities.reduce((sum, e) => sum + e.seatsFromQuotient, 0);
+      let seatsDistributedByQuotient = entitiesReachingQE.reduce((sum, e) => sum + e.seatsFromQuotient, 0);
       let remainingSeats = availableSeats - seatsDistributedByQuotient;
 
-      for (let round = 0; round < remainingSeats; round++) {
-        let maxQuotient = 0;
+      let remainderPool: EntityResult[];
+      let noPartyReachedQE = false;
+
+      if (entitiesReachingQE.length === 0) {
+        noPartyReachedQE = true;
+        remainderPool = entityResults.filter(e => e.totalVotes > 0);
+        remainingSeats = availableSeats;
+      } else {
+        remainderPool = barrierEligible;
+      }
+
+      const totalRemainderRounds = remainingSeats;
+      for (let round = 0; round < totalRemainderRounds; round++) {
+        let maxQ = 0;
         let winnerIdx = -1;
 
-        qualifiedEntities.forEach((e, idx) => {
+        remainderPool.forEach((e, idx) => {
           const currentSeats = e.seatsFromQuotient + e.seatsFromRemainder;
           const q = e.totalVotes / (currentSeats + 1);
-          if (q > maxQuotient) {
-            maxQuotient = q;
+          if (q > maxQ || (q === maxQ && winnerIdx >= 0 && e.totalVotes > remainderPool[winnerIdx].totalVotes)) {
+            maxQ = q;
             winnerIdx = idx;
           }
         });
 
         if (winnerIdx >= 0) {
-          qualifiedEntities[winnerIdx].seatsFromRemainder += 1;
+          remainderPool[winnerIdx].seatsFromRemainder += 1;
         }
       }
 
-      qualifiedEntities.forEach(e => { e.totalSeats = e.seatsFromQuotient + e.seatsFromRemainder; });
+      entityResults.forEach(e => { e.totalSeats = e.seatsFromQuotient + e.seatsFromRemainder; });
+
+      type CandidateResult = { candidateId: number; name: string; votes: number; elected: boolean; position: number; belowMinThreshold: boolean; thresholdDetail: string };
 
       type PartyResultWithAlliance = {
         partyId: number;
@@ -1422,36 +1450,56 @@ export async function registerRoutes(
         seatsFromQuotient: number;
         seatsFromRemainder: number;
         totalSeats: number;
-        electedCandidates: { candidateId: number; name: string; votes: number; elected: boolean; position: number }[];
+        electedCandidates: CandidateResult[];
         color: string;
-        allianceId?: number;
-        allianceName?: string;
-        allianceType?: string;
+        federationId?: number;
+        federationName?: string;
+        meetsBarrier: boolean;
+        barrierDetail: string;
       };
 
       const partyResults: PartyResultWithAlliance[] = [];
 
-      for (const entity of qualifiedEntities) {
+      const buildCandidateResults = (
+        candidates: typeof allCandidates,
+        totalSeats: number,
+      ): CandidateResult[] => {
+        const results: CandidateResult[] = candidates.map(c => {
+          const votes = candidateVotes[c.id] || 0;
+          const belowMinThreshold = votes < candidateMinVotes;
+          return {
+            candidateId: c.id,
+            name: c.nickname || c.name,
+            votes,
+            elected: false,
+            position: 0,
+            belowMinThreshold,
+            thresholdDetail: belowMinThreshold 
+              ? `Abaixo do mínimo: ${votes.toLocaleString("pt-BR")} < ${candidateMinVotes.toLocaleString("pt-BR")} (20% QE)`
+              : `Acima do mínimo: ${votes.toLocaleString("pt-BR")} >= ${candidateMinVotes.toLocaleString("pt-BR")} (20% QE)`,
+          };
+        }).sort((a, b) => b.votes - a.votes);
+
+        let electedCount = 0;
+        results.forEach(c => {
+          if (electedCount < totalSeats && !c.belowMinThreshold) {
+            c.elected = true;
+            c.position = electedCount + 1;
+            electedCount++;
+          }
+        });
+
+        return results;
+      }
+
+      for (const entity of entityResults) {
+        if (entity.totalSeats === 0 && entity.totalVotes === 0) continue;
+
         if (entity.entityType === "party") {
           const partyId = parseInt(entity.entityId.replace("party-", ""));
           const party = allParties.find(p => p.id === partyId)!;
           const partyCandidates = candidatesByParty[partyId] || [];
-          const candidateResults = partyCandidates.map(c => ({
-            candidateId: c.id,
-            name: c.nickname || c.name,
-            votes: candidateVotes[c.id] || 0,
-            elected: false,
-            position: 0,
-          })).sort((a, b) => b.votes - a.votes);
-
-          let electedCount = 0;
-          candidateResults.forEach(c => {
-            if (electedCount < entity.totalSeats) {
-              c.elected = true;
-              c.position = electedCount + 1;
-              electedCount++;
-            }
-          });
+          const candidateResults = buildCandidateResults(partyCandidates, entity.totalSeats);
 
           partyResults.push({
             partyId: party.id,
@@ -1464,39 +1512,45 @@ export async function registerRoutes(
             totalSeats: entity.totalSeats,
             electedCandidates: candidateResults,
             color: entity.color,
+            meetsBarrier: entity.meetsBarrier,
+            barrierDetail: entity.barrierDetail,
           });
         } else {
-          const allianceId = parseInt(entity.entityId.replace("alliance-", ""));
-          const alliance = scenarioAlliances.find(a => a.id === allianceId)!;
+          const federationId = parseInt(entity.entityId.replace("federation-", ""));
+          const federation = federationAlliances.find(a => a.id === federationId)!;
           const memberPartyIds = entity.memberPartyIds || [];
 
-          const memberPartyResults: { partyId: number; votes: number; candidates: any[] }[] = [];
+          const allFederationCandidates: (CandidateResult & { partyId: number })[] = [];
           for (const pid of memberPartyIds) {
-            const party = allParties.find(p => p.id === pid)!;
             const partyCandidates = candidatesByParty[pid] || [];
-            const candidateResults = partyCandidates.map(c => ({
-              candidateId: c.id,
-              name: c.nickname || c.name,
-              votes: candidateVotes[c.id] || 0,
-              elected: false,
-              position: 0,
-            })).sort((a, b) => b.votes - a.votes);
-            memberPartyResults.push({ partyId: pid, votes: partyVotes[pid] || 0, candidates: candidateResults });
+            for (const c of partyCandidates) {
+              const votes = candidateVotes[c.id] || 0;
+              const belowMinThreshold = votes < candidateMinVotes;
+              allFederationCandidates.push({
+                candidateId: c.id,
+                name: c.nickname || c.name,
+                votes,
+                elected: false,
+                position: 0,
+                belowMinThreshold,
+                thresholdDetail: belowMinThreshold
+                  ? `Abaixo do mínimo: ${votes.toLocaleString("pt-BR")} < ${candidateMinVotes.toLocaleString("pt-BR")} (20% QE)`
+                  : `Acima do mínimo: ${votes.toLocaleString("pt-BR")} >= ${candidateMinVotes.toLocaleString("pt-BR")} (20% QE)`,
+                partyId: pid,
+              });
+            }
           }
+          allFederationCandidates.sort((a, b) => b.votes - a.votes);
 
-          const allAllianceCandidates = memberPartyResults.flatMap(mp => 
-            mp.candidates.map(c => ({ ...c, partyId: mp.partyId }))
-          ).sort((a, b) => b.votes - a.votes);
-
-          const partySeatsInAlliance: Record<number, number> = {};
-          memberPartyIds.forEach(pid => { partySeatsInAlliance[pid] = 0; });
+          const partySeatsInFederation: Record<number, number> = {};
+          memberPartyIds.forEach(pid => { partySeatsInFederation[pid] = 0; });
 
           let electedCount = 0;
-          allAllianceCandidates.forEach(c => {
-            if (electedCount < entity.totalSeats) {
+          allFederationCandidates.forEach(c => {
+            if (electedCount < entity.totalSeats && !c.belowMinThreshold) {
               c.elected = true;
               c.position = electedCount + 1;
-              partySeatsInAlliance[c.partyId] = (partySeatsInAlliance[c.partyId] || 0) + 1;
+              partySeatsInFederation[c.partyId] = (partySeatsInFederation[c.partyId] || 0) + 1;
               electedCount++;
             }
           });
@@ -1504,8 +1558,8 @@ export async function registerRoutes(
           for (const pid of memberPartyIds) {
             const party = allParties.find(p => p.id === pid)!;
             const partyVotesTotal = partyVotes[pid] || 0;
-            const partyCandidates = allAllianceCandidates.filter(c => c.partyId === pid);
-            const partySeats = partySeatsInAlliance[pid] || 0;
+            const partyCandidates = allFederationCandidates.filter(c => c.partyId === pid);
+            const partySeats = partySeatsInFederation[pid] || 0;
 
             partyResults.push({
               partyId: party.id,
@@ -1522,11 +1576,14 @@ export async function registerRoutes(
                 votes: c.votes,
                 elected: c.elected,
                 position: c.position,
+                belowMinThreshold: c.belowMinThreshold,
+                thresholdDetail: c.thresholdDetail,
               })),
               color: party.color,
-              allianceId: alliance.id,
-              allianceName: alliance.name,
-              allianceType: alliance.type,
+              federationId: federation.id,
+              federationName: federation.name,
+              meetsBarrier: entity.meetsBarrier,
+              barrierDetail: entity.barrierDetail,
             });
           }
         }
@@ -1534,33 +1591,65 @@ export async function registerRoutes(
 
       partyResults.sort((a, b) => b.totalSeats - a.totalSeats || b.totalVotes - a.totalVotes);
 
-      const allianceResults = qualifiedEntities.filter(e => e.entityType === "alliance").map(e => ({
-        allianceId: parseInt(e.entityId.replace("alliance-", "")),
+      const federationResults = entityResults.filter(e => e.entityType === "federation").map(e => ({
+        federationId: parseInt(e.entityId.replace("federation-", "")),
         name: e.name,
-        type: e.allianceType,
         totalVotes: e.totalVotes,
         totalSeats: e.totalSeats,
         seatsFromQuotient: e.seatsFromQuotient,
         seatsFromRemainder: e.seatsFromRemainder,
         memberPartyIds: e.memberPartyIds,
         color: e.color,
+        meetsBarrier: e.meetsBarrier,
+        barrierDetail: e.barrierDetail,
       }));
+
+      const calculationLog = {
+        step1_QE: `QE = floor(${validVotes} / ${availableSeats}) = ${electoralQuotient}`,
+        step2_barrier: `Cláusula de barreira = 80% × QE = ${barrierThreshold} votos mínimos`,
+        step3_candidateMin: `Votação mínima individual = 20% × QE = ${candidateMinVotes} votos`,
+        step4_quotientSeats: `${seatsDistributedByQuotient} vagas distribuídas pelo quociente partidário`,
+        step5_remainderSeats: `${totalRemainderRounds} vagas distribuídas por sobras (D'Hondt)`,
+        step6_totalEntities: `${entityResults.length} entidades analisadas (${federationAlliances.length} federações + ${entityResults.length - federationAlliances.length} partidos isolados)`,
+        step7_barrierEligible: `${barrierEligible.length} entidades atingiram a barreira para sobras`,
+        noPartyReachedQE,
+        warnings: noPartyReachedQE 
+          ? ["Nenhuma entidade atingiu o QE. Vagas distribuídas por D'Hondt entre todos os partidos com votos."]
+          : [],
+      };
 
       const result = {
         electoralQuotient,
+        barrierThreshold,
+        candidateMinVotes,
         totalValidVotes: validVotes,
         availableSeats,
         seatsDistributedByQuotient,
-        seatsDistributedByRemainder: remainingSeats,
+        seatsDistributedByRemainder: totalRemainderRounds,
         partyResults,
-        allianceResults,
-        hasAlliances: scenarioAlliances.length > 0,
+        federationResults,
+        allianceResults: federationResults,
+        hasAlliances: federationAlliances.length > 0,
+        hasFederations: federationAlliances.length > 0,
+        noPartyReachedQE,
+        calculationLog,
+        tseRulesApplied: [
+          "Art. 106 CE: Quociente Eleitoral (QE) = votos válidos / vagas",
+          "Art. 107 CE: Quociente Partidário (QP) = votos da legenda / QE",
+          "Art. 108 CE: Distribuição de sobras pelo método D'Hondt (maiores médias)",
+          "Art. 108 §1º: Cláusula de barreira de 80% do QE para participar das sobras (Lei 14.211/2021)",
+          "Art. 108 §1º-A: Votação nominal mínima de 20% do QE para eleição individual",
+          "Federações partidárias computadas como entidade única (Lei 14.208/2021)",
+        ],
       };
 
       await logAudit(req, "simulation", "electoral_calculation", String(scenarioId), { 
         electoralQuotient, 
+        barrierThreshold,
+        candidateMinVotes,
         availableSeats,
-        alliancesCount: scenarioAlliances.length,
+        federationsCount: federationAlliances.length,
+        noPartyReachedQE,
       });
 
       res.json(result);
@@ -1581,47 +1670,112 @@ export async function registerRoutes(
 
   app.post("/api/ai/predict", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
-      const { scenarioId } = req.body;
+      const { scenarioId, partyVotes, candidateVotes } = req.body;
       const scenario = await storage.getScenario(scenarioId);
       if (!scenario) {
         return res.status(404).json({ error: "Scenario not found" });
       }
 
       const parties = await storage.getParties();
+      const allCandidates = await storage.getCandidates();
+      const scenarioAlliances = await storage.getAlliances(scenarioId);
+      const federations = scenarioAlliances.filter(a => a.type === "federation");
+
+      const validVotes = scenario.validVotes;
+      const availableSeats = scenario.availableSeats;
+      const QE = Math.floor(validVotes / availableSeats);
+      const barrier80 = Math.floor(QE * 0.80);
+      const candidateMin20 = Math.floor(QE * 0.20);
+
+      let federationInfo = "";
+      if (federations.length > 0) {
+        const fedDetails: string[] = [];
+        for (const fed of federations) {
+          const members = await storage.getAllianceParties(fed.id);
+          const memberNames = members.map(m => {
+            const p = parties.find(pp => pp.id === m.partyId);
+            return p ? p.abbreviation : `ID:${m.partyId}`;
+          });
+          fedDetails.push(`  - ${fed.name}: ${memberNames.join(" + ")}`);
+        }
+        federationInfo = `\nFederações partidárias (contam como entidade única para QE/QP/barreira):\n${fedDetails.join("\n")}`;
+      }
+
+      let voteDataInfo = "";
+      if (partyVotes && Object.keys(partyVotes).length > 0) {
+        const voteLines = parties
+          .map(p => {
+            const v = partyVotes[p.id] || 0;
+            return v > 0 ? `  - ${p.abbreviation}: ${v.toLocaleString("pt-BR")} votos` : null;
+          })
+          .filter(Boolean);
+        if (voteLines.length > 0) {
+          voteDataInfo = `\nVotação por partido (dados reais do cenário):\n${voteLines.join("\n")}`;
+        }
+      }
 
       const openai = new OpenAI();
 
-      const prompt = `Você é um analista político especializado em eleições proporcionais brasileiras.
-Analise o seguinte cenário eleitoral e forneça previsões:
+      const prompt = `Você é um especialista em direito eleitoral brasileiro e análise de eleições proporcionais.
+Analise o cenário abaixo e forneça previsões PRECISAS baseadas nas regras oficiais do TSE.
 
-Cenário: ${scenario.name}
-Total de Eleitores: ${scenario.totalVoters.toLocaleString("pt-BR")}
-Votos Válidos: ${scenario.validVotes.toLocaleString("pt-BR")}
-Vagas Disponíveis: ${scenario.availableSeats}
+=== REGRAS TSE PARA ELEIÇÕES PROPORCIONAIS ===
+1. Quociente Eleitoral (QE) = floor(votos_válidos / vagas) = floor(${validVotes} / ${availableSeats}) = ${QE}
+2. Quociente Partidário (QP) = floor(votos_partido_ou_federação / QE) → define vagas iniciais
+3. Cláusula de barreira (Art. 108 §1º, Lei 14.211/2021): partido/federação precisa de >= 80% do QE (= ${barrier80} votos) para participar da distribuição de sobras
+4. Distribuição de sobras: método D'Hondt (maiores médias) → votos/(vagas_já_obtidas+1), apenas entre entidades que atingiram a barreira
+5. Votação mínima individual (Art. 108 §1º-A): candidato precisa de >= 20% do QE (= ${candidateMin20} votos nominais) para ser eleito
+6. Federações partidárias (Lei 14.208/2021) são computadas como entidade ÚNICA para QE, QP e barreira
+7. Coligações foram ABOLIDAS para eleições proporcionais (Lei 14.211/2021)
+8. Se NENHUM partido/federação atingir o QE, todas as vagas são distribuídas por D'Hondt entre todos os partidos com votos
+
+=== CENÁRIO ===
+Nome: ${scenario.name}
 Cargo: ${scenario.position}
+Total de Eleitores: ${scenario.totalVoters.toLocaleString("pt-BR")}
+Votos Válidos: ${validVotes.toLocaleString("pt-BR")}
+Vagas Disponíveis: ${availableSeats}
+QE calculado: ${QE.toLocaleString("pt-BR")}
+Barreira (80% QE): ${barrier80.toLocaleString("pt-BR")}
+Mínimo individual (20% QE): ${candidateMin20.toLocaleString("pt-BR")}
 
-Partidos participantes:
-${parties.map((p) => `- ${p.abbreviation} (${p.name}) - Número: ${p.number}`).join("\n")}
+Partidos:
+${parties.map((p) => `- ${p.abbreviation} (${p.name}) - Nº ${p.number}`).join("\n")}
+${federationInfo}${voteDataInfo}
 
-Responda em JSON com a seguinte estrutura:
+=== INSTRUÇÕES ===
+Com base nas regras acima e nos dados do cenário, faça previsões realistas.
+${voteDataInfo ? "Use os dados de votação fornecidos para calcular a distribuição exata de vagas pelo sistema proporcional do TSE." : "Sem dados de votação específicos, faça projeções baseadas no perfil dos partidos e na quantidade de vagas."}
+
+Responda em JSON:
 {
-  "analysis": "Análise geral do cenário em 2-3 parágrafos em português",
+  "analysis": "Análise detalhada em 3-4 parágrafos explicando o cenário, cálculos do QE/QP, barreira, e distribuição de sobras. Cite os artigos do Código Eleitoral aplicados.",
   "predictions": [
     {
-      "partyId": número_do_partido_id,
-      "partyName": "nome_do_partido",
+      "partyId": id_do_partido,
+      "partyName": "sigla_do_partido",
+      "predictedVotes": { "min": número, "max": número },
       "predictedSeats": { "min": número, "max": número },
-      "confidence": número_entre_0_e_1,
-      "trend": "up" | "down" | "stable"
+      "meetsBarrier": true_ou_false,
+      "confidence": 0_a_1,
+      "trend": "up" | "down" | "stable",
+      "reasoning": "breve_justificativa"
     }
   ],
-  "recommendations": ["recomendação 1", "recomendação 2", "recomendação 3"]
+  "seatDistribution": {
+    "byQuotient": número_de_vagas_pelo_QP,
+    "byRemainder": número_de_vagas_por_sobras,
+    "total": ${availableSeats}
+  },
+  "recommendations": ["recomendação 1", "recomendação 2", "recomendação 3"],
+  "warnings": ["alertas sobre partidos que podem não atingir barreira, candidatos em risco, etc."]
 }`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
+        max_completion_tokens: 4000,
       });
 
       const content = completion.choices[0]?.message?.content;
@@ -1631,13 +1785,21 @@ Responda em JSON com a seguinte estrutura:
 
       const prediction = JSON.parse(content);
       prediction.generatedAt = new Date().toISOString();
+      prediction.tseContext = {
+        electoralQuotient: QE,
+        barrierThreshold: barrier80,
+        candidateMinVotes: candidateMin20,
+        validVotes,
+        availableSeats,
+        federationsCount: federations.length,
+      };
 
       await logAudit(req, "prediction", "scenario", String(scenarioId));
 
       res.json(prediction);
     } catch (error: any) {
       console.error("AI Prediction error:", error);
-      res.status(500).json({ error: "Failed to generate prediction" });
+      res.status(500).json({ error: error.message || "Failed to generate prediction" });
     }
   });
 
@@ -6025,15 +6187,19 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
 
   // ===== Sentiment Analysis Routes =====
 
-  // Run sentiment analysis - aggregates from multiple sources and analyzes with AI
   app.post("/api/sentiment/analyze", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
     try {
-      const { entityType, entityId, days } = req.body;
-      const result = await runSentimentAnalysis({ entityType, entityId, days });
+      const { entityType, entityId, customKeywords } = req.body;
+      const result = await runSentimentAnalysis({ entityType, entityId, customKeywords });
+      await logAudit(req, "sentiment_analysis", "sentiment", undefined, { 
+        entityType, entityId, 
+        articlesAnalyzed: result.articlesAnalyzed,
+        entitiesFound: result.entities.length,
+      });
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Sentiment analysis error:", error);
-      res.status(500).json({ error: "Failed to run sentiment analysis" });
+      res.status(500).json({ error: error.message || "Falha na análise de sentimento" });
     }
   });
 

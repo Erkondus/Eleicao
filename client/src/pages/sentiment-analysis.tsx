@@ -98,6 +98,9 @@ interface SentimentAnalysisResult {
   sourceBreakdown: Record<string, { count: number; avgSentiment: number }>;
   timeline: { date: string; sentiment: number; volume: number }[];
   summary: string;
+  articlesAnalyzed?: number;
+  sourcesUsed?: string[];
+  isFallback?: boolean;
   generatedAt: string;
 }
 
@@ -321,30 +324,37 @@ export default function SentimentAnalysisPage() {
   });
 
   const analyzeMutation = useMutation({
-    mutationFn: async (params: { entityType?: string; entityId?: string }) => {
+    mutationFn: async (params: { entityType?: string; entityId?: string; customKeywords?: string[] }) => {
       const response = await fetch("/api/sentiment/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
         credentials: "include",
       });
-      if (!response.ok) throw new Error("Failed to analyze sentiment");
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Falha na análise de sentimento");
+      }
       return response.json() as Promise<SentimentAnalysisResult>;
     },
     onSuccess: (data) => {
+      const srcCount = data.sourcesUsed?.length || 0;
+      const fallbackNote = data.isFallback ? " (dados de contexto local - fontes externas indisponíveis)" : "";
       toast({
         title: "Análise concluída",
-        description: `Análise de sentimento processada com ${data.entities.length} entidades identificadas.`,
+        description: `${data.articlesAnalyzed || 0} artigos analisados de ${srcCount} fontes. ${data.entities.length} entidades identificadas.${fallbackNote}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/sentiment/wordcloud"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["/api/sentiment/overview"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sentiment/timeline"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["/api/sentiment/sources"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sentiment/summary"] });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         variant: "destructive",
         title: "Erro na análise",
-        description: "Não foi possível processar a análise de sentimento.",
+        description: error.message || "Não foi possível processar a análise de sentimento.",
       });
     },
   });
@@ -481,12 +491,12 @@ export default function SentimentAnalysisPage() {
             {analyzeMutation.isPending ? (
               <>
                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Analisando...
+                Buscando notícias reais...
               </>
             ) : (
               <>
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Nova Análise
+                Nova Análise (Dados Reais)
               </>
             )}
           </Button>

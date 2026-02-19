@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { storage } from "./storage";
+import { fetchExternalData, type ExternalArticle } from "./external-data-service";
 import type { InsertSentimentAnalysisResult, InsertSentimentKeyword } from "@shared/schema";
 
 const openai = new OpenAI({
@@ -42,95 +43,115 @@ export interface SentimentAnalysisResponse {
   timeline: { date: string; sentiment: number; volume: number }[];
   summary: string;
   generatedAt: string;
+  articlesAnalyzed: number;
+  sourcesUsed: string[];
+  isFallback: boolean;
 }
 
-const SIMULATED_SOURCES: SentimentSource[] = [
-  {
-    type: "news",
-    name: "Folha de São Paulo",
-    country: "BR",
-    articles: [
-      {
-        title: "Eleições 2024: PT lidera intenções de voto em capitais",
-        content: "Pesquisa recente mostra crescimento do PT nas principais capitais brasileiras. Candidatos do partido apresentam propostas focadas em educação e saúde. Analistas apontam recuperação da imagem do partido após reformulação interna.",
-        date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        title: "PL aposta em candidatos evangélicos para disputas municipais",
-        content: "O partido tem investido fortemente em candidaturas ligadas a igrejas evangélicas. Estratégia visa consolidar base eleitoral conservadora. Críticos questionam mistura de religião e política.",
-        date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
-  },
-  {
-    type: "news",
-    name: "O Globo",
-    country: "BR",
-    articles: [
-      {
-        title: "MDB busca renovação com novos candidatos para 2024",
-        content: "Partido tradicional investe em perfis jovens e progressistas. Líderes históricos cedem espaço para nova geração. Mudança estratégica busca atrair eleitores moderados.",
-        date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        title: "PSDB enfrenta crise de identidade nas eleições",
-        content: "Partido passa por momento de redefinição ideológica. Dissidências internas enfraquecem posicionamento. Candidatos buscam distanciamento de governos anteriores.",
-        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
-  },
-  {
-    type: "blog",
-    name: "Blog Política Brasil",
-    country: "BR",
-    articles: [
-      {
-        title: "Análise: O que esperar das eleições municipais",
-        content: "A polarização entre esquerda e direita deve continuar marcando as disputas. Partidos de centro tentam se posicionar como alternativa viável. Economia local será tema central dos debates.",
-        date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
-  },
-  {
-    type: "forum",
-    name: "Fórum Democracia Digital",
-    country: "BR",
-    articles: [
-      {
-        title: "Discussão: Transparência nas campanhas eleitorais",
-        content: "Usuários debatem necessidade de maior fiscalização de gastos de campanha. Propostas incluem auditorias independentes e prestação de contas em tempo real. Participantes citam exemplos de irregularidades passadas.",
-        date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
-  },
-  {
-    type: "news",
-    name: "El País Brasil",
-    country: "ES",
-    articles: [
-      {
-        title: "Brasil: elecciones municipales generan expectativas internacionales",
-        content: "Observadores internacionales analizan el panorama político brasileño. Las elecciones pueden indicar tendencias para 2026. Partidos de izquierda y derecha disputan con intensidad.",
-        date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
-  },
-  {
-    type: "news",
-    name: "The Guardian - Americas",
-    country: "UK",
-    articles: [
-      {
-        title: "Brazilian municipal elections: what to expect",
-        content: "Local elections in Brazil are often a preview of national trends. Major parties are investing heavily in key cities. Environmental and economic policies dominate campaign discussions.",
-        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
-  },
-];
+async function fetchRealSources(customKeywords?: string[]): Promise<{ sources: SentimentSource[]; isFallback: boolean }> {
+  const parties = await storage.getParties();
+  const partyKeywords = parties.slice(0, 10).map(p => `${p.abbreviation} partido eleições`);
+  
+  const baseKeywords = customKeywords && customKeywords.length > 0 
+    ? customKeywords 
+    : [
+        "eleições brasil 2026",
+        "política brasileira",
+        "candidatos eleições",
+        ...partyKeywords.slice(0, 5),
+      ];
 
-export async function fetchSentimentSources(): Promise<SentimentSource[]> {
-  return SIMULATED_SOURCES;
+  try {
+    const externalData = await fetchExternalData({
+      keywords: baseKeywords,
+      enableGoogleNews: true,
+      enableTwitterTrends: false,
+      maxArticlesPerSource: 15,
+    });
+
+    const sourceMap = new Map<string, SentimentSource>();
+
+    for (const article of externalData.articles) {
+      const key = article.source;
+      if (!sourceMap.has(key)) {
+        sourceMap.set(key, {
+          type: article.sourceType || "news",
+          name: article.source,
+          country: article.country || "BR",
+          articles: [],
+        });
+      }
+      sourceMap.get(key)!.articles.push({
+        title: article.title,
+        content: article.content || article.title,
+        date: article.publishedAt.toISOString(),
+        url: article.url,
+        author: article.author,
+      });
+    }
+
+    const sources = Array.from(sourceMap.values());
+
+    if (sources.length === 0) {
+      console.log("[Sentiment] No external articles found, generating context-aware fallback...");
+      return { sources: generateContextAwareFallback(parties.map(p => p.abbreviation)), isFallback: true };
+    }
+
+    console.log(`[Sentiment] Fetched ${externalData.articles.length} real articles from ${sources.length} sources`);
+    return { sources, isFallback: false };
+  } catch (error) {
+    console.error("[Sentiment] Error fetching real sources, using fallback:", error);
+    return { sources: generateContextAwareFallback(parties.map(p => p.abbreviation)), isFallback: true };
+  }
+}
+
+function generateContextAwareFallback(partyAbbreviations: string[]): SentimentSource[] {
+  const now = new Date();
+  const year = now.getFullYear();
+  const topParties = partyAbbreviations.slice(0, 6);
+
+  return [{
+    type: "news",
+    name: "Análise Contextual (dados locais)",
+    country: "BR",
+    articles: topParties.map(party => ({
+      title: `Cenário eleitoral ${year}: análise da posição do ${party}`,
+      content: `O partido ${party} mantém sua estratégia para as eleições de ${year}. Analistas avaliam o posicionamento do partido no cenário político atual, considerando alianças, base eleitoral e propostas programáticas.`,
+      date: new Date(now.getTime() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
+    })),
+  }];
+}
+
+async function autoDetectEntities(): Promise<{ type: "party" | "candidate"; id: string; name: string }[]> {
+  const entities: { type: "party" | "candidate"; id: string; name: string }[] = [];
+
+  const parties = await storage.getParties();
+  for (const party of parties.filter(p => p.active).slice(0, 15)) {
+    entities.push({
+      type: "party",
+      id: party.abbreviation,
+      name: party.name,
+    });
+  }
+
+  try {
+    const candidatesResult = await storage.getCandidatesPaginated({ page: 1, limit: 10, sortBy: "createdAt", sortOrder: "desc" });
+    for (const candidate of candidatesResult.data.slice(0, 5)) {
+      entities.push({
+        type: "candidate",
+        id: String(candidate.id),
+        name: candidate.nickname || candidate.name,
+      });
+    }
+  } catch {
+  }
+
+  return entities;
+}
+
+export async function fetchSentimentSources(customKeywords?: string[]): Promise<SentimentSource[]> {
+  const { sources } = await fetchRealSources(customKeywords);
+  return sources;
 }
 
 export async function analyzeSentimentWithAI(
@@ -155,23 +176,26 @@ export async function analyzeSentimentWithAI(
       keywords: [],
       sourceBreakdown: {},
       timeline: [],
-      summary: "Nenhum conteúdo disponível para análise.",
+      summary: "Nenhum conteúdo disponível para análise. Tente novamente mais tarde.",
       generatedAt: new Date().toISOString(),
+      articlesAnalyzed: 0,
+      sourcesUsed: [],
+      isFallback: true,
     };
   }
 
-  const contentForAnalysis = allContent.slice(0, 20).map((a, i) => 
+  const contentForAnalysis = allContent.slice(0, 25).map((a, i) => 
     `[${i+1}] [${a.sourceType.toUpperCase()}/${a.source}/${a.country}] ${a.title}\n${a.content}`
   ).join("\n\n");
 
   const entitiesHint = targetEntities && targetEntities.length > 0
-    ? `\nEntidades para análise específica: ${targetEntities.map(e => `${e.name} (${e.type})`).join(", ")}`
-    : "\nAnalise menções a partidos políticos brasileiros (PT, PL, MDB, PSDB, etc.) e candidatos relevantes.";
+    ? `\nEntidades para análise específica: ${targetEntities.map(e => `${e.name} (${e.type}: ${e.id})`).join(", ")}`
+    : "\nIdentifique e analise todas as entidades políticas (partidos e candidatos) mencionadas no conteúdo.";
 
-  const prompt = `Você é um especialista em análise de sentimento político e eleitoral.
-Analise o seguinte conteúdo de múltiplas fontes e forneça uma análise de sentimento detalhada.
+  const prompt = `Você é um especialista em análise de sentimento político e eleitoral brasileiro.
+Analise o seguinte conteúdo de múltiplas fontes jornalísticas REAIS e forneça uma análise de sentimento detalhada e precisa.
 
-CONTEÚDO PARA ANÁLISE:
+CONTEÚDO PARA ANÁLISE (${allContent.length} artigos de ${sources.length} fontes):
 ${contentForAnalysis}
 ${entitiesHint}
 
@@ -188,9 +212,9 @@ Responda em JSON com a seguinte estrutura:
       "sentimentScore": número_de_-1_a_1,
       "sentimentLabel": "positive" | "negative" | "neutral" | "mixed",
       "confidence": número_de_0_a_1,
-      "mentionCount": número,
+      "mentionCount": número_de_menções_no_conteúdo,
       "keywords": [{ "word": "palavra", "count": número, "sentiment": número_-1_a_1 }],
-      "sampleMentions": ["trecho_exemplo_1", "trecho_exemplo_2"]
+      "sampleMentions": ["trecho_real_do_artigo_1", "trecho_real_do_artigo_2"]
     }
   ],
   "keywords": [
@@ -204,14 +228,18 @@ Responda em JSON com a seguinte estrutura:
   "timeline": [
     { "date": "YYYY-MM-DD", "sentiment": número_-1_a_1, "volume": número_menções }
   ],
-  "summary": "resumo_detalhado_da_análise_em_português"
+  "summary": "resumo_analítico_detalhado_em_português_sobre_o_cenário_atual"
 }
 
-Importante:
-- Extraia pelo menos 20-30 palavras-chave relevantes para nuvem de palavras
-- Agrupe as palavras por tema (economia, saúde, educação, corrupção, etc.)
-- Identifique tendências temporais quando possível
-- Considere o tom e contexto das menções`;
+Regras importantes:
+- Baseie-se EXCLUSIVAMENTE no conteúdo fornecido - não invente dados
+- Alguns artigos podem conter apenas títulos ou resumos breves - analise com base no que está disponível
+- Extraia 20-40 palavras-chave relevantes para nuvem de palavras
+- Os trechos em sampleMentions devem ser baseados nos artigos fornecidos
+- Agrupe as palavras por tema (economia, saúde, educação, segurança, etc.)
+- Identifique tendências temporais com base nas datas dos artigos
+- Avalie o tom, contexto e viés das menções
+- Para cada entidade, indique a contagem real de menções no conteúdo`;
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -222,13 +250,18 @@ Importante:
 
   const content = completion.choices[0]?.message?.content;
   if (!content) {
-    throw new Error("No response from AI");
+    throw new Error("Sem resposta da IA");
   }
 
   const result = JSON.parse(content);
+  const sourcesUsed = Array.from(new Set(allContent.map(a => a.source)));
+
   return {
     ...result,
     generatedAt: new Date().toISOString(),
+    articlesAnalyzed: allContent.length,
+    sourcesUsed,
+    isFallback: false,
   };
 }
 
@@ -236,18 +269,29 @@ export async function runSentimentAnalysis(
   options?: {
     entityType?: "party" | "candidate";
     entityId?: string;
-    days?: number;
+    customKeywords?: string[];
   }
 ): Promise<SentimentAnalysisResponse> {
-  const sources = await fetchSentimentSources();
-  
-  const targetEntities = options?.entityId ? [{
-    type: options.entityType || "party",
-    id: options.entityId,
-    name: options.entityId,
-  }] : undefined;
+  console.log("[Sentiment] Starting real-data sentiment analysis...");
 
-  const analysis = await analyzeSentimentWithAI(sources, targetEntities as any);
+  const { sources, isFallback } = await fetchRealSources(options?.customKeywords);
+  console.log(`[Sentiment] Collected ${sources.reduce((acc, s) => acc + s.articles.length, 0)} articles from ${sources.length} sources${isFallback ? " (FALLBACK)" : ""}`);
+
+  let targetEntities: { type: "party" | "candidate"; id: string; name: string }[] | undefined;
+
+  if (options?.entityId) {
+    targetEntities = [{
+      type: options.entityType || "party",
+      id: options.entityId,
+      name: options.entityId,
+    }];
+  } else {
+    targetEntities = await autoDetectEntities();
+    console.log(`[Sentiment] Auto-detected ${targetEntities.length} entities from database`);
+  }
+
+  const analysis = await analyzeSentimentWithAI(sources, targetEntities);
+  console.log(`[Sentiment] AI analysis complete: ${analysis.entities.length} entities, overall=${analysis.overallSentiment}`);
 
   for (const entity of analysis.entities) {
     const resultData: InsertSentimentAnalysisResult = {
@@ -290,7 +334,8 @@ export async function runSentimentAnalysis(
     });
   }
 
-  return analysis;
+  console.log("[Sentiment] Analysis persisted to database");
+  return { ...analysis, isFallback };
 }
 
 export async function getSentimentTimeline(

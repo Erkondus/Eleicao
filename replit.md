@@ -14,7 +14,16 @@ SimulaVoto is a comprehensive web system designed to simulate Brazilian proporti
 The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend, an Express.js + TypeScript backend, and PostgreSQL with Drizzle ORM for the database. Authentication is handled via `passport-local` and `express-session`, implementing Role-Based Access Control (RBAC) with `admin`, `analyst`, and `viewer` roles.
 
 **Key Features and Implementations:**
-- **Electoral Calculation:** Implements the Brazilian proportional electoral system, including electoral quotient, party quotient, initial seat distribution, and D'Hondt method. Supports Federations and Coalitions.
+- **Electoral Calculation:** Implements the Brazilian proportional electoral system with full TSE compliance:
+  - Quociente Eleitoral (QE) = floor(votos_válidos / vagas) (Art. 106 CE)
+  - Quociente Partidário (QP) = floor(votos_entidade / QE) (Art. 107 CE)
+  - Cláusula de barreira: 80% do QE para participar das sobras (Art. 108 §1º, Lei 14.211/2021)
+  - Votação mínima individual: 20% do QE para eleição (Art. 108 §1º-A)
+  - Distribuição de sobras por D'Hondt (maiores médias) entre entidades que atingiram barreira
+  - Federações partidárias como entidade única (Lei 14.208/2021)
+  - Coligações abolidas para eleições proporcionais (Lei 14.211/2021)
+  - Edge case: sem QE atingido → D'Hondt entre todos os partidos com votos
+  - Desempate no D'Hondt por total de votos
 - **Data Import System:** Robust CSV import from TSE URLs with streaming, real-time progress updates via WebSockets, and re-processing of failed batches. Batch tracking with original file row indices for accurate audit trails. All three import types (PARTIDO, DETALHE, CANDIDATO) use consistent duplicate checking and row tracking. Includes an enhanced IBGE import system with detailed error reporting, real-time progress, and cancel/restart capabilities.
   - **Dynamic CSV Format Detection:** The TSE changed CSV formats across election years. The system auto-detects column count and applies appropriate field mappings:
     - **PARTIDO (votacao_partido_munzona):**
