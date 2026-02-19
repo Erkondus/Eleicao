@@ -6249,12 +6249,24 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
   // Dashboard summary of top sentiment entities
   app.get("/api/sentiment/summary", requireAuth, async (req, res) => {
     try {
-      const results = await storage.getSentimentResults({ limit: 10 });
-      const entities = results.map(r => ({
-        name: r.entityName || `${r.entityType} ${r.entityId}`,
-        sentiment: parseFloat(r.sentimentScore) || 0,
-        type: r.entityType,
-      }));
+      const results = await storage.getSentimentResults({ limit: 100 });
+      const entityMap = new Map<string, { name: string; type: string; totalScore: number; totalMentions: number; count: number }>();
+      for (const r of results) {
+        const key = `${r.entityType}:${r.entityId}`;
+        const score = parseFloat(r.sentimentScore) || 0;
+        const mentions = r.mentionCount || 1;
+        if (!entityMap.has(key)) {
+          entityMap.set(key, { name: r.entityName || `${r.entityType} ${r.entityId}`, type: r.entityType, totalScore: 0, totalMentions: 0, count: 0 });
+        }
+        const entry = entityMap.get(key)!;
+        entry.totalScore += score * mentions;
+        entry.totalMentions += mentions;
+        entry.count++;
+      }
+      const entities = Array.from(entityMap.values())
+        .map(e => ({ name: e.name, sentiment: e.totalMentions > 0 ? Math.round((e.totalScore / e.totalMentions) * 1000) / 1000 : 0, type: e.type }))
+        .sort((a, b) => Math.abs(b.sentiment) - Math.abs(a.sentiment))
+        .slice(0, 10);
       res.json({ entities });
     } catch (error) {
       console.error("Sentiment summary error:", error);

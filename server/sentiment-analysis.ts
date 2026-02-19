@@ -370,23 +370,86 @@ export async function getEntitiesSentimentOverview(): Promise<{
   parties: EntitySentiment[];
   candidates: EntitySentiment[];
 }> {
-  const partyResults = await storage.getSentimentResults({ entityType: "party", limit: 20 });
-  const candidateResults = await storage.getSentimentResults({ entityType: "candidate", limit: 20 });
+  const partyResults = await storage.getSentimentResults({ entityType: "party", limit: 100 });
+  const candidateResults = await storage.getSentimentResults({ entityType: "candidate", limit: 100 });
 
-  const mapToEntity = (r: any): EntitySentiment => ({
-    entityType: r.entityType,
-    entityId: r.entityId,
-    entityName: r.entityName,
-    sentimentScore: parseFloat(String(r.sentimentScore)),
-    sentimentLabel: r.sentimentLabel,
-    confidence: parseFloat(String(r.confidence)),
-    mentionCount: r.mentionCount || 0,
-    keywords: (r.topKeywords as any[]) || [],
-    sampleMentions: (r.sampleMentions as string[]) || [],
-  });
+  function consolidateEntities(results: any[]): EntitySentiment[] {
+    const entityMap = new Map<string, {
+      rows: any[];
+      entityType: "party" | "candidate";
+      entityId: string;
+      entityName: string;
+    }>();
+
+    for (const r of results) {
+      const key = `${r.entityType}:${r.entityId}`;
+      if (!entityMap.has(key)) {
+        entityMap.set(key, {
+          rows: [],
+          entityType: r.entityType as "party" | "candidate",
+          entityId: r.entityId,
+          entityName: r.entityName,
+        });
+      }
+      entityMap.get(key)!.rows.push(r);
+    }
+
+    return Array.from(entityMap.values()).map(({ rows, entityType, entityId, entityName }) => {
+      const totalMentions = rows.reduce((sum, r) => sum + (r.mentionCount || 0), 0);
+      const weightedScore = totalMentions > 0
+        ? rows.reduce((sum, r) => sum + parseFloat(String(r.sentimentScore)) * (r.mentionCount || 1), 0) / totalMentions
+        : rows.reduce((sum, r) => sum + parseFloat(String(r.sentimentScore)), 0) / rows.length;
+      const avgConfidence = rows.reduce((sum, r) => sum + parseFloat(String(r.confidence || 0)), 0) / rows.length;
+
+      const keywordsMap = new Map<string, { count: number; sentiment: number }>();
+      for (const r of rows) {
+        const kws = (r.topKeywords as any[]) || [];
+        for (const kw of kws) {
+          if (kw?.word) {
+            const existing = keywordsMap.get(kw.word);
+            if (existing) {
+              existing.count += kw.count || 1;
+              existing.sentiment = (existing.sentiment + (kw.sentiment || 0)) / 2;
+            } else {
+              keywordsMap.set(kw.word, { count: kw.count || 1, sentiment: kw.sentiment || 0 });
+            }
+          }
+        }
+      }
+      const keywords = Array.from(keywordsMap.entries())
+        .map(([word, data]) => ({ word, ...data }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15);
+
+      const allMentions: string[] = [];
+      for (const r of rows) {
+        const mentions = (r.sampleMentions as string[]) || [];
+        allMentions.push(...mentions);
+      }
+      const uniqueMentions = [...new Set(allMentions)].slice(0, 5);
+
+      let sentimentLabel: "positive" | "negative" | "neutral" | "mixed";
+      if (weightedScore > 0.3) sentimentLabel = "positive";
+      else if (weightedScore < -0.3) sentimentLabel = "negative";
+      else if (Math.abs(weightedScore) <= 0.1) sentimentLabel = "neutral";
+      else sentimentLabel = "mixed";
+
+      return {
+        entityType,
+        entityId,
+        entityName,
+        sentimentScore: Math.round(weightedScore * 1000) / 1000,
+        sentimentLabel,
+        confidence: Math.round(avgConfidence * 1000) / 1000,
+        mentionCount: totalMentions,
+        keywords,
+        sampleMentions: uniqueMentions,
+      };
+    }).sort((a, b) => b.mentionCount - a.mentionCount);
+  }
 
   return {
-    parties: partyResults.map(mapToEntity),
-    candidates: candidateResults.map(mapToEntity),
+    parties: consolidateEntities(partyResults),
+    candidates: consolidateEntities(candidateResults),
   };
 }

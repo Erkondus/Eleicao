@@ -1603,10 +1603,10 @@ export class DatabaseStorage implements IStorage {
     dsCargo: string | null;
     qtVotosNominais: number | null;
   }[]> {
-    const conditions = [
-      sql`(LOWER(${tseCandidateVotes.nmCandidato}) LIKE ${'%' + query.toLowerCase() + '%'} OR LOWER(${tseCandidateVotes.nmUrnaCandidato}) LIKE ${'%' + query.toLowerCase() + '%'})`
-    ];
-    
+    const upperQuery = query.toUpperCase();
+
+    const conditions: SQL[] = [];
+
     if (filters?.year) {
       conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     }
@@ -1617,8 +1617,12 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(tseCandidateVotes.cdCargo, filters.cargo));
     }
 
-    // Agrupa por candidato e soma votos
-    const results = await db
+    const step1Conditions = [...conditions];
+    step1Conditions.push(
+      sql`(UPPER(${tseCandidateVotes.nmUrnaCandidato}) LIKE ${upperQuery + '%'} OR UPPER(${tseCandidateVotes.nmCandidato}) LIKE ${upperQuery + '%'})`
+    );
+
+    let results = await db
       .select({
         nmCandidato: tseCandidateVotes.nmCandidato,
         nmUrnaCandidato: tseCandidateVotes.nmUrnaCandidato,
@@ -1632,8 +1636,9 @@ export class DatabaseStorage implements IStorage {
         qtVotosNominais: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
       })
       .from(tseCandidateVotes)
-      .where(and(...conditions))
+      .where(and(...step1Conditions))
       .groupBy(
+        tseCandidateVotes.sqCandidato,
         tseCandidateVotes.nmCandidato,
         tseCandidateVotes.nmUrnaCandidato,
         tseCandidateVotes.nrCandidato,
@@ -1646,6 +1651,43 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
       .limit(20);
+
+    if (results.length === 0 && upperQuery.length >= 3) {
+      const step2Conditions = [...conditions];
+      step2Conditions.push(
+        sql`(UPPER(${tseCandidateVotes.nmUrnaCandidato}) LIKE ${'%' + upperQuery + '%'} OR UPPER(${tseCandidateVotes.nmCandidato}) LIKE ${'%' + upperQuery + '%'})`
+      );
+
+      results = await db
+        .select({
+          nmCandidato: tseCandidateVotes.nmCandidato,
+          nmUrnaCandidato: tseCandidateVotes.nmUrnaCandidato,
+          nrCandidato: tseCandidateVotes.nrCandidato,
+          sgPartido: tseCandidateVotes.sgPartido,
+          nmPartido: tseCandidateVotes.nmPartido,
+          nrPartido: tseCandidateVotes.nrPartido,
+          anoEleicao: tseCandidateVotes.anoEleicao,
+          sgUf: tseCandidateVotes.sgUf,
+          dsCargo: tseCandidateVotes.dsCargo,
+          qtVotosNominais: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+        })
+        .from(tseCandidateVotes)
+        .where(and(...step2Conditions))
+        .groupBy(
+          tseCandidateVotes.sqCandidato,
+          tseCandidateVotes.nmCandidato,
+          tseCandidateVotes.nmUrnaCandidato,
+          tseCandidateVotes.nrCandidato,
+          tseCandidateVotes.sgPartido,
+          tseCandidateVotes.nmPartido,
+          tseCandidateVotes.nrPartido,
+          tseCandidateVotes.anoEleicao,
+          tseCandidateVotes.sgUf,
+          tseCandidateVotes.dsCargo
+        )
+        .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+        .limit(20);
+    }
 
     return results;
   }

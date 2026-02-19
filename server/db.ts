@@ -224,12 +224,15 @@ export async function initializeDatabase(): Promise<void> {
 async function createIndexesInBackground(indexes: { name: string; sql: string }[], pool: any): Promise<void> {
   (async () => {
     for (const idx of indexes) {
+      const client = await pool.connect();
       try {
         console.log(`[Migration/BG] Creating index ${idx.name}...`);
-        await pool.query(idx.sql);
+        await client.query(idx.sql);
         console.log(`[Migration/BG] Index ${idx.name} created.`);
       } catch (e: any) {
         console.warn(`[Migration/BG] Index ${idx.name} failed (non-fatal): ${e.message}`);
+      } finally {
+        client.release();
       }
     }
     console.log("[Migration/BG] Background index creation complete.");
@@ -282,6 +285,8 @@ export async function runSafeMigrations(): Promise<void> {
           { name: "idx_tse_cv_nm_tipo_eleicao", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_tipo_eleicao ON tse_candidate_votes (nm_tipo_eleicao)` },
           { name: "idx_tse_cv_uf_municipio", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_uf_municipio ON tse_candidate_votes (sg_uf, cd_municipio, nm_municipio)` },
           { name: "idx_tse_cv_sq_candidato", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sq_candidato ON tse_candidate_votes (sq_candidato)` },
+          { name: "idx_tse_cv_nm_urna_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)` },
+          { name: "idx_tse_cv_nm_cand_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_cand_upper ON tse_candidate_votes (UPPER(nm_candidato) text_pattern_ops)` },
         ];
         if (hasTrgm) {
           allIndexes.push(
