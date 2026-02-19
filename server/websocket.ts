@@ -50,33 +50,25 @@ export function initWebSocketServer(server: Server): WebSocketServer {
     const cookies = req.headers.cookie ? parseCookie(req.headers.cookie) : {};
     const signedSessionId = cookies["connect.sid"];
     
-    // Reject connections without session cookie
     if (!signedSessionId) {
-      console.log("WebSocket connection rejected - no session cookie");
       ws.close(4001, "Authentication required");
       return;
     }
     
-    // Unsign the session cookie
     const sessionId = unsignCookie(signedSessionId, sessionSecret);
     if (!sessionId) {
-      console.log("WebSocket connection rejected - invalid session signature");
       ws.close(4001, "Invalid session");
       return;
     }
     
-    // Validate session against the session store
     getSessionStore().get(sessionId, (err, session) => {
       if (err || !session) {
-        console.log("WebSocket connection rejected - session not found in store");
         ws.close(4001, "Session expired");
         return;
       }
       
-      // Check if user is authenticated in the session
       const passport = session.passport as { user?: number } | undefined;
       if (!passport?.user) {
-        console.log("WebSocket connection rejected - no authenticated user in session");
         ws.close(4001, "Not authenticated");
         return;
       }
