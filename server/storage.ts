@@ -1569,7 +1569,7 @@ export class DatabaseStorage implements IStorage {
     if (cached) return cached;
 
     const [countResult, yearsResult, ufsResult, cargosResult] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(tseCandidateVotes),
+      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_candidate_votes'`),
       db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`),
       db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`),
       db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`),
@@ -1577,13 +1577,21 @@ export class DatabaseStorage implements IStorage {
 
     const validUfs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
 
+    const countRows = countResult.rows ?? countResult;
+    let estimatedCount = Number((countRows as any)[0]?.count || 0);
+
+    if (estimatedCount <= 0) {
+      const exactCount = await db.select({ count: sql<number>`count(*)` }).from(tseCandidateVotes);
+      estimatedCount = Number(exactCount[0]?.count || 0);
+    }
+
     const result = {
-      totalRecords: Number(countResult[0]?.count || 0),
+      totalRecords: estimatedCount,
       years: yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a),
       ufs: validUfs,
       cargos: cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! })),
     };
-    this.analyticsCache.set(cacheKey, result, 10 * 60 * 1000);
+    this.analyticsCache.set(cacheKey, result, 30 * 60 * 1000);
     return result;
   }
 
@@ -1910,7 +1918,7 @@ export class DatabaseStorage implements IStorage {
 
     data.sort((a, b) => b.votesTotal - a.votesTotal);
 
-    this.analyticsCache.set(cacheKey, data, 5 * 60 * 1000);
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
     return data;
   }
 

@@ -271,7 +271,7 @@ export async function runSafeMigrations(): Promise<void> {
       `);
       if (tableCheck.rows.length > 0) {
         const existingIndexes = await client.query(`
-          SELECT indexname FROM pg_indexes WHERE tablename = 'tse_candidate_votes'
+          SELECT indexname FROM pg_indexes WHERE tablename IN ('tse_candidate_votes', 'tse_party_votes')
         `);
         const existingSet = new Set(existingIndexes.rows.map((r: any) => r.indexname));
 
@@ -287,6 +287,9 @@ export async function runSafeMigrations(): Promise<void> {
           { name: "idx_tse_cv_sq_candidato", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sq_candidato ON tse_candidate_votes (sq_candidato)` },
           { name: "idx_tse_cv_nm_urna_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)` },
           { name: "idx_tse_cv_nm_cand_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_cand_upper ON tse_candidate_votes (UPPER(nm_candidato) text_pattern_ops)` },
+          { name: "idx_tse_cv_partido_votos", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_partido_votos ON tse_candidate_votes (sg_partido, nr_partido, qt_votos_nominais)` },
+          { name: "idx_tse_pv_partido_legenda", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_pv_partido_legenda ON tse_party_votes (sg_partido, qt_votos_legenda_validos)` },
+          { name: "idx_tse_pv_ano_uf", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_pv_ano_uf ON tse_party_votes (ano_eleicao, sg_uf)` },
         ];
         if (hasTrgm) {
           allIndexes.push(
