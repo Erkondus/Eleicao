@@ -221,6 +221,31 @@ export async function initializeDatabase(): Promise<void> {
   }
 }
 
+export async function runSafeMigrations(): Promise<void> {
+  if (!_pool) return;
+  try {
+    const client = await _pool.connect();
+    try {
+      const check = await client.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'scenario_candidates' AND column_name = 'updated_at'
+      `);
+      if (check.rows.length === 0) {
+        console.log("[Migration] Adding missing updated_at column to scenario_candidates...");
+        await client.query(`
+          ALTER TABLE scenario_candidates 
+          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+        `);
+        console.log("[Migration] updated_at column added successfully.");
+      }
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("[Migration] Safe migration failed (non-fatal):", err);
+  }
+}
+
 export async function testConnection(): Promise<boolean> {
   if (!_pool) {
     throw new Error("Database not initialized");

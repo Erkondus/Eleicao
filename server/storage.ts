@@ -1600,7 +1600,7 @@ export class DatabaseStorage implements IStorage {
   async getScenarioCandidates(scenarioId: number): Promise<(ScenarioCandidate & { candidate: Candidate; party: Party })[]> {
     const results = await db
       .select({
-        scenarioCandidate: scenarioCandidates,
+        scenarioCandidate: this.scenarioCandidateSafeColumns(),
         candidate: candidates,
         party: parties,
       })
@@ -1613,28 +1613,45 @@ export class DatabaseStorage implements IStorage {
     return results
       .filter((r) => r.candidate !== null && r.party !== null)
       .map((r) => ({
-        ...r.scenarioCandidate,
+        ...this.toScenarioCandidate(r.scenarioCandidate),
         candidate: r.candidate!,
         party: r.party!,
       }));
   }
 
+  private scenarioCandidateSafeColumns() {
+    return {
+      id: scenarioCandidates.id,
+      scenarioId: scenarioCandidates.scenarioId,
+      candidateId: scenarioCandidates.candidateId,
+      partyId: scenarioCandidates.partyId,
+      ballotNumber: scenarioCandidates.ballotNumber,
+      nickname: scenarioCandidates.nickname,
+      status: scenarioCandidates.status,
+      votes: scenarioCandidates.votes,
+      createdAt: scenarioCandidates.createdAt,
+    };
+  }
+
+  private toScenarioCandidate(row: any): ScenarioCandidate {
+    return { ...row, updatedAt: row.updatedAt ?? row.createdAt ?? new Date() };
+  }
+
   async getScenarioCandidate(id: number): Promise<ScenarioCandidate | undefined> {
-    const [result] = await db.select().from(scenarioCandidates).where(eq(scenarioCandidates.id, id));
-    return result;
+    const [result] = await db.select(this.scenarioCandidateSafeColumns()).from(scenarioCandidates).where(eq(scenarioCandidates.id, id));
+    return result ? this.toScenarioCandidate(result) : undefined;
   }
 
   async createScenarioCandidate(data: InsertScenarioCandidate): Promise<ScenarioCandidate> {
-    const [created] = await db.insert(scenarioCandidates).values(data).returning();
-    return created;
+    const { updatedAt: _ignore, ...safeData } = data as any;
+    const [created] = await db.insert(scenarioCandidates).values(safeData).returning(this.scenarioCandidateSafeColumns());
+    return this.toScenarioCandidate(created);
   }
 
   async updateScenarioCandidate(id: number, data: Partial<InsertScenarioCandidate>): Promise<ScenarioCandidate | undefined> {
-    const [updated] = await db.update(scenarioCandidates).set({
-      ...data,
-      updatedAt: new Date(),
-    }).where(eq(scenarioCandidates.id, id)).returning();
-    return updated;
+    const { updatedAt: _ignore, ...safeData } = data as any;
+    const [updated] = await db.update(scenarioCandidates).set(safeData).where(eq(scenarioCandidates.id, id)).returning(this.scenarioCandidateSafeColumns());
+    return updated ? this.toScenarioCandidate(updated) : undefined;
   }
 
   async deleteScenarioCandidate(id: number): Promise<boolean> {

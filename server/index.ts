@@ -172,11 +172,14 @@ app.use((req, res, next) => {
 (async () => {
   try {
     // Initialize database with IPv4 resolution for production
-    const { initializeDatabase, testConnection } = await import("./db");
+    const { initializeDatabase, testConnection, runSafeMigrations } = await import("./db");
     await initializeDatabase();
     
     // Test database connection
     await testConnection();
+
+    // Run safe migrations to fix missing columns
+    await runSafeMigrations();
     
     console.log("Registering routes...");
     await registerRoutes(httpServer, app);
