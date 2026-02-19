@@ -1605,16 +1605,18 @@ export class DatabaseStorage implements IStorage {
         party: parties,
       })
       .from(scenarioCandidates)
-      .innerJoin(candidates, eq(scenarioCandidates.candidateId, candidates.id))
-      .innerJoin(parties, eq(scenarioCandidates.partyId, parties.id))
+      .leftJoin(candidates, eq(scenarioCandidates.candidateId, candidates.id))
+      .leftJoin(parties, eq(scenarioCandidates.partyId, parties.id))
       .where(eq(scenarioCandidates.scenarioId, scenarioId))
       .orderBy(scenarioCandidates.ballotNumber);
 
-    return results.map((r) => ({
-      ...r.scenarioCandidate,
-      candidate: r.candidate,
-      party: r.party,
-    }));
+    return results
+      .filter((r) => r.candidate !== null && r.party !== null)
+      .map((r) => ({
+        ...r.scenarioCandidate,
+        candidate: r.candidate!,
+        party: r.party!,
+      }));
   }
 
   async getScenarioCandidate(id: number): Promise<ScenarioCandidate | undefined> {

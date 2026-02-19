@@ -116,11 +116,17 @@ export default function ScenarioCandidates() {
   const { data: scenario } = useQuery<Scenario>({
     queryKey: ["/api/scenarios", scenarioId],
     enabled: !!scenarioId,
+    staleTime: 30000,
+    refetchOnMount: "always",
   });
 
-  const { data: scenarioCandidates, isLoading } = useQuery<ScenarioCandidateWithDetails[]>({
+  const { data: scenarioCandidates, isLoading, error: candidatesError, refetch: refetchCandidates } = useQuery<ScenarioCandidateWithDetails[]>({
     queryKey: ["/api/scenarios", scenarioId, "candidates"],
     enabled: !!scenarioId,
+    staleTime: 30000,
+    refetchOnMount: "always",
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const { data: allCandidates } = useQuery<Candidate[]>({
@@ -144,8 +150,16 @@ export default function ScenarioCandidates() {
       toast({ title: "Sucesso", description: "Candidato adicionado ao cenário" });
       resetForm();
     },
-    onError: () => {
-      toast({ title: "Erro", description: "Falha ao adicionar candidato ao cenário", variant: "destructive" });
+    onError: (error: Error) => {
+      const msg = error.message?.includes(":") ? error.message.split(":").slice(1).join(":").trim() : "Falha ao adicionar candidato ao cenário";
+      let description = "Falha ao adicionar candidato ao cenário";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) description = parsed.error;
+      } catch {
+        if (msg.length < 200) description = msg;
+      }
+      toast({ title: "Erro", description, variant: "destructive" });
     },
   });
 
@@ -430,7 +444,17 @@ export default function ScenarioCandidates() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {!isLoading && (!scenarioCandidates || scenarioCandidates.length === 0) ? (
+          {candidatesError ? (
+            <div className="text-center py-8 space-y-3" data-testid="error-candidates">
+              <p className="text-destructive font-medium">Erro ao carregar candidatos</p>
+              <p className="text-sm text-muted-foreground">
+                {candidatesError.message?.includes("500") ? "Erro no servidor. Tente novamente." : candidatesError.message}
+              </p>
+              <Button variant="outline" onClick={() => refetchCandidates()} data-testid="button-retry-candidates">
+                Tentar novamente
+              </Button>
+            </div>
+          ) : !isLoading && (!scenarioCandidates || scenarioCandidates.length === 0) ? (
             <EmptyState
               icon={Users}
               title="Nenhum candidato neste cenário"

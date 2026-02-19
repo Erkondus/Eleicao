@@ -894,6 +894,7 @@ export async function registerRoutes(
       await logAudit(req, "create", "candidate", String(candidate.id), { name: candidate.name });
       res.json(candidate);
     } catch (error) {
+      console.error("Failed to create candidate:", error);
       res.status(500).json({ error: "Failed to create candidate" });
     }
   });
@@ -1144,6 +1145,7 @@ export async function registerRoutes(
       const scenarioCandidates = await storage.getScenarioCandidates(scenarioId);
       res.json(scenarioCandidates);
     } catch (error) {
+      console.error("Failed to fetch scenario candidates:", error);
       res.status(500).json({ error: "Failed to fetch scenario candidates" });
     }
   });
@@ -1155,6 +1157,21 @@ export async function registerRoutes(
       
       if (!candidateId || !partyId || !ballotNumber) {
         return res.status(400).json({ error: "candidateId, partyId, and ballotNumber are required" });
+      }
+
+      const scenario = await storage.getScenario(scenarioId);
+      if (!scenario) {
+        return res.status(404).json({ error: "Cenário não encontrado" });
+      }
+
+      const candidate = await storage.getCandidate(candidateId);
+      if (!candidate) {
+        return res.status(404).json({ error: "Candidato não encontrado no sistema. Cadastre o candidato primeiro." });
+      }
+
+      const party = await storage.getParty(partyId);
+      if (!party) {
+        return res.status(404).json({ error: "Partido não encontrado no sistema. Cadastre o partido primeiro." });
       }
       
       const scenarioCandidate = await storage.addCandidateToScenario(
@@ -1176,7 +1193,9 @@ export async function registerRoutes(
 
       res.json(scenarioCandidate);
     } catch (error) {
-      res.status(500).json({ error: "Failed to add candidate to scenario" });
+      console.error("Failed to add candidate to scenario:", error);
+      const message = error instanceof Error ? error.message : "Failed to add candidate to scenario";
+      res.status(500).json({ error: message });
     }
   });
 
@@ -1217,6 +1236,7 @@ export async function registerRoutes(
 
       res.json(updated);
     } catch (error) {
+      console.error("Failed to update scenario candidate:", error);
       res.status(500).json({ error: "Failed to update scenario candidate" });
     }
   });
