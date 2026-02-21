@@ -1,0 +1,271 @@
+Last login: Sat Feb 21 13:20:31 on ttys000
+(base) denisbezerra@MacBook-Pro-de-Denis ~ % ssh root@31.97.16.215
+Linux manager 6.12.63+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.63-1 (2025-12-30) x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Sat Feb 21 16:20:36 2026 from 74.244.222.171
+root@manager:~# cd /opt/simulavoto/
+root@manager:/opt/simulavoto# ls
+attached_assets		    design_guidelines.md	  Dockerfile		  postcss.config.js  tailwind.config.ts
+client			    docker-compose.portainer.yml  drizzle.config.ts	  replit.md	     tsconfig.json
+components.json		    docker-compose.supabase.yml   Eleicao.code-workspace  script	     vite.config.ts
+DEPLOY.md		    docker-compose.yaml		  migrations		  scripts
+DEPLOY-PORTAINER.md	    docker-compose.yml		  package.json		  server
+DEPLOY-UPDATE-PORTAINER.md  docker-entrypoint.sh	  package-lock.json	  shared
+root@manager:/opt/simulavoto# git pull
+remote: Enumerating objects: 99, done.
+remote: Counting objects: 100% (99/99), done.
+remote: Compressing objects: 100% (39/39), done.
+remote: Total 72 (delta 38), reused 61 (delta 27), pack-reused 0 (from 0)
+Unpacking objects: 100% (72/72), 3.29 MiB | 4.22 MiB/s, done.
+From https://github.com/Erkondus/Eleicao
+   239c938..8411feb  main       -> origin/main
+Updating 239c938..8411feb
+Fast-forward
+ .../replit/agent/.agent_state_7d86ae6497ccdb3b21a1082903fb41ee61f1c203.bin  |  Bin 0 -> 95844 bytes
+ .../replit/agent/.agent_state_7e3970f64c0483ce14823294fa7177d45351aefd.bin  |  Bin 0 -> 114447 bytes
+ .../replit/agent/.agent_state_80929590b466d86314e5204694d9d04c7efd00d0.bin  |  Bin 0 -> 90614 bytes
+ .../replit/agent/.agent_state_8b04b7bce849aac979475d37d0ef7ed17068a38b.bin  |  Bin 0 -> 113496 bytes
+ .../replit/agent/.agent_state_8ba674982d090c63d12737d35287ec87d3603738.bin  |  Bin 0 -> 105528 bytes
+ .../replit/agent/.agent_state_90563c21630cc354273c2565140a77270966e3eb.bin  |  Bin 0 -> 104136 bytes
+ .../replit/agent/.agent_state_95b1386648d0ecdd8fc32290641de7227a58878d.bin  |  Bin 0 -> 130153 bytes
+ .../replit/agent/.agent_state_b5fe34513c5376bad290f4f8fc33a8f13c7bea16.bin  |  Bin 0 -> 96630 bytes
+ .../replit/agent/.agent_state_ba8420cfd1509ef6540940c0cae1b31ddc9c1ef5.bin  |  Bin 0 -> 118011 bytes
+ .../replit/agent/.agent_state_c9049f4781675bf633153a1e6f7e57fb2661d585.bin  |  Bin 0 -> 95503 bytes
+ .../replit/agent/.agent_state_f9d68f220c42c34e62f089ff44d3b1e9e8a468e8.bin  |  Bin 0 -> 119714 bytes
+ .../replit/agent/.agent_state_fd859768466ae35bf97ec6a6237a9a5fbcc12a36.bin  |  Bin 0 -> 99531 bytes
+ .local/state/replit/agent/.agent_state_main.bin                             |  Bin 93398 -> 130082 bytes
+ .local/state/replit/agent/repl_state.bin                                    |  Bin 15799 -> 15799 bytes
+ .local/state/replit/log-query.db                                            |  Bin 1179648 -> 1404928 bytes
+ .local/state/replit/log-query.db-shm                                        |  Bin 32768 -> 32768 bytes
+ .local/state/replit/log-query.db-wal                                        |  Bin 4128272 -> 4128272 bytes
+ ...ast-login-Thu-Feb-19-13-58-00-on-ttys000-base-denisbez_1771690974152.txt | 7360 +++++++++++++++++++++++++++++++++++
+ ...ocker-compose-logs-f-simulavoto-WARN-0000-Found-multip_1771527132216.txt |  117 +
+ ...mulavoto-WebSocket-client-connected-user-3b0f7e6a-c3c5_1771527735660.txt |   32 +
+ ...imulavoto-4-39-28-PM-express-GET-api-imports-tse-304-i_1771692528698.txt |   18 +
+ ...imulavoto-7-01-44-PM-express-HEAD-api-health-200-in-13_1771528189053.txt |  135 +
+ client/src/pages/candidates.tsx                                             |   22 +-
+ client/src/pages/predictions.tsx                                            |    9 +-
+ server/ai-insights.ts                                                       |   41 +-
+ server/campaign-insights-service.ts                                         |    4 +
+ server/data-validation.ts                                                   |    1 +
+ server/db.ts                                                                |    5 +-
+ server/external-data-service.ts                                             |    3 +-
+ server/forecasting.ts                                                       |    3 +-
+ server/routes.ts                                                            |   19 +-
+ server/semantic-search.ts                                                   |    4 +-
+ server/sentiment-analysis.ts                                                |    1 +
+ server/storage.ts                                                           |   22 +-
+ 34 files changed, 7776 insertions(+), 20 deletions(-)
+ create mode 100644 .local/state/replit/agent/.agent_state_7d86ae6497ccdb3b21a1082903fb41ee61f1c203.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_7e3970f64c0483ce14823294fa7177d45351aefd.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_80929590b466d86314e5204694d9d04c7efd00d0.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_8b04b7bce849aac979475d37d0ef7ed17068a38b.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_8ba674982d090c63d12737d35287ec87d3603738.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_90563c21630cc354273c2565140a77270966e3eb.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_95b1386648d0ecdd8fc32290641de7227a58878d.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_b5fe34513c5376bad290f4f8fc33a8f13c7bea16.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_ba8420cfd1509ef6540940c0cae1b31ddc9c1ef5.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_c9049f4781675bf633153a1e6f7e57fb2661d585.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_f9d68f220c42c34e62f089ff44d3b1e9e8a468e8.bin
+ create mode 100644 .local/state/replit/agent/.agent_state_fd859768466ae35bf97ec6a6237a9a5fbcc12a36.bin
+ create mode 100644 attached_assets/Pasted-Last-login-Thu-Feb-19-13-58-00-on-ttys000-base-denisbez_1771690974152.txt
+ create mode 100644 attached_assets/Pasted-docker-compose-logs-f-simulavoto-WARN-0000-Found-multip_1771527132216.txt
+ create mode 100644 attached_assets/Pasted-imulavoto-WebSocket-client-connected-user-3b0f7e6a-c3c5_1771527735660.txt
+ create mode 100644 attached_assets/Pasted-simulavoto-4-39-28-PM-express-GET-api-imports-tse-304-i_1771692528698.txt
+ create mode 100644 attached_assets/Pasted-simulavoto-7-01-44-PM-express-HEAD-api-health-200-in-13_1771528189053.txt
+root@manager:/opt/simulavoto# docker compose -f docker-compose.supabase.yml up -d --build 
+[+] Building 217.4s (25/25) FINISHED                                                                                    
+ => [internal] load local bake definitions                                                                         0.0s
+ => => reading from stdin 504B                                                                                     0.0s
+ => [internal] load build definition from Dockerfile                                                               0.1s
+ => => transferring dockerfile: 1.14kB                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                  0.8s
+ => [internal] load .dockerignore                                                                                  0.1s
+ => => transferring context: 200B                                                                                  0.0s
+ => [internal] load build context                                                                                  0.6s
+ => => transferring context: 22.01MB                                                                               0.6s
+ => [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d2836  0.0s
+ => => resolve docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132  0.0s
+ => CACHED [builder 2/6] WORKDIR /app                                                                              0.0s
+ => CACHED [builder 3/6] COPY package*.json ./                                                                     0.0s
+ => CACHED [builder 4/6] RUN npm ci                                                                                0.0s
+ => [builder 5/6] COPY . .                                                                                         1.1s
+ => [builder 6/6] RUN npm run build                                                                               46.3s
+ => CACHED [runner  3/14] RUN apk add --no-cache dumb-init wget                                                    0.0s 
+ => [runner  4/14] COPY --from=builder /app/dist ./dist                                                            0.1s 
+ => [runner  5/14] COPY --from=builder /app/package*.json ./                                                       2.0s 
+ => [runner  6/14] COPY --from=builder /app/drizzle.config.ts ./                                                   0.3s 
+ => [runner  7/14] COPY --from=builder /app/shared ./shared                                                        0.1s 
+ => [runner  8/14] COPY --from=builder /app/server ./server                                                        0.0s 
+ => [runner  9/14] COPY --from=builder /app/node_modules ./node_modules                                           13.4s
+ => [runner 10/14] COPY --from=builder /app/docker-entrypoint.sh ./                                                0.3s
+ => [runner 11/14] COPY --from=builder /app/scripts ./scripts                                                      0.1s
+ => [runner 12/14] COPY --from=builder /app/migrations ./migrations                                                0.0s
+ => [runner 13/14] RUN addgroup --system --gid 1001 nodejs &&     adduser --system --uid 1001 expressjs &&     c  68.5s
+ => [runner 14/14] RUN chmod +x docker-entrypoint.sh                                                               0.7s
+ => exporting to image                                                                                            50.9s
+ => => exporting layers                                                                                           28.6s
+ => => exporting manifest sha256:a3fbf53a0ea7be45710b38d7da96ceea25ed62ba8ed036c87cde8cb5ce391233                  0.0s
+ => => exporting config sha256:ec1018dfcd39e5595c81d2ffbede06347194e903b5d17d5f402c6f328e1b0579                    0.0s
+ => => exporting attestation manifest sha256:3722b4fbd596ce1279ccc0151bcf38e4acccb09fff4109b58fcb04c61c12fcb7      0.0s
+ => => exporting manifest list sha256:eaf39cab0a0f9b1783e1b442d355721664bf3dbf96325353dc322e918437dc3d             0.0s
+ => => naming to docker.io/library/simulavoto-simulavoto:latest                                                    0.0s
+ => => unpacking to docker.io/library/simulavoto-simulavoto:latest                                                22.2s
+ => resolving provenance for metadata file                                                                         0.0s
+[+] up 2/2
+ ✔ Image simulavoto-simulavoto Built                                                                              217.6s
+ ✔ Container simulavoto        Recreated                                                                          5.0s
+root@manager:/opt/simulavoto# docker compose logs -f simulavoto
+WARN[0000] Found multiple config files with supported names: /opt/simulavoto/docker-compose.yml, /opt/simulavoto/docker-compose.yaml 
+WARN[0000] Using /opt/simulavoto/docker-compose.yml     
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - testing connection...
+simulavoto  | SSL: SSL failed, testing without SSL...
+simulavoto  | SSL: connected WITHOUT SSL
+simulavoto  | Final host: 72.60.255.204
+simulavoto  | 
+simulavoto  | Running database schema sync (db:push)...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 db:push
+simulavoto  | > drizzle-kit push
+simulavoto  | 
+simulavoto  | No config path provided, using default 'drizzle.config.ts'
+simulavoto  | Reading config file '/app/drizzle.config.ts'
+simulavoto  | Using 'pg' driver for database querying
+simulavoto  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[✓] Pulling schema from database...
+simulavoto  | [✓] Changes applied
+simulavoto  | npm notice
+simulavoto  | npm notice New major version of npm available! 10.8.2 -> 11.10.1
+simulavoto  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.10.1
+simulavoto  | npm notice To update run: npm install -g npm@11.10.1
+simulavoto  | npm notice
+simulavoto  | db:push completed successfully!
+simulavoto  | 
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | DATABASE_URL host: 72.60.255.204
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving external database hostname to IPv4...
+simulavoto  | SSL mode: auto (DATABASE_SSL=auto)
+simulavoto  | SSL: auto - trying with SSL first...
+simulavoto  | SSL: connection with SSL failed, trying without SSL...
+simulavoto  | SSL error: The server does not support SSL connections
+simulavoto  | SSL: connected successfully WITHOUT SSL
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test successful!
+simulavoto  | [Migration] 7 indexes missing, creating in background (server will start now)...
+simulavoto  | Registering routes...
+simulavoto  | [Startup] Checking for stuck import jobs from previous crash...
+simulavoto  | [Migration/BG] Creating index idx_tse_cv_nm_urna_upper...
+simulavoto  | [Startup] No stuck import jobs found.
+simulavoto  | [SessionStore] Session table ready
+simulavoto  | Routes registered successfully!
+simulavoto  | WebSocket server initialized on /ws/imports
+simulavoto  | WebSocket server initialized
+simulavoto  | 5:38:12 PM [express] serving on port 5000
+simulavoto  | Report scheduler started (checking every 5 minutes)
+simulavoto  | 5:38:13 PM [express] HEAD /api/health 200 in 20ms :: {"status":"healthy","timestamp":"2026-02-21T17:38:13.010Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":90}}
+simulavoto  | WebSocket client connected (user: 0e7a8a4d-6c7b-4abd-b5d9-d1dff97c7efd). Total clients: 1
+simulavoto  | [Migration/BG] Index idx_tse_cv_nm_urna_upper created.
+simulavoto  | [Migration/BG] Creating index idx_tse_cv_nm_cand_upper...
+simulavoto  | 5:38:43 PM [express] HEAD /api/health 200 in 7ms :: {"status":"healthy","timestamp":"2026-02-21T17:38:43.089Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":90}}
+simulavoto  | [Migration/BG] Index idx_tse_cv_nm_cand_upper created.
+simulavoto  | [Migration/BG] Creating index idx_tse_cv_partido_votos...
+simulavoto  | [Migration/BG] Index idx_tse_cv_partido_votos created.
+simulavoto  | [Migration/BG] Creating index idx_tse_pv_partido_legenda...
+simulavoto  | [Migration/BG] Index idx_tse_pv_partido_legenda created.
+simulavoto  | [Migration/BG] Creating index idx_tse_pv_ano_uf...
+simulavoto  | [Migration/BG] Index idx_tse_pv_ano_uf created.
+simulavoto  | [Migration/BG] Creating index idx_tse_cv_nm_candidato_trgm...
+simulavoto  | 5:39:13 PM [express] HEAD /api/health 200 in 35ms :: {"status":"healthy","timestamp":"2026-02-21T17:39:13.192Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":90}}
+simulavoto  | 5:39:43 PM [express] HEAD /api/health 200 in 31ms :: {"status":"healthy","timestamp":"2026-02-21T17:39:43.299Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":90}}
+simulavoto  | 5:40:13 PM [express] HEAD /api/health 200 in 31ms :: {"status":"healthy","timestamp":"2026-02-21T17:40:13.430Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":90}}
+simulavoto  | 5:40:40 PM [express] GET /api/scenarios 304 in 78ms :: [{"id":1,"name":"Eleição Geral 2026","description":null,"totalVoters":6854818,"validVotes":5649398,"availableSeats":22,"position":"deputado_federal","status":"draft","historicalYear":null,"historicalUf":null,"historicalMunicipio":null,"createdAt":"2026-02-16T15:41:38.462Z","updatedAt":"2026-02-16T15:41:38.462Z","createdBy":"0e7a8a4d-6c7b-4abd-b5d9-d1dff97c7efd"}]
+simulavoto  | 5:40:40 PM [express] GET /api/simulations/recent 304 in 85ms :: []
+simulavoto  | 5:40:40 PM [express] GET /api/sentiment/alerts/count 304 in 109ms :: {"unacknowledged":0}
+simulavoto  | 5:40:40 PM [express] GET /api/stats 304 in 117ms :: {"parties":32,"candidates":90,"scenarios":1,"simulations":0}
+simulavoto  | 5:40:40 PM [express] GET /api/sentiment/summary 304 in 111ms :: {"entities":[{"name":"Movimento Democrático Brasileiro","sentiment":0.25,"type":"party"},{"name":"Partido da Social Democracia Brasileira","sentiment":-0.2,"type":"party"},{"name":"Partido dos Trabalhadores","sentiment":0.06,"type":"party"},{"name":"Partido Liberal","sentiment":0.05,"type":"party"},{"name":"PROGRESSISTAS","sentiment":0,"type":"party"},{"name":"PASTOR AIRTON SILVA","sentiment":0,"type":"candidate"},{"name":"PASTOR EDIVAN","sentiment":0,"type":"candidate"},{"name":"Jose Airton","sentiment":0,"type":"candidate"}]}
+simulavoto  | 5:40:40 PM [express] GET /api/activity-trend 304 in 130ms :: [{"day":"Dom","simulacoes":0,"cenarios":0},{"day":"Seg","simulacoes":0,"cenarios":1},{"day":"Ter","simulacoes":0,"cenarios":0},{"day":"Qua","simulacoes":0,"cenarios":0},{"day":"Qui","simulacoes":0,"cenarios":0},{"day":"Sex","simulacoes":0,"cenarios":0},{"day":"Sáb","simulacoes":0,"cenarios":0}]
+simulavoto  | 5:40:42 PM [express] GET /api/reports 304 in 14ms :: []
+simulavoto  | 5:40:43 PM [express] GET /api/ai/suggestions 304 in 22ms :: []
+simulavoto  | 5:40:43 PM [express] GET /api/dashboards 304 in 442ms :: []
+simulavoto  | 5:40:43 PM [express] HEAD /api/health 200 in 34ms :: {"status":"healthy","timestamp":"2026-02-21T17:40:43.544Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":90}}
+simulavoto  | 5:40:46 PM [express] GET /api/analytics/election-years 304 in 3656ms :: [2022]
+simulavoto  | [getTopCandidates] Total rows in tse_candidate_votes: 9377797
+simulavoto  | [getTopCandidates] Filters: {"limit":20}, conditions count: 0
+simulavoto  | 5:40:50 PM [express] GET /api/analytics/election-types 304 in 7412ms :: ["Eleição Ordinária"]
+simulavoto  | 5:40:51 PM [express] GET /api/analytics/parties-list 304 in 8260ms :: [{"party":"AGIR","number":36},{"party":"AVANTE","number":70},{"party":"CIDADANIA","number":23},{"party":"DC","number":27},{"party":"MDB","number":15},{"party":"NOVO","number":30},{"party":"PATRIOTA","number":51},{"party":"PCB","number":21},{"party":"PC do B","number":65},{"party":"PCO","number":29},{"party":"PDT","number":12},{"party":"PL","number":22},{"party":"PMB","number":35},{"party":"PMN","number":33},{"party":"PODE","number":19},{"party":"PP","number":11},{"party":"PROS","number":90},{"party":"PRTB","number":28},{"party":"PSB","number":40},{"party":"PSC","number":20},{"party":"PSD","number":55},{"party":"PSDB","number":45},{"party":"PSOL","number":50},{"party":"PSTU","number":16},{"party":"PT","number":13},{"party":"PTB","number":14},{"party":"PV","number":43},{"party":"REDE","number":18},{"party":"REPUBLICANOS","number":10},{"party":"SOLIDARIEDADE","number":77},{"party":"UNIÃO","number":44},{"party":"UP","number":80}]
+simulavoto  | [getTopCandidates] Query returned 20 results
+simulavoto  | 5:40:59 PM [express] GET /api/analytics/top-candidates 304 in 16465ms :: [{"name":"JAIR MESSIAS BOLSONARO","nickname":"JAIR BOLSONARO","party":"PL","number":22,"state":"SP","position":"Presidente","votes":26456576},{"name":"TARCISIO GOMES DE FREITAS","nickname":"TARCÍSIO","party":"REPUBLICANOS","number":10,"state":"SP","position":"Governador","votes":23362638},{"name":"LUIZ INÁCIO LULA DA SILVA","nickname":"LULA","party":"PT","number":13,"state":"SP","position":"Presidente","votes":22009914},{"name":"FERNANDO HADDAD","nickname":"FERNANDO HADDAD","party":"PT","number":13,"state":"SP","position":"Governador","votes":19246510},{"name":"LUIZ INÁCIO LULA DA SILVA","nickname":"LULA","party":"PT","number":13,"state":"MG","position":"Presidente","votes":11993531},{"name":"LUIZ INÁCIO LULA DA SILVA","nickname":"LULA","party":"PT","number":13,"state":"BA","position":"Presidente","votes":11970896},{"name":"JAIR MESSIAS BOLSONARO","nickname":"JAIR BOLSONARO","party":"PL","number":22,"state":"MG","position":"Presidente","votes":11380574},{"name":"MARCOS CESAR PONTES","nickname":"ASTRONAUTA MARCOS PONTES","party":"PL","number":222,"state":"SP","position":"Senador","votes":10714913},{"name":"JAIR MESSIAS BOLSONARO","nickname":"JAIR BOLSONARO","party":"PL","number":22,"state":"RJ","position":"Presidente","votes":10235140},{"name":"JERÔNIMO RODRIGUES SOUZA","nickname":"JERÔNIMO","party":"PT","number":13,"state":"BA","position":"Governador","votes":8500294},{"name":"LUIZ INÁCIO LULA DA SILVA","nickname":"LULA","party":"PT","number":13,"state":"RJ","position":"Presidente","votes":8003360},{"name":"MÁRCIO LUIZ FRANÇA GOMES","nickname":"MÁRCIO FRANÇA","party":"PSB","number":400,"state":"SP","position":"Senador","votes":7822518},{"name":"JAIR MESSIAS BOLSONARO","nickname":"JAIR BOLSONARO","party":"PL","number":22,"state":"PR","position":"Presidente","votes":7787955},{"name":"LUIZ INÁCIO LULA DA SILVA","nickname":"LULA","party":"PT","number":13,"state":"CE","position":"Presidente","votes":7386246},{"name":"ANTONIO CARLOS PEIXOTO DE MAGALHÃES NETO","nickname":"ACM NETO","party":"UNIÃO","number":44,"state":"BA","position":"Governador","votes":7323734},{"name":"LUIZ INÁCIO LULA DA SILVA","nickname":"LULA","party":"PT","number":13,"state":"PE","position":"Presidente","votes":7199255},{"name":"JAIR MESSIAS BOLSONARO","nickname":"JAIR BOLSONARO","party":"PL","number":22,"state":"RS","position":"Presidente","votes":6978208},{"name":"ROMEU ZEMA NETO","nickname":"ZEMA","party":"NOVO","number":30,"state":"MG","position":"Governador","votes":6094136},{"name":"JAIR MESSIAS BOLSONARO","nickname":"JAIR BOLSONARO","party":"PL","number":22,"state":"SC","position":"Presidente","votes":5742036},{"name":"LUIZ INÁCIO LULA DA SILVA","nickname":"LULA","party":"PT","number":13,"state":"RS","position":"Presidente","votes":5698523}]
+simulavoto  | 5:40:59 PM [express] GET /api/imports/tse 304 in 12ms :: [{"id":6,"filename":"[PARTIDO] votacao_partido_munzona_2022.zip","fileSize":26012029,"status":"completed","stage":"completed","downloadedBytes":26012029,"totalRows":533446,"processedRows":533446,"skippedRows":3665,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_partido_munzona/votacao_partido_munzona_2022.zip","totalFileRows":537111,"validationStatus":"passed","validationMessage":"Validação OK: 533.446 registros verificados no banco","validatedAt":"2026-02-16T15:46:52.110Z","startedAt":"2026-02-16T15:28:48.181Z","completedAt":"2026-02-16T15:33:11.094Z","updatedAt":"2026-02-16T15:46:52.110Z","createdAt":"2026-02-16T15:28:37.573Z","createdBy":"0e7a8a4d-6c7b-4abd-b5d9-d1dff97c7efd"},{"id":5,"filename":"[DETALHE] detalhe_votacao_munzona_2022.zip","fileSize":4391215,"status":"completed","stage":"completed","downloadedBytes":4391215,"totalRows":39966,"processedRows":39966,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/detalhe_votacao_munzona/detalhe_votacao_munzona_2022.zip","totalFileRows":39966,"validationStatus":"passed","validationMessage":"Validação OK: 39.966 registros verificados no banco","validatedAt":"2026-02-16T15:30:04.037Z","startedAt":"2026-02-16T15:28:21.685Z","completedAt":"2026-02-16T15:28:48.174Z","updatedAt":"2026-02-16T15:30:04.037Z","createdAt":"2026-02-16T15:28:21.549Z","createdBy":"0e7a8a4d-6c7b-4abd-b5d9-d1dff97c7efd"},{"id":4,"filename":"[URL] votacao_candidato_munzona_2022.zip","fileSize":580858579,"status":"completed","stage":"completed","downloadedBytes":580858579,"totalRows":0,"processedRows":9377797,"skippedRows":0,"errorCount":0,"errorMessage":null,"electionYear":2022,"electionType":null,"uf":null,"cargoFilter":null,"sourceUrl":"https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_candidato_munzona/votacao_candidato_munzona_2022.zip","totalFileRows":9377797,"validationStatus":"passed","validationMessage":"Validação OK: 9.377.797 registros importados corretamente","validatedAt":"2026-02-13T20:23:23.967Z","startedAt":"2026-02-13T19:01:55.928Z","completedAt":"2026-02-13T20:23:23.967Z","updatedAt":"2026-02-13T20:23:23.967Z","createdAt":"2026-02-13T19:01:55.916Z","createdBy":"0e7a8a4d-6c7b-4abd-b5d9-d1dff97c7efd"}]
+simulavoto  | 5:41:01 PM [express] GET /api/analytics/states 304 in 18049ms :: ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"]
+simulavoto  | 5:41:05 PM [express] GET /api/notifications 304 in 35ms :: {"notifications":[],"unreadCount":0}
+simulavoto  | 5:41:05 PM [express] GET /api/analytics/positions 304 in 22793ms :: [{"code":1,"name":"Presidente","votes":236782072},{"code":3,"name":"Governador","votes":168773742},{"code":6,"name":"Deputado Federal","votes":106036172},{"code":7,"name":"Deputado Estadual","votes":100636376},{"code":5,"name":"Senador","votes":100128660},{"code":8,"name":"Deputado Distrital","votes":1597791}]
+simulavoto  | 5:41:13 PM [express] HEAD /api/health 200 in 17ms :: {"status":"healthy","timestamp":"2026-02-21T17:41:13.639Z","version":"1.0.0","database":"connected","stats":{"parties":32,"candidates":90}}
+

@@ -162,7 +162,7 @@ export default function InteractiveDashboard() {
     queryKey: ["/api/analytics/election-years"],
   });
 
-  const { data: positions } = useQuery<string[]>({
+  const { data: positions } = useQuery<{ code: number; name: string; votes: number }[]>({
     queryKey: ["/api/analytics/positions"],
   });
 
@@ -345,8 +345,8 @@ export default function InteractiveDashboard() {
             <SelectContent>
               <SelectItem value="all" data-testid="option-position-all">Todos os cargos</SelectItem>
               {positions?.map((pos) => (
-                <SelectItem key={pos} value={pos} data-testid={`option-position-${pos}`}>
-                  {pos}
+                <SelectItem key={pos.name} value={pos.name} data-testid={`option-position-${pos.name}`}>
+                  {pos.name}
                 </SelectItem>
               ))}
             </SelectContent>

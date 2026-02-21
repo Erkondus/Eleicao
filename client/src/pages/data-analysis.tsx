@@ -209,7 +209,7 @@ export default function DataAnalysis() {
     queryKey: [`/api/analytics/election-types${statesQuery}`],
   });
 
-  const { data: positions } = useQuery<string[]>({
+  const { data: positions } = useQuery<{ code: number; name: string; votes: number }[]>({
     queryKey: [`/api/analytics/positions${statesQuery}`],
   });
 
@@ -664,8 +664,8 @@ export default function DataAnalysis() {
                 <SelectContent>
                   <SelectItem value="all">Todos os cargos</SelectItem>
                   {(positions ?? []).map((pos) => (
-                    <SelectItem key={pos} value={pos}>
-                      {pos}
+                    <SelectItem key={pos.name} value={pos.name}>
+                      {pos.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

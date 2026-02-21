@@ -87,7 +87,7 @@ export default function SemanticSearchPage() {
     queryKey: ["/api/analytics/parties-list"],
   });
 
-  const { data: availablePositions } = useQuery<string[]>({
+  const { data: availablePositions } = useQuery<{ code: number; name: string; votes: number }[]>({
     queryKey: ["/api/analytics/positions"],
   });
 
@@ -292,8 +292,8 @@ export default function SemanticSearchPage() {
                       <SelectContent>
                         <SelectItem value="" data-testid="option-position-all">Todos</SelectItem>
                         {availablePositions?.map((position) => (
-                          <SelectItem key={position} value={position} data-testid={`option-position-${position}`}>
-                            {position}
+                          <SelectItem key={position.name} value={position.name} data-testid={`option-position-${position.name}`}>
+                            {position.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
