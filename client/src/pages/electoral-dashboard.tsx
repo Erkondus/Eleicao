@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -158,11 +158,29 @@ export default function ElectoralDashboard() {
     },
   });
 
-  const yearQuery = selectedYear !== "all" ? `?year=${selectedYear}` : "";
+  const [selectedPosition, setSelectedPosition] = useState<string>("");
 
   const { data: years } = useQuery<number[]>({
     queryKey: ["/api/analytics/election-years"],
   });
+
+  const { data: positions } = useQuery<{ code: number; name: string; votes: number }[]>({
+    queryKey: ["/api/analytics/positions"],
+  });
+
+  useEffect(() => {
+    if (positions && positions.length > 0 && !selectedPosition) {
+      setSelectedPosition(positions[0].name);
+    }
+  }, [positions]);
+
+  const yearQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (selectedYear !== "all") params.append("year", selectedYear);
+    if (selectedPosition) params.append("position", selectedPosition);
+    const str = params.toString();
+    return str ? `?${str}` : "";
+  }, [selectedYear, selectedPosition]);
 
   const { data: summary, isLoading: summaryLoading } = useQuery<{
     totalVotes: number;
@@ -171,6 +189,7 @@ export default function ElectoralDashboard() {
     totalMunicipalities: number;
   }>({
     queryKey: [`/api/analytics/summary${yearQuery}`],
+    enabled: !!selectedPosition,
   });
 
   const { data: votesByParty, isLoading: partyLoading } = useQuery<{
@@ -180,6 +199,7 @@ export default function ElectoralDashboard() {
     candidateCount: number;
   }[]>({
     queryKey: [`/api/analytics/votes-by-party${yearQuery}`],
+    enabled: !!selectedPosition,
   });
 
   const { data: topCandidates, isLoading: candidatesLoading } = useQuery<{
@@ -192,6 +212,7 @@ export default function ElectoralDashboard() {
     votes: number;
   }[]>({
     queryKey: [`/api/analytics/top-candidates${yearQuery}`],
+    enabled: !!selectedPosition,
   });
 
   const { data: votesByState, isLoading: stateLoading } = useQuery<{
@@ -201,6 +222,7 @@ export default function ElectoralDashboard() {
     partyCount: number;
   }[]>({
     queryKey: [`/api/analytics/votes-by-state${yearQuery}`],
+    enabled: !!selectedPosition,
   });
 
   const { data: importJobs, isLoading: importsLoading, refetch: refetchImports } = useQuery<TseImportJob[]>({

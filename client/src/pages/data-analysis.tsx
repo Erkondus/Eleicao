@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -212,6 +212,12 @@ export default function DataAnalysis() {
   const { data: positions } = useQuery<{ code: number; name: string; votes: number }[]>({
     queryKey: [`/api/analytics/positions${statesQuery}`],
   });
+
+  useEffect(() => {
+    if (positions && positions.length > 0 && selectedPosition === "all") {
+      setSelectedPosition(positions[0].name);
+    }
+  }, [positions]);
 
   const { data: partiesList } = useQuery<{ party: string; number: number }[]>({
     queryKey: [`/api/analytics/parties-list${statesQuery}`],

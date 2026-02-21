@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -166,20 +166,28 @@ export default function InteractiveDashboard() {
     queryKey: ["/api/analytics/positions"],
   });
 
+  useEffect(() => {
+    if (positions && positions.length > 0 && !context.position) {
+      setContext(prev => ({ ...prev, position: positions[0].name }));
+    }
+  }, [positions]);
+
   const { data: summary, isLoading: summaryLoading } = useQuery<{
     totalVotes: number;
     totalCandidates: number;
     totalParties: number;
     totalMunicipalities: number;
   }>({
-    queryKey: ["/api/analytics/summary", context.year, context.state],
+    queryKey: ["/api/analytics/summary", context.year, context.state, context.position],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (context.year) params.append("year", String(context.year));
       if (context.state) params.append("uf", context.state);
+      if (context.position) params.append("position", context.position);
       const res = await fetch(`/api/analytics/summary?${params}`);
       return res.json();
     },
+    enabled: !!context.position,
   });
 
   const { data: votesByParty, isLoading: partyLoading } = useQuery<PartyVotes[]>({
@@ -196,27 +204,29 @@ export default function InteractiveDashboard() {
   });
 
   const { data: votesByState, isLoading: stateLoading } = useQuery<StateVotes[]>({
-    queryKey: ["/api/analytics/votes-by-state", context.year],
+    queryKey: ["/api/analytics/votes-by-state", context.year, context.position],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (context.year) params.append("year", String(context.year));
+      if (context.position) params.append("position", context.position);
       const res = await fetch(`/api/analytics/votes-by-state?${params}`);
       return res.json();
     },
-    enabled: !context.state,
+    enabled: !context.state && !!context.position,
   });
 
   const { data: votesByMunicipality, isLoading: municipalityLoading } = useQuery<MunicipalityVotes[]>({
-    queryKey: ["/api/analytics/votes-by-municipality", context.year, context.state],
+    queryKey: ["/api/analytics/votes-by-municipality", context.year, context.state, context.position],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (context.year) params.append("year", String(context.year));
       if (context.state) params.append("uf", context.state);
+      if (context.position) params.append("position", context.position);
       params.append("limit", "20");
       const res = await fetch(`/api/analytics/votes-by-municipality?${params}`);
       return res.json();
     },
-    enabled: !!context.state,
+    enabled: !!context.state && !!context.position,
   });
 
   const { data: candidatesByParty, isLoading: candidatesLoading } = useQuery<CandidateDetails[]>({

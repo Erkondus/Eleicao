@@ -1776,6 +1776,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Analytics methods
+  private defaultPositionCache: Map<string, { position: string; expiresAt: number }> = new Map();
+
+  private async resolveDefaultPosition(year?: number): Promise<string | undefined> {
+    const cacheKey = `default_pos_${year ?? 'all'}`;
+    const cached = this.defaultPositionCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.position;
+
+    const conditions: SQL[] = [];
+    if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [result] = await db
+      .select({
+        position: tseCandidateVotes.dsCargo,
+        total: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)`,
+      })
+      .from(tseCandidateVotes)
+      .where(whereClause)
+      .groupBy(tseCandidateVotes.dsCargo)
+      .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
+      .limit(1);
+
+    const position = result?.position ?? undefined;
+    if (position) {
+      this.defaultPositionCache.set(cacheKey, { position, expiresAt: Date.now() + 30 * 60 * 1000 });
+    }
+    return position;
+  }
+
   private buildCandidateVoteConditions(filters: {
     year?: number; uf?: string; electionType?: string; position?: string;
     party?: string; municipality?: string; minVotes?: number; maxVotes?: number;
@@ -1802,6 +1831,9 @@ export class DatabaseStorage implements IStorage {
     totalParties: number;
     totalMunicipalities: number;
   }> {
+    if (!filters.position) {
+      filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
+    }
     const conditions = this.buildCandidateVoteConditions(filters);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -1858,6 +1890,9 @@ export class DatabaseStorage implements IStorage {
     votesTotal: number;
     candidateCount: number;
   }[]> {
+    if (!filters.position) {
+      filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
+    }
     const cacheKey = `votes_party_${filters.year ?? 'all'}_${filters.uf ?? 'all'}_${filters.electionType ?? 'all'}_${filters.position ?? 'all'}_${filters.party ?? 'all'}_${filters.municipality ?? 'all'}_${filters.limit ?? 20}`;
     const cached = this.analyticsCache.get<any[]>(cacheKey);
     if (cached) return cached;
@@ -1934,15 +1969,14 @@ export class DatabaseStorage implements IStorage {
     position: string | null;
     votes: number;
   }[]> {
+    if (!filters.position) {
+      filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
+    }
     const cacheKey = `top_candidates_${filters.year ?? 'all'}_${filters.uf ?? 'all'}_${filters.electionType ?? 'all'}_${filters.position ?? 'all'}_${filters.party ?? 'all'}_${filters.municipality ?? 'all'}_${filters.limit ?? 20}`;
     const cached = this.analyticsCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
-    const [countResult] = await db.select({ count: sql<number>`COUNT(*)` }).from(tseCandidateVotes);
-    console.log(`[getTopCandidates] Total rows in tse_candidate_votes: ${countResult?.count}`);
-
     const conditions = this.buildCandidateVoteConditions(filters);
-    console.log(`[getTopCandidates] Filters: ${JSON.stringify(filters)}, conditions count: ${conditions.length}`);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const results = await db
@@ -1992,6 +2026,9 @@ export class DatabaseStorage implements IStorage {
     candidateCount: number;
     partyCount: number;
   }[]> {
+    if (!filters.position) {
+      filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
+    }
     const conditions: SQL[] = [
       sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
       sql`${tseCandidateVotes.sgUf} != 'ZZ'`
@@ -2033,8 +2070,11 @@ export class DatabaseStorage implements IStorage {
     candidateCount: number;
     partyCount: number;
   }[]> {
+    if (!filters.position) {
+      filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
+    }
     const conditions: SQL[] = [
-      sql`${tseCandidateVotes.sgUf} != 'ZZ'` // Exclude exterior votes
+      sql`${tseCandidateVotes.sgUf} != 'ZZ'`
     ];
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
@@ -2380,6 +2420,9 @@ export class DatabaseStorage implements IStorage {
       avgVotes: number;
     };
   }> {
+    if (!filters.position) {
+      filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
+    }
     const conditions: any[] = [];
     if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
     if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
