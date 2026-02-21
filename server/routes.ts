@@ -6504,20 +6504,7 @@ Sugira 3-5 visualizações e análises relevantes baseadas nestes dados.`
     }
   });
 
-  // Advanced filter endpoints
-  app.get("/api/analytics/positions", requireAuth, async (req, res) => {
-    try {
-      const { year, uf } = req.query;
-      const positions = await storage.getAvailablePositions({
-        year: year ? parseInt(year as string) : undefined,
-        uf: uf as string | undefined,
-      });
-      res.json(positions);
-    } catch (error) {
-      console.error("Positions error:", error);
-      res.status(500).json({ error: "Failed to fetch positions" });
-    }
-  });
+  // Advanced filter endpoints (positions route already registered above)
 
   app.get("/api/analytics/parties-list", requireAuth, async (req, res) => {
     try {

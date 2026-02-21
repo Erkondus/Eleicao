@@ -2076,13 +2076,20 @@ export class DatabaseStorage implements IStorage {
     if (cached) return cached;
 
     const results = await db
-      .selectDistinct({ year: tseCandidateVotes.anoEleicao })
-      .from(tseCandidateVotes)
-      .where(sql`${tseCandidateVotes.anoEleicao} IS NOT NULL`)
-      .orderBy(sql`${tseCandidateVotes.anoEleicao} DESC`);
+      .selectDistinct({ year: tseElectoralStatistics.anoEleicao })
+      .from(tseElectoralStatistics)
+      .orderBy(sql`${tseElectoralStatistics.anoEleicao} DESC`);
 
-    const data = results.map((r) => r.year!).filter(Boolean);
-    this.analyticsCache.set(cacheKey, data, 10 * 60 * 1000);
+    let data = results.map((r) => r.year!).filter(Boolean);
+    if (data.length === 0) {
+      const fallback = await db
+        .selectDistinct({ year: tseCandidateVotes.anoEleicao })
+        .from(tseCandidateVotes)
+        .where(sql`${tseCandidateVotes.anoEleicao} IS NOT NULL`)
+        .orderBy(sql`${tseCandidateVotes.anoEleicao} DESC`);
+      data = fallback.map((r) => r.year!).filter(Boolean);
+    }
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
     return data;
   }
 
@@ -2092,19 +2099,32 @@ export class DatabaseStorage implements IStorage {
     if (cached) return cached;
 
     const conditions: any[] = [
-      sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
-      sql`${tseCandidateVotes.sgUf} != 'ZZ'`
+      sql`${tseElectoralStatistics.sgUf} IS NOT NULL`,
+      sql`${tseElectoralStatistics.sgUf} != 'ZZ'`
     ];
-    if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
+    if (year) conditions.push(eq(tseElectoralStatistics.anoEleicao, year));
 
     const results = await db
-      .selectDistinct({ state: tseCandidateVotes.sgUf })
-      .from(tseCandidateVotes)
+      .selectDistinct({ state: tseElectoralStatistics.sgUf })
+      .from(tseElectoralStatistics)
       .where(and(...conditions))
-      .orderBy(tseCandidateVotes.sgUf);
+      .orderBy(tseElectoralStatistics.sgUf);
 
-    const data = results.map((r) => r.state!).filter(Boolean);
-    this.analyticsCache.set(cacheKey, data, 10 * 60 * 1000);
+    let data = results.map((r) => r.state!).filter(Boolean);
+    if (data.length === 0) {
+      const fallbackCond: any[] = [
+        sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
+        sql`${tseCandidateVotes.sgUf} != 'ZZ'`
+      ];
+      if (year) fallbackCond.push(eq(tseCandidateVotes.anoEleicao, year));
+      const fallback = await db
+        .selectDistinct({ state: tseCandidateVotes.sgUf })
+        .from(tseCandidateVotes)
+        .where(and(...fallbackCond))
+        .orderBy(tseCandidateVotes.sgUf);
+      data = fallback.map((r) => r.state!).filter(Boolean);
+    }
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
     return data;
   }
 
@@ -2113,17 +2133,27 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<string[]>(cacheKey);
     if (cached) return cached;
 
-    const conditions: any[] = [sql`${tseCandidateVotes.nmTipoEleicao} IS NOT NULL`];
-    if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
+    const conditions: any[] = [sql`${tseElectoralStatistics.nmTipoEleicao} IS NOT NULL`];
+    if (year) conditions.push(eq(tseElectoralStatistics.anoEleicao, year));
 
     const results = await db
-      .selectDistinct({ type: tseCandidateVotes.nmTipoEleicao })
-      .from(tseCandidateVotes)
+      .selectDistinct({ type: tseElectoralStatistics.nmTipoEleicao })
+      .from(tseElectoralStatistics)
       .where(and(...conditions))
-      .orderBy(tseCandidateVotes.nmTipoEleicao);
+      .orderBy(tseElectoralStatistics.nmTipoEleicao);
 
-    const data = results.map((r) => r.type!).filter(Boolean);
-    this.analyticsCache.set(cacheKey, data, 10 * 60 * 1000);
+    let data = results.map((r) => r.type!).filter(Boolean);
+    if (data.length === 0) {
+      const fallbackCond: any[] = [sql`${tseCandidateVotes.nmTipoEleicao} IS NOT NULL`];
+      if (year) fallbackCond.push(eq(tseCandidateVotes.anoEleicao, year));
+      const fallback = await db
+        .selectDistinct({ type: tseCandidateVotes.nmTipoEleicao })
+        .from(tseCandidateVotes)
+        .where(and(...fallbackCond))
+        .orderBy(tseCandidateVotes.nmTipoEleicao);
+      data = fallback.map((r) => r.type!).filter(Boolean);
+    }
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
     return data;
   }
 
@@ -2132,18 +2162,29 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<string[]>(cacheKey);
     if (cached) return cached;
 
-    const conditions: any[] = [sql`${tseCandidateVotes.dsCargo} IS NOT NULL`];
-    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
-    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    const conditions: any[] = [sql`${tseElectoralStatistics.dsCargo} IS NOT NULL`];
+    if (filters.year) conditions.push(eq(tseElectoralStatistics.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tseElectoralStatistics.sgUf, filters.uf));
 
     const results = await db
-      .selectDistinct({ position: tseCandidateVotes.dsCargo })
-      .from(tseCandidateVotes)
+      .selectDistinct({ position: tseElectoralStatistics.dsCargo })
+      .from(tseElectoralStatistics)
       .where(and(...conditions))
-      .orderBy(tseCandidateVotes.dsCargo);
+      .orderBy(tseElectoralStatistics.dsCargo);
 
-    const data = results.map((r) => r.position!).filter(Boolean);
-    this.analyticsCache.set(cacheKey, data, 10 * 60 * 1000);
+    let data = results.map((r) => r.position!).filter(Boolean);
+    if (data.length === 0) {
+      const fallbackCond: any[] = [sql`${tseCandidateVotes.dsCargo} IS NOT NULL`];
+      if (filters.year) fallbackCond.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+      if (filters.uf) fallbackCond.push(eq(tseCandidateVotes.sgUf, filters.uf));
+      const fallback = await db
+        .selectDistinct({ position: tseCandidateVotes.dsCargo })
+        .from(tseCandidateVotes)
+        .where(and(...fallbackCond))
+        .orderBy(tseCandidateVotes.dsCargo);
+      data = fallback.map((r) => r.position!).filter(Boolean);
+    }
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
     return data;
   }
 
@@ -2152,21 +2193,32 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<{ party: string; number: number }[]>(cacheKey);
     if (cached) return cached;
 
-    const conditions: any[] = [sql`${tseCandidateVotes.sgPartido} IS NOT NULL`];
-    if (filters.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
-    if (filters.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    const conditions: any[] = [sql`${tsePartyVotes.sgPartido} IS NOT NULL`];
+    if (filters.year) conditions.push(eq(tsePartyVotes.anoEleicao, filters.year));
+    if (filters.uf) conditions.push(eq(tsePartyVotes.sgUf, filters.uf));
 
     const results = await db
       .selectDistinct({ 
-        party: tseCandidateVotes.sgPartido,
-        number: tseCandidateVotes.nrPartido
+        party: tsePartyVotes.sgPartido,
+        number: tsePartyVotes.nrPartido
       })
-      .from(tseCandidateVotes)
+      .from(tsePartyVotes)
       .where(and(...conditions))
-      .orderBy(tseCandidateVotes.sgPartido);
+      .orderBy(tsePartyVotes.sgPartido);
 
-    const data = results.filter(r => r.party).map(r => ({ party: r.party!, number: r.number || 0 }));
-    this.analyticsCache.set(cacheKey, data, 10 * 60 * 1000);
+    let data = results.filter(r => r.party).map(r => ({ party: r.party!, number: r.number || 0 }));
+    if (data.length === 0) {
+      const fallbackCond: any[] = [sql`${tseCandidateVotes.sgPartido} IS NOT NULL`];
+      if (filters.year) fallbackCond.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+      if (filters.uf) fallbackCond.push(eq(tseCandidateVotes.sgUf, filters.uf));
+      const fallback = await db
+        .selectDistinct({ party: tseCandidateVotes.sgPartido, number: tseCandidateVotes.nrPartido })
+        .from(tseCandidateVotes)
+        .where(and(...fallbackCond))
+        .orderBy(tseCandidateVotes.sgPartido);
+      data = fallback.filter(r => r.party).map(r => ({ party: r.party!, number: r.number || 0 }));
+    }
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
     return data;
   }
 
@@ -3256,24 +3308,38 @@ export class DatabaseStorage implements IStorage {
     if (cached) return cached;
 
     const conditions: SQL[] = [];
-    if (filters?.year) conditions.push(eq(tseCandidateVotes.anoEleicao, filters.year));
-    if (filters?.uf) conditions.push(eq(tseCandidateVotes.sgUf, filters.uf));
+    if (filters?.year) conditions.push(eq(tseElectoralStatistics.anoEleicao, filters.year));
+    if (filters?.uf) conditions.push(eq(tseElectoralStatistics.sgUf, filters.uf));
 
     const result = await db.select({
-      code: tseCandidateVotes.cdCargo,
-      name: tseCandidateVotes.dsCargo,
-      votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)::int`,
-    }).from(tseCandidateVotes)
+      code: tseElectoralStatistics.cdCargo,
+      name: tseElectoralStatistics.dsCargo,
+      votes: sql<number>`COALESCE(SUM(${tseElectoralStatistics.qtVotosNominaisValidos}), 0)::bigint`,
+    }).from(tseElectoralStatistics)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .groupBy(tseCandidateVotes.cdCargo, tseCandidateVotes.dsCargo)
-      .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0) DESC`);
+      .groupBy(tseElectoralStatistics.cdCargo, tseElectoralStatistics.dsCargo)
+      .orderBy(sql`COALESCE(SUM(${tseElectoralStatistics.qtVotosNominaisValidos}), 0) DESC`);
 
-    const data = result.map(r => ({
+    let data = result.map(r => ({
       code: r.code || 0,
       name: r.name || "N/A",
-      votes: r.votes,
+      votes: Number(r.votes),
     }));
-    this.analyticsCache.set(cacheKey, data, 5 * 60 * 1000);
+    if (data.length === 0) {
+      const fallbackCond: SQL[] = [];
+      if (filters?.year) fallbackCond.push(eq(tseCandidateVotes.anoEleicao, filters.year));
+      if (filters?.uf) fallbackCond.push(eq(tseCandidateVotes.sgUf, filters.uf));
+      const fallback = await db.select({
+        code: tseCandidateVotes.cdCargo,
+        name: tseCandidateVotes.dsCargo,
+        votes: sql<number>`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0)::int`,
+      }).from(tseCandidateVotes)
+        .where(fallbackCond.length > 0 ? and(...fallbackCond) : undefined)
+        .groupBy(tseCandidateVotes.cdCargo, tseCandidateVotes.dsCargo)
+        .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0) DESC`);
+      data = fallback.map(r => ({ code: r.code || 0, name: r.name || "N/A", votes: Number(r.votes) }));
+    }
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
     return data;
   }
 
