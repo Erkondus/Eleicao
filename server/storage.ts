@@ -48,6 +48,9 @@ import {
   type AiKpiGoal, type InsertAiKpiGoal, aiKpiGoals,
   type CampaignNotification, type InsertCampaignNotification, campaignNotifications,
   campaignInsightSessions,
+  summaryPartyVotes,
+  summaryCandidateVotes,
+  summaryStateVotes,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -1897,6 +1900,47 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
+    let data: { party: string; partyNumber: number | null; votes: number; votesNominais: number; votesLegenda: number; votesTotal: number; candidateCount: number }[];
+
+    if (!filters.municipality) {
+      const conditions: SQL[] = [];
+      if (filters.year) conditions.push(eq(summaryPartyVotes.anoEleicao, filters.year));
+      if (filters.uf) conditions.push(eq(summaryPartyVotes.sgUf, filters.uf));
+      if (filters.position) conditions.push(eq(summaryPartyVotes.dsCargo, filters.position));
+      if (filters.party) conditions.push(eq(summaryPartyVotes.sgPartido, filters.party));
+      if (filters.electionType) conditions.push(eq(summaryPartyVotes.nmTipoEleicao, filters.electionType));
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const results = await db
+        .select({
+          party: summaryPartyVotes.sgPartido,
+          partyNumber: summaryPartyVotes.nrPartido,
+          votesNominais: sql<number>`COALESCE(SUM(${summaryPartyVotes.totalVotosNominais}), 0)`,
+          votesLegenda: sql<number>`COALESCE(SUM(${summaryPartyVotes.totalVotosLegenda}), 0)`,
+          votesTotal: sql<number>`COALESCE(SUM(${summaryPartyVotes.totalVotosValidos}), 0)`,
+          candidateCount: sql<number>`COALESCE(SUM(${summaryPartyVotes.totalCandidatos}), 0)`,
+        })
+        .from(summaryPartyVotes)
+        .where(whereClause)
+        .groupBy(summaryPartyVotes.sgPartido, summaryPartyVotes.nrPartido)
+        .orderBy(sql`SUM(${summaryPartyVotes.totalVotosValidos}) DESC`)
+        .limit(filters.limit ?? 20);
+
+      if (results.length > 0) {
+        data = results.map((r) => ({
+          party: r.party || "N/A",
+          partyNumber: r.partyNumber,
+          votes: Number(r.votesTotal),
+          votesNominais: Number(r.votesNominais),
+          votesLegenda: Number(r.votesLegenda),
+          votesTotal: Number(r.votesTotal),
+          candidateCount: Number(r.candidateCount),
+        }));
+        this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
+        return data;
+      }
+    }
+
     const conditions = this.buildCandidateVoteConditions(filters);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -1936,7 +1980,7 @@ export class DatabaseStorage implements IStorage {
       legendMap.set(lr.party, Number(lr.votesLegenda));
     }
 
-    const data = nominaisResults.map((r) => {
+    data = nominaisResults.map((r) => {
       const nominais = Number(r.votesNominais);
       const legenda = legendMap.get(r.party || "") ?? 0;
       const total = nominais + legenda;
@@ -1976,6 +2020,53 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
+    if (!filters.municipality) {
+      const conditions: SQL[] = [];
+      if (filters.year) conditions.push(eq(summaryCandidateVotes.anoEleicao, filters.year));
+      if (filters.uf) conditions.push(eq(summaryCandidateVotes.sgUf, filters.uf));
+      if (filters.position) conditions.push(eq(summaryCandidateVotes.dsCargo, filters.position));
+      if (filters.party) conditions.push(eq(summaryCandidateVotes.sgPartido, filters.party));
+      if (filters.electionType) conditions.push(eq(summaryCandidateVotes.nmTipoEleicao, filters.electionType));
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const results = await db
+        .select({
+          name: summaryCandidateVotes.nmCandidato,
+          nickname: summaryCandidateVotes.nmUrnaCandidato,
+          party: summaryCandidateVotes.sgPartido,
+          number: summaryCandidateVotes.nrCandidato,
+          state: summaryCandidateVotes.sgUf,
+          position: summaryCandidateVotes.dsCargo,
+          votes: sql<number>`COALESCE(SUM(${summaryCandidateVotes.totalVotosNominais}), 0)`,
+        })
+        .from(summaryCandidateVotes)
+        .where(whereClause)
+        .groupBy(
+          summaryCandidateVotes.nmCandidato,
+          summaryCandidateVotes.nmUrnaCandidato,
+          summaryCandidateVotes.sgPartido,
+          summaryCandidateVotes.nrCandidato,
+          summaryCandidateVotes.sgUf,
+          summaryCandidateVotes.dsCargo
+        )
+        .orderBy(sql`SUM(${summaryCandidateVotes.totalVotosNominais}) DESC`)
+        .limit(filters.limit ?? 20);
+
+      if (results.length > 0) {
+        const data = results.map((r) => ({
+          name: r.name || "N/A",
+          nickname: r.nickname,
+          party: r.party,
+          number: r.number,
+          state: r.state,
+          position: r.position,
+          votes: Number(r.votes),
+        }));
+        this.analyticsCache.set(cacheKey, data, 5 * 60 * 1000);
+        return data;
+      }
+    }
+
     const conditions = this.buildCandidateVoteConditions(filters);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -2002,8 +2093,6 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
       .limit(filters.limit ?? 20);
 
-    console.log(`[getTopCandidates] Query returned ${results.length} results`);
-
     const data = results.map((r) => ({
       name: r.name || "N/A",
       nickname: r.nickname,
@@ -2029,6 +2118,37 @@ export class DatabaseStorage implements IStorage {
     if (!filters.position) {
       filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
     }
+
+    if (!filters.municipality && !filters.party) {
+      const conditions: SQL[] = [];
+      if (filters.year) conditions.push(eq(summaryStateVotes.anoEleicao, filters.year));
+      if (filters.uf) conditions.push(eq(summaryStateVotes.sgUf, filters.uf));
+      if (filters.position) conditions.push(eq(summaryStateVotes.dsCargo, filters.position));
+      if (filters.electionType) conditions.push(eq(summaryStateVotes.nmTipoEleicao, filters.electionType));
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const results = await db
+        .select({
+          state: summaryStateVotes.sgUf,
+          votes: sql<number>`COALESCE(SUM(${summaryStateVotes.totalVotos}), 0)`,
+          candidateCount: sql<number>`COALESCE(SUM(${summaryStateVotes.totalCandidatos}), 0)`,
+          partyCount: sql<number>`COALESCE(SUM(${summaryStateVotes.totalPartidos}), 0)`,
+        })
+        .from(summaryStateVotes)
+        .where(whereClause)
+        .groupBy(summaryStateVotes.sgUf)
+        .orderBy(sql`SUM(${summaryStateVotes.totalVotos}) DESC`);
+
+      if (results.length > 0) {
+        return results.map((r) => ({
+          state: r.state || "N/A",
+          votes: Number(r.votes),
+          candidateCount: Number(r.candidateCount),
+          partyCount: Number(r.partyCount),
+        }));
+      }
+    }
+
     const conditions: SQL[] = [
       sql`${tseCandidateVotes.sgUf} IS NOT NULL`,
       sql`${tseCandidateVotes.sgUf} != 'ZZ'`
@@ -2876,8 +2996,48 @@ export class DatabaseStorage implements IStorage {
     totalVotes: number;
     candidateCount: number;
   }[]> {
+    const summaryConditions: SQL[] = [];
+    if (filters.years.length > 0) {
+      summaryConditions.push(sql`${summaryPartyVotes.anoEleicao} = ANY(${filters.years})`);
+    }
+    if (filters.position) {
+      summaryConditions.push(eq(summaryPartyVotes.dsCargo, filters.position));
+    }
+    if (filters.state) {
+      summaryConditions.push(eq(summaryPartyVotes.sgUf, filters.state));
+    }
+
+    const summaryResult = await db
+      .select({
+        year: summaryPartyVotes.anoEleicao,
+        party: summaryPartyVotes.sgPartido,
+        state: summaryPartyVotes.sgUf,
+        position: summaryPartyVotes.dsCargo,
+        totalVotes: sql<number>`SUM(${summaryPartyVotes.totalVotosNominais})::int`,
+        candidateCount: sql<number>`SUM(${summaryPartyVotes.totalCandidatos})::int`,
+      })
+      .from(summaryPartyVotes)
+      .where(summaryConditions.length > 0 ? and(...summaryConditions) : undefined)
+      .groupBy(
+        summaryPartyVotes.anoEleicao,
+        summaryPartyVotes.sgPartido,
+        summaryPartyVotes.sgUf,
+        summaryPartyVotes.dsCargo
+      )
+      .orderBy(summaryPartyVotes.anoEleicao, desc(sql`SUM(${summaryPartyVotes.totalVotosNominais})`));
+
+    if (summaryResult.length > 0) {
+      return summaryResult.map(r => ({
+        year: r.year || 0,
+        party: r.party || "",
+        state: r.state,
+        position: r.position,
+        totalVotes: r.totalVotes,
+        candidateCount: r.candidateCount,
+      }));
+    }
+
     const conditions: SQL[] = [];
-    
     if (filters.years.length > 0) {
       conditions.push(sql`${tseCandidateVotes.anoEleicao} = ANY(${filters.years})`);
     }

@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { requireAuth, logAudit } from "./shared";
+import { requireAuth, requireRole, logAudit } from "./shared";
 import { storage } from "../storage";
+import { refreshAllSummaries } from "../summary-refresh";
 
 const router = Router();
 
@@ -373,6 +374,17 @@ router.get("/api/analytics/drill-down/votes-by-position", requireAuth, async (re
   } catch (error) {
     console.error("Votes by position error:", error);
     res.status(500).json({ error: "Failed to fetch votes by position" });
+  }
+});
+
+router.post("/api/analytics/refresh-summaries", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const result = await refreshAllSummaries();
+    await logAudit(req, "refresh", "summary_tables", "all", { tables: result.tables, duration: result.duration });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Summary refresh error:", error);
+    res.status(500).json({ error: "Failed to refresh summary tables" });
   }
 });
 

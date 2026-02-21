@@ -1,8 +1,5 @@
-import OpenAI from "openai";
 import { z } from "zod";
 import { storage } from "./storage";
-
-const openai = new OpenAI();
 
 // Zod schema for AI projection report response validation
 const aiProjectionResponseSchema = z.object({
@@ -321,56 +318,22 @@ export async function predictVoterTurnout(filters: {
 
   const votesByState = filters.uf ? [] : await storage.getVotesByState({ year: availableYears[0] });
 
-  const prompt = `Você é um especialista em análise eleitoral brasileira e previsão de comparecimento eleitoral.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e recomendações devem ser em português. Nunca use inglês.
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-DADOS HISTÓRICOS DE VOTAÇÃO:
-${historicalData.map(d => `Ano ${d.year}: ${d.totalVotes.toLocaleString("pt-BR")} votos totais, ${d.candidates} candidatos`).join("\n")}
+  const userPrompt = `Preveja comparecimento eleitoral baseado em dados históricos.
+Histórico: ${historicalData.map(d => `${d.year}:${d.totalVotes}votos/${d.candidates}cand`).join(" | ")}
+UF=${filters.uf || "Nacional"} Tipo=${filters.electionType || "Todos"} Alvo=${filters.targetYear || availableYears[0] + 4}
+${votesByState.length > 0 ? `Estados: ${votesByState.slice(0, 10).map(s => `${s.state}:${s.votes}`).join(",")}` : ""}
 
-Filtros aplicados: UF=${filters.uf || "Nacional"}, Tipo=${filters.electionType || "Todos"}
-Anos disponíveis: ${availableYears.join(", ")}
-Ano alvo para previsão: ${filters.targetYear || availableYears[0] + 4}
+JSON: {"predictedTurnout":0-100,"confidence":0-1,"factors":[{"factor":"","impact":"positive|negative|neutral","weight":0-1,"description":""}],"historicalComparison":[{"year":n,"turnout":n,"trend":"up|down|stable"}],"recommendations":[""],"methodology":""}`;
 
-${votesByState.length > 0 ? `DISTRIBUIÇÃO POR ESTADO (último ano):
-${votesByState.slice(0, 10).map(s => `${s.state}: ${s.votes.toLocaleString("pt-BR")} votos`).join("\n")}` : ""}
-
-Analise os padrões históricos e forneça uma previsão de comparecimento eleitoral.
-
-Responda em JSON com a estrutura exata:
-{
-  "predictedTurnout": número_percentual_0_a_100,
-  "confidence": número_0_a_1,
-  "factors": [
-    {
-      "factor": "nome do fator",
-      "impact": "positive" | "negative" | "neutral",
-      "weight": número_0_a_1,
-      "description": "descrição do impacto"
-    }
-  ],
-  "historicalComparison": [
-    {
-      "year": ano,
-      "turnout": percentual,
-      "trend": "up" | "down" | "stable"
-    }
-  ],
-  "recommendations": ["recomendação 1", "recomendação 2"],
-  "methodology": "breve descrição da metodologia usada"
-}`;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+  const { data: prediction } = await cachedAiCall<Record<string, any>>({
+    model: "standard",
+    systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
+    userPrompt,
+    maxTokens: 1500,
   });
 
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  const prediction = JSON.parse(content);
   prediction.generatedAt = new Date().toISOString();
   
   return prediction as TurnoutPrediction;
@@ -460,75 +423,22 @@ export async function predictCandidateSuccess(filters: {
       ).slice(0, 10)
     : topCandidates.slice(0, 20);
 
-  const prompt = `Você é um especialista em análise eleitoral brasileira.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e recomendações devem ser em português. Nunca use inglês.
-Analise os seguintes candidatos e preveja suas chances de sucesso eleitoral.
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-CANDIDATOS A ANALISAR:
-${candidatesToAnalyze.map((c, i) => `${i + 1}. ${c.name} (${c.party || "Partido N/D"}) - Número: ${c.number || "N/D"}, Votos históricos: ${c.votes.toLocaleString("pt-BR")}, Cargo: ${c.position || filters.electionType || "N/D"}`).join("\n")}
+  const userPrompt = `Analise candidatos e preveja chances de sucesso eleitoral.
+Candidatos: ${candidatesToAnalyze.map(c => `${c.name}(${c.party||'?'}/#${c.number||'?'}):${c.votes}votos`).join(" | ")}
+Partidos: ${votesByParty.slice(0, 10).map(p => `${p.party}:${p.votes}`).join(",")}
+Tendências: ${Object.entries(historicalPartyData).slice(0, 8).map(([party, data]) => `${party}:${data.map(d => `${d.year}=${d.votes}`).join("→")}`).join(" | ")}
+UF=${filters.uf || "Nacional"} Ano=${filters.year || "Recente"}
 
-DESEMPENHO DOS PARTIDOS:
-${votesByParty.slice(0, 15).map(p => `${p.party}: ${p.votes.toLocaleString("pt-BR")} votos (${p.candidateCount} candidatos)`).join("\n")}
+JSON: {"predictions":[{"candidateName":"","candidateNumber":n,"party":"","position":"","successProbability":0-1,"confidence":0-1,"ranking":n,"factors":[{"factor":"","impact":"positive|negative|neutral","weight":0-1,"value":""}],"similarCandidates":[{"name":"","year":n,"votes":n,"result":"ELEITO|NÃO ELEITO","similarity":0-1}],"projectedVotes":{"min":n,"expected":n,"max":n},"recommendation":""}]}`;
 
-TENDÊNCIAS HISTÓRICAS POR PARTIDO:
-${Object.entries(historicalPartyData).slice(0, 10).map(([party, data]) => 
-  `${party}: ${data.map(d => `${d.year}: ${d.votes.toLocaleString("pt-BR")}`).join(" → ")}`
-).join("\n")}
-
-Filtros: UF=${filters.uf || "Nacional"}, Ano=${filters.year || "Mais recente"}
-
-Para cada candidato, forneça uma análise de probabilidade de sucesso.
-
-Responda em JSON com a estrutura:
-{
-  "predictions": [
-    {
-      "candidateName": "nome",
-      "candidateNumber": número,
-      "party": "sigla",
-      "position": "cargo",
-      "successProbability": número_0_a_1,
-      "confidence": número_0_a_1,
-      "ranking": posição_no_ranking,
-      "factors": [
-        {
-          "factor": "nome do fator",
-          "impact": "positive" | "negative" | "neutral",
-          "weight": número_0_a_1,
-          "value": "valor ou descrição"
-        }
-      ],
-      "similarCandidates": [
-        {
-          "name": "nome do candidato similar",
-          "year": ano,
-          "votes": número,
-          "result": "ELEITO" | "NÃO ELEITO",
-          "similarity": número_0_a_1
-        }
-      ],
-      "projectedVotes": {
-        "min": número,
-        "expected": número,
-        "max": número
-      },
-      "recommendation": "recomendação estratégica"
-    }
-  ]
-}`;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+  const { data: result } = await cachedAiCall<Record<string, any>>({
+    model: "standard",
+    systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
+    userPrompt,
+    maxTokens: 2500,
   });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  const result = JSON.parse(content);
   const generatedAt = new Date().toISOString();
   
   return (result.predictions || []).map((p: any) => ({
@@ -567,53 +477,20 @@ export async function predictPartyPerformance(filters: {
     throw new Error("No party data available for the specified filters");
   }
 
-  const prompt = `Você é um especialista em análise político-eleitoral brasileira.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e previsões devem ser em português. Nunca use inglês.
-Analise os dados históricos dos partidos e forneça previsões de desempenho.
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-DADOS HISTÓRICOS POR ANO:
-${historicalData.map(h => `
-ANO ${h.year}:
-${h.parties.slice(0, 15).map(p => `  ${p.party}: ${p.votes.toLocaleString("pt-BR")} votos (${p.candidateCount} candidatos)`).join("\n")}`).join("\n")}
+  const userPrompt = `Preveja desempenho partidário futuro baseado em dados históricos.
+Histórico: ${historicalData.map(h => `${h.year}:[${h.parties.slice(0, 10).map(p => `${p.party}:${p.votes}`).join(",")}]`).join(" | ")}
+Analisar: ${partiesToAnalyze.map(p => p.party).join(",")} | UF=${filters.uf || "Nacional"} Tipo=${filters.electionType || "Todos"} Alvo=${filters.targetYear || (availableYears[0] || 2022) + 4}
 
-PARTIDOS A ANALISAR: ${partiesToAnalyze.map(p => p.party).join(", ")}
-Filtros: UF=${filters.uf || "Nacional"}, Tipo=${filters.electionType || "Todos"}
-Ano alvo para previsão: ${filters.targetYear || (availableYears[0] || 2022) + 4}
+JSON: {"predictions":[{"party":"","predictedVoteShare":n,"predictedSeats":{"min":n,"expected":n,"max":n},"confidence":0-1,"trend":"growing|declining|stable","trendStrength":0-1,"historicalPerformance":[{"year":n,"votes":n,"voteShare":n,"seats":n}],"keyFactors":[""],"risks":[""],"opportunities":[""]}]}`;
 
-Analise tendências, calcule crescimento/declínio e projete desempenho futuro.
-
-Responda em JSON com a estrutura:
-{
-  "predictions": [
-    {
-      "party": "sigla",
-      "predictedVoteShare": número_percentual,
-      "predictedSeats": { "min": número, "expected": número, "max": número },
-      "confidence": número_0_a_1,
-      "trend": "growing" | "declining" | "stable",
-      "trendStrength": número_0_a_1,
-      "historicalPerformance": [
-        { "year": ano, "votes": número, "voteShare": percentual, "seats": número }
-      ],
-      "keyFactors": ["fator 1", "fator 2"],
-      "risks": ["risco 1", "risco 2"],
-      "opportunities": ["oportunidade 1", "oportunidade 2"]
-    }
-  ]
-}`;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+  const { data: result } = await cachedAiCall<Record<string, any>>({
+    model: "standard",
+    systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
+    userPrompt,
+    maxTokens: 2500,
   });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  const result = JSON.parse(content);
   const generatedAt = new Date().toISOString();
   
   return (result.predictions || []).map((p: any) => ({
@@ -662,58 +539,20 @@ export async function analyzeElectoralSentiment(input: {
     ...(input.socialPosts || []).map(p => `[${p.platform}] ${p.text.substring(0, 150)}`)
   ].join("\n\n");
 
-  const prompt = `Você é um especialista em análise de sentimento político e eleitoral brasileiro.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e resumos devem ser em português. Nunca use inglês.
-Analise o conteúdo abaixo e forneça uma análise de sentimento detalhada.
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-CONTEÚDO PARA ANÁLISE:
-${contentSummary}
+  const userPrompt = `Analise sentimento político do conteúdo:
+${contentSummary.substring(0, 2000)}
+Partido=${input.party || "Todos"} Período=${input.dateRange ? `${input.dateRange.start}-${input.dateRange.end}` : "N/D"}
 
-Filtros: Partido=${input.party || "Todos"}, Período=${input.dateRange ? `${input.dateRange.start} a ${input.dateRange.end}` : "Não especificado"}
+JSON: {"overallSentiment":"positive|negative|neutral|mixed","sentimentScore":-1a1,"confidence":0-1,"topics":[{"topic":"","sentiment":"positive|negative|neutral","frequency":n,"examples":[""]}],"parties":[{"party":"","sentiment":"","mentionCount":n,"sentimentScore":-1a1}],"trends":[{"period":"","sentiment":-1a1,"volume":n}],"summary":""}`;
 
-Responda em JSON com a estrutura:
-{
-  "overallSentiment": "positive" | "negative" | "neutral" | "mixed",
-  "sentimentScore": número_-1_a_1,
-  "confidence": número_0_a_1,
-  "topics": [
-    {
-      "topic": "nome do tópico",
-      "sentiment": "positive" | "negative" | "neutral",
-      "frequency": número,
-      "examples": ["exemplo 1", "exemplo 2"]
-    }
-  ],
-  "parties": [
-    {
-      "party": "sigla",
-      "sentiment": "positive" | "negative" | "neutral",
-      "mentionCount": número,
-      "sentimentScore": número_-1_a_1
-    }
-  ],
-  "trends": [
-    {
-      "period": "período",
-      "sentiment": número_-1_a_1,
-      "volume": número
-    }
-  ],
-  "summary": "resumo da análise de sentimento"
-}`;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+  const { data: result } = await cachedAiCall<Record<string, any>>({
+    model: "standard",
+    systemPrompt: SYSTEM_PROMPTS.sentimentAnalyst,
+    userPrompt,
+    maxTokens: 1500,
   });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  const result = JSON.parse(content);
   result.generatedAt = new Date().toISOString();
   
   return result as SentimentAnalysis;
@@ -732,48 +571,24 @@ export async function classifyArticleSentiment(article: {
   keywords: { word: string; sentiment: number }[];
   summary: string;
 }> {
-  const prompt = `Você é um especialista em análise de sentimento político brasileiro.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e classificações devem ser em português. Nunca use inglês.
-Analise o seguinte artigo e classifique o sentimento geral e por entidade.
-
-ARTIGO:
-Título: ${article.title}
-Fonte: ${article.source}
-Conteúdo: ${article.content.substring(0, 1500)}
-
-Responda em JSON:
-{
-  "sentimentScore": número_de_-1_a_1,
-  "sentimentLabel": "positive" | "negative" | "neutral" | "mixed",
-  "confidence": número_de_0_a_1,
-  "entities": [
-    { "type": "party" ou "candidate", "name": "nome", "sentiment": número_-1_a_1 }
-  ],
-  "keywords": [
-    { "word": "palavra-chave", "sentiment": número_-1_a_1 }
-  ],
-  "summary": "resumo de 1-2 frases do sentimento do artigo"
-}
-
-Considere:
-- Sentimento positivo > 0.3, negativo < -0.3, neutro entre -0.3 e 0.3
-- Identifique partidos (PT, PL, MDB, PSDB, etc.) e candidatos mencionados
-- Extraia 3-5 palavras-chave relevantes com seus sentimentos`;
-
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      max_tokens: 800,
+    const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
+
+    const userPrompt = `Classifique sentimento do artigo:
+Título: ${article.title} | Fonte: ${article.source}
+Conteúdo: ${article.content.substring(0, 1200)}
+
+JSON: {"sentimentScore":-1a1,"sentimentLabel":"positive|negative|neutral|mixed","confidence":0-1,"entities":[{"type":"party|candidate","name":"","sentiment":-1a1}],"keywords":[{"word":"","sentiment":-1a1}],"summary":"1-2 frases"}
+Regras: positivo>0.3, negativo<-0.3, identifique PT/PL/MDB/PSDB etc, 3-5 keywords`;
+
+    const { data } = await cachedAiCall<any>({
+      model: "fast",
+      systemPrompt: SYSTEM_PROMPTS.sentimentAnalyst,
+      userPrompt,
+      maxTokens: 800,
     });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error("No response from AI");
-    }
-
-    return JSON.parse(content);
+    return data;
   } catch (error) {
     console.error("Error classifying article sentiment:", error);
     return {
@@ -931,28 +746,22 @@ export async function generateComparisonNarrative(entities: {
     `${e.name} (${e.type}): sentimento ${(e.avgSentiment * 100).toFixed(0)}%, ${e.totalMentions} menções, tendência ${e.trend}`
   ).join("\n");
 
-  const prompt = `Você é um analista político especializado em eleições brasileiras.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, comparações e narrativas devem ser em português. Nunca use inglês.
-Compare o sentimento público entre estas entidades políticas:
-
-${entitiesSummary}
-
-Gere uma análise comparativa concisa (3-4 frases) destacando:
-1. Qual entidade tem melhor percepção pública
-2. Diferenças significativas entre elas
-3. Tendências observadas
-4. Implicações para o cenário eleitoral
-
-Responda apenas com o texto da análise, sem formatação JSON.`;
-
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 300,
+    const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
+
+    const userPrompt = `Compare sentimento público entre entidades:
+${entitiesSummary}
+Gere análise comparativa concisa (3-4 frases): melhor percepção, diferenças, tendências, implicações eleitorais. Texto puro, sem JSON.`;
+
+    const { data } = await cachedAiCall<string>({
+      model: "fast",
+      systemPrompt: SYSTEM_PROMPTS.sentimentAnalyst,
+      userPrompt,
+      maxTokens: 300,
+      jsonMode: false,
     });
 
-    return completion.choices[0]?.message?.content || "Análise não disponível.";
+    return typeof data === 'string' ? data : JSON.stringify(data);
   } catch (error) {
     console.error("Error generating comparison narrative:", error);
     return "Não foi possível gerar análise comparativa.";
@@ -985,68 +794,23 @@ export async function generateElectoralInsights(filters: {
     });
   }
 
-  const prompt = `Você é um especialista em análise eleitoral brasileira.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, insights e recomendações devem ser em português. Nunca use inglês.
-Analise os dados eleitorais e gere insights estratégicos abrangentes.
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-RESUMO DOS DADOS:
-- Total de Votos: ${summary.totalVotes?.toLocaleString("pt-BR") || "N/D"}
-- Total de Candidatos: ${summary.totalCandidates || "N/D"}
-- Total de Partidos Ativos: ${votesByParty.length}
-- Municípios: ${summary.totalMunicipalities || "N/D"}
+  const userPrompt = `Gere insights estratégicos eleitorais.
+Dados: Votos=${summary.totalVotes||'N/D'} Candidatos=${summary.totalCandidates||'N/D'} Partidos=${votesByParty.length} Municípios=${summary.totalMunicipalities||'N/D'}
+Top Partidos: ${votesByParty.slice(0, 8).map(p => `${p.party}:${p.votes}`).join(",")}
+Top Candidatos: ${topCandidates.slice(0, 8).map(c => `${c.name}(${c.party||'?'}):${c.votes}`).join(",")}
+Tendências: ${historicalTrends.map(t => `${t.year}:${t.totalVotes}/${t.parties}p`).join(",")}
+UF=${filters.uf || "Nacional"} Ano=${filters.year || "Todos"} Tipo=${filters.electionType || "Todos"}
 
-TOP PARTIDOS:
-${votesByParty.slice(0, 10).map((p, i) => `${i + 1}. ${p.party}: ${p.votes.toLocaleString("pt-BR")} votos (${p.candidateCount} candidatos)`).join("\n")}
+JSON: {"summary":"2-3 parágrafos","keyFindings":[{"finding":"","importance":"high|medium|low","category":"trend|anomaly|pattern|prediction"}],"riskFactors":[{"risk":"","probability":0-1,"impact":"high|medium|low","mitigation":""}],"recommendations":[""],"dataQuality":{"completeness":0-1,"yearsAnalyzed":n,"candidatesAnalyzed":n,"partiesAnalyzed":n}}`;
 
-TOP CANDIDATOS:
-${topCandidates.slice(0, 10).map((c, i) => `${i + 1}. ${c.name} (${c.party || "N/D"}): ${c.votes.toLocaleString("pt-BR")} votos`).join("\n")}
-
-TENDÊNCIAS HISTÓRICAS:
-${historicalTrends.map(t => `Ano ${t.year}: ${t.totalVotes.toLocaleString("pt-BR")} votos, ${t.parties} partidos`).join("\n")}
-
-Filtros: UF=${filters.uf || "Nacional"}, Ano=${filters.year || "Todos"}, Tipo=${filters.electionType || "Todos"}
-
-Gere insights estratégicos, identifique padrões, anomalias e riscos.
-
-Responda em JSON com a estrutura:
-{
-  "summary": "resumo executivo da análise (2-3 parágrafos)",
-  "keyFindings": [
-    {
-      "finding": "descoberta",
-      "importance": "high" | "medium" | "low",
-      "category": "trend" | "anomaly" | "pattern" | "prediction"
-    }
-  ],
-  "riskFactors": [
-    {
-      "risk": "descrição do risco",
-      "probability": número_0_a_1,
-      "impact": "high" | "medium" | "low",
-      "mitigation": "estratégia de mitigação"
-    }
-  ],
-  "recommendations": ["recomendação 1", "recomendação 2", "recomendação 3"],
-  "dataQuality": {
-    "completeness": número_0_a_1,
-    "yearsAnalyzed": número,
-    "candidatesAnalyzed": número,
-    "partiesAnalyzed": número
-  }
-}`;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+  const { data: result } = await cachedAiCall<Record<string, any>>({
+    model: "standard",
+    systemPrompt: SYSTEM_PROMPTS.electoralAnalyst,
+    userPrompt,
+    maxTokens: 2000,
   });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  const result = JSON.parse(content);
   result.generatedAt = new Date().toISOString();
   
   return result as ElectoralInsights;
@@ -1100,117 +864,23 @@ export async function generateProjectionReport(params: {
   
   const totalRecords = historicalData.reduce((sum, d) => sum + d.candidates, 0);
   
-  const prompt = `Você é um especialista em análise eleitoral brasileira e projeções de resultados eleitorais.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, projeções, narrativas e recomendações devem ser em português. Nunca use inglês.
-Você deve gerar um relatório de projeção completo e detalhado para a eleição de ${targetYear}.
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-CONTEXTO DA ANÁLISE:
-- Ano alvo: ${targetYear}
-- Tipo de eleição: ${electionType}
-- Escopo: ${scope === "national" ? "Nacional (todos os estados)" : `Estado: ${state}`}
-${position ? `- Cargo: ${position}` : ""}
+  const userPrompt = `Gere relatório de projeção eleitoral completo para ${targetYear}.
+Contexto: Tipo=${electionType} Escopo=${scope==="national"?"Nacional":`Estado:${state}`}${position?` Cargo:${position}`:''}
+Histórico: ${historicalData.map(d => `${d.year}:${d.totalVotes}v/${d.candidates}c/${d.parties}p`).join(" | ")}
+Partidos(${availableYears[0]}): ${votesByParty.slice(0, 12).map(p => `${p.party}:${p.votes}(${((p.votes/(historicalData[0]?.totalVotes||1))*100).toFixed(1)}%)`).join(",")}
+Top Candidatos: ${topCandidates.slice(0, 15).map(c => `${c.name}(${c.party||'?'}):${c.votes}`).join(",")}
+${scope==="national"&&votesByState.length>0?`Estados: ${votesByState.map(s=>`${s.state}:${s.votes}`).join(",")}`:''}
 
-DADOS HISTÓRICOS DE VOTAÇÃO (base para projeções):
-${historicalData.map(d => `Ano ${d.year}: ${d.totalVotes.toLocaleString("pt-BR")} votos, ${d.candidates} candidatos, ${d.parties} partidos`).join("\n")}
+JSON compacto: {"executiveSummary":"3-4§","methodology":"","turnoutProjection":{"expected":n,"confidence":0-1,"marginOfError":{"lower":n,"upper":n},"historicalBasis":[{"year":n,"turnout":n}],"factors":[{"factor":"","impact":-1a1,"description":""}]},"partyProjections":[{"party":"","abbreviation":"","voteShare":{"expected":n,"min":n,"max":n},"seats":{"expected":n,"min":n,"max":n},"trend":"growing|declining|stable","confidence":0-1,"marginOfError":n}],"candidateProjections":[{"name":"","party":"","position":"","electionProbability":0-1,"projectedVotes":{"expected":n,"min":n,"max":n},"confidence":0-1,"ranking":n}],"scenarios":[{"name":"","description":"","probability":0-1,"outcomes":[{"party":"","seats":n,"voteShare":n}]}],"riskAssessment":{"overallRisk":"low|medium|high","risks":[{"risk":"","probability":0-1,"impact":"low|medium|high","category":"political|economic|social|technical","mitigation":""}]},"confidenceIntervals":{"overall":0-1,"turnout":0-1,"partyResults":0-1,"seatDistribution":0-1},"recommendations":[""]}`;
 
-DESEMPENHO ATUAL DOS PARTIDOS (ano ${availableYears[0]}):
-${votesByParty.slice(0, 15).map((p, i) => `${i + 1}. ${p.party}: ${p.votes.toLocaleString("pt-BR")} votos (${((p.votes / (historicalData[0]?.totalVotes || 1)) * 100).toFixed(1)}%)`).join("\n")}
-
-TOP 20 CANDIDATOS MAIS VOTADOS:
-${topCandidates.slice(0, 20).map((c, i) => `${i + 1}. ${c.name} (${c.party || "N/D"}): ${c.votes.toLocaleString("pt-BR")} votos`).join("\n")}
-
-${scope === "national" && votesByState.length > 0 ? `
-VOTOS POR ESTADO:
-${votesByState.map(s => `${s.state}: ${s.votes.toLocaleString("pt-BR")} votos`).join("\n")}
-` : ""}
-
-Gere um RELATÓRIO DE PROJEÇÃO COMPLETO com margens de erro e intervalos de confiança.
-Use metodologia estatística rigorosa baseada em:
-1. Análise de tendências históricas
-2. Crescimento/declínio partidário
-3. Volatilidade eleitoral
-4. Fatores contextuais
-
-Responda em JSON com a estrutura EXATA:
-{
-  "executiveSummary": "resumo executivo completo (3-4 parágrafos)",
-  "methodology": "descrição da metodologia usada para as projeções",
-  "turnoutProjection": {
-    "expected": número_percentual_esperado (ex: 78.5),
-    "confidence": número_0_a_1,
-    "marginOfError": { "lower": número_percentual, "upper": número_percentual },
-    "historicalBasis": [{ "year": ano, "turnout": percentual }],
-    "factors": [{ "factor": "nome", "impact": -1_a_1, "description": "descrição" }]
-  },
-  "partyProjections": [
-    {
-      "party": "nome completo",
-      "abbreviation": "SIGLA",
-      "voteShare": { "expected": número, "min": número, "max": número },
-      "seats": { "expected": número, "min": número, "max": número },
-      "trend": "growing" | "declining" | "stable",
-      "confidence": número_0_a_1,
-      "marginOfError": número_percentual
-    }
-  ],
-  "candidateProjections": [
-    {
-      "name": "nome",
-      "party": "SIGLA",
-      "position": "cargo",
-      "electionProbability": número_0_a_1,
-      "projectedVotes": { "expected": número, "min": número, "max": número },
-      "confidence": número_0_a_1,
-      "ranking": número
-    }
-  ],
-  "scenarios": [
-    {
-      "name": "nome do cenário",
-      "description": "descrição",
-      "probability": número_0_a_1,
-      "outcomes": [{ "party": "SIGLA", "seats": número, "voteShare": número }]
-    }
-  ],
-  "riskAssessment": {
-    "overallRisk": "low" | "medium" | "high",
-    "risks": [
-      {
-        "risk": "descrição",
-        "probability": número_0_a_1,
-        "impact": "low" | "medium" | "high",
-        "category": "political" | "economic" | "social" | "technical",
-        "mitigation": "estratégia"
-      }
-    ]
-  },
-  "confidenceIntervals": {
-    "overall": número_0_a_1,
-    "turnout": número_0_a_1,
-    "partyResults": número_0_a_1,
-    "seatDistribution": número_0_a_1
-  },
-  "recommendations": ["recomendação1", "recomendação2", ...]
-}`;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+  const { data: rawAiResult } = await cachedAiCall<unknown>({
+    model: "standard",
+    systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
+    userPrompt,
+    maxTokens: 3000,
   });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  let rawAiResult: unknown;
-  try {
-    rawAiResult = JSON.parse(content);
-  } catch (parseError) {
-    console.error("Failed to parse AI response as JSON:", parseError);
-    throw new Error("AI response was not valid JSON. Please try again.");
-  }
   
   // Validate AI response with Zod schema and apply safe defaults
   const validationResult = aiProjectionResponseSchema.safeParse(rawAiResult);

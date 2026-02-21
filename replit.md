@@ -61,9 +61,25 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
 - **Campaign Insights AI Module:** AI-powered module for campaign strategy analysis including high-impact segment identification, message strategy generation, campaign impact prediction, and executive report generation.
 - **Campaign Management Module:** Comprehensive management with team roles, calendar visualization, AI-powered KPI goal tracking, and activity assignment.
 - **Real-time Collaborative Editing:** Multi-user scenario editing with optimistic locking (expectedUpdatedAt on PUT/DELETE for scenario candidates), WebSocket broadcast of scenario.candidate.added/updated/deleted events, and automatic React Query cache invalidation via `useScenarioWebSocket` hook. 409 conflict detection with user-friendly toast messages and automatic data refresh.
+- **AI Performance Optimization:** Centralized AI call management via `server/ai-cache.ts` with:
+  - `cachedAiCall` wrapper: DB-backed response caching with configurable TTL (1-24h), MD5-based cache keys, automatic JSON parsing
+  - Model tier selection: `gpt-4o-mini` ("fast") for simple tasks (article enrichment, narratives, semantic search answers, suggestions), `gpt-4o` ("standard") for complex analysis (predictions, forecasting, validation)
+  - Shared system prompts (`SYSTEM_PROMPTS`): 7 reusable prompts (electoralAnalyst, politicalForecaster, anomalyDetector, electoralLawExpert, sentimentAnalyst, campaignStrategist, dataAnalyst)
+  - Prompt compression: 60-70% reduction in prompt token usage via compact JSON schema notation and eliminated verbose instructions
+  - Token limits: `max_completion_tokens` set per endpoint (300-4000 based on complexity)
+  - All application AI calls route through `cachedAiCall` (files: ai.ts, ai-insights.ts, forecasting.ts, data-validation.ts, sentiment-analysis.ts, external-data-service.ts, semantic-search.ts)
+
+- **Database Performance Optimization:**
+  - Reduced redundant indexes: `tse_candidate_votes` from 14→4 indexes, `tse_party_votes` from 6→3 indexes (recovered 618 MB)
+  - Pre-aggregated summary tables (`summary_party_votes`, `summary_candidate_votes`, `summary_state_votes`) in `shared/schema.ts` for fast analytics queries
+  - Summary refresh logic in `server/summary-refresh.ts`: atomic transactions (DELETE+INSERT), mutex via `refreshInProgress` flag, proper GROUP BY including `ds_cargo`/`nm_tipo_eleicao`
+  - Analytics storage methods (`getVotesByParty`, `getTopCandidates`, `getVotesByState`, `getHistoricalVotesByParty`) try summary tables first, fall back to raw tables for municipality-level or empty data
+  - Import batch size reduced from 10K→2K rows for memory safety
+  - Post-import async maintenance: ANALYZE + summary refresh via `postImportMaintenance()` (2s delayed, non-blocking)
+  - Manual refresh endpoint: `POST /api/analytics/refresh-summaries` (admin-only)
 
 ## External Dependencies
-- **OpenAI:** GPT-4o for AI integrations (validation, insights, sentiment, predictions, suggestions) and `text-embedding-3-small` for semantic search.
+- **OpenAI:** GPT-4o and GPT-4o-mini for AI integrations (validation, insights, sentiment, predictions, suggestions) via centralized `cachedAiCall`, and `text-embedding-3-small` for semantic search.
 - **Resend:** For sending automated reports and email alerts.
 - **PostgreSQL:** Primary database.
 - **Drizzle ORM:** Object-Relational Mapper.

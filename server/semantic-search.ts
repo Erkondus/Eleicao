@@ -6,7 +6,6 @@ import crypto from "crypto";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 1536;
-const CHAT_MODEL = "gpt-4o";
 
 let openaiClient: OpenAI | null = null;
 
@@ -132,30 +131,17 @@ export async function generateAnswer(
     `[${i + 1}] ${r.content.slice(0, 500)}${r.content.length > 500 ? "..." : ""}`
   ).join("\n\n");
   
-  const systemPrompt = `Você é um assistente especializado em dados eleitorais brasileiros. 
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e explicações devem ser em português. Nunca use inglês.
-Responda perguntas de forma concisa e factual, baseando-se exclusivamente nos dados fornecidos.
-Cite as fontes usando o formato [número] quando usar informações específicas.
-Se não houver dados suficientes para responder, diga claramente.`;
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-  const userPrompt = `Pergunta: ${query}
-
-Dados disponíveis:
-${contextSnippets}
-
-Forneça uma resposta concisa baseada nos dados acima.`;
-
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
-    ],
-    max_tokens: 1000,
-    temperature: 0.3,
+  const { data: answerData } = await cachedAiCall<string>({
+    model: "fast",
+    systemPrompt: `${SYSTEM_PROMPTS.electoralAnalyst} Responda de forma concisa e factual, baseando-se exclusivamente nos dados fornecidos. Cite fontes com [número]. Se dados insuficientes, diga claramente.`,
+    userPrompt: `Pergunta: ${query}\n\nDados:\n${contextSnippets}\n\nResponda concisamente.`,
+    maxTokens: 1000,
+    jsonMode: false,
   });
   
-  const answer = response.choices[0]?.message?.content || "Não foi possível gerar uma resposta.";
+  const answer = typeof answerData === 'string' ? answerData : "Não foi possível gerar uma resposta.";
   
   const citations = searchResults.slice(0, 5).map(r => ({
     id: r.id,

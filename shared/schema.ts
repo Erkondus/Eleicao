@@ -349,16 +349,9 @@ export const tseCandidateVotes = pgTable("tse_candidate_votes", {
     table.nrCandidato,
     table.stVotoEmTransito
   ),
-  idxAnoEleicao: index("idx_tse_cv_ano_eleicao").on(table.anoEleicao),
-  idxSgUf: index("idx_tse_cv_sg_uf").on(table.sgUf),
-  idxCdCargo: index("idx_tse_cv_cd_cargo").on(table.cdCargo),
-  idxSgPartido: index("idx_tse_cv_sg_partido").on(table.sgPartido),
-  idxAnoUf: index("idx_tse_cv_ano_uf").on(table.anoEleicao, table.sgUf),
   idxAnoUfCargo: index("idx_tse_cv_ano_uf_cargo").on(table.anoEleicao, table.sgUf, table.cdCargo),
-  idxNmTipoEleicao: index("idx_tse_cv_nm_tipo_eleicao").on(table.nmTipoEleicao),
-  idxUfMunicipio: index("idx_tse_cv_uf_municipio").on(table.sgUf, table.cdMunicipio, table.nmMunicipio),
+  idxSgPartido: index("idx_tse_cv_sg_partido").on(table.sgPartido),
   idxSqCandidato: index("idx_tse_cv_sq_candidato").on(table.sqCandidato),
-  idxPartidoVotos: index("idx_tse_cv_partido_votos").on(table.sgPartido, table.nrPartido, table.qtVotosNominais),
 }));
 
 export const tseImportErrors = pgTable("tse_import_errors", {
@@ -558,9 +551,6 @@ export const tsePartyVotes = pgTable("tse_party_votes", {
 }, (table) => [
   index("tse_party_votes_year_uf_cargo_idx").on(table.anoEleicao, table.sgUf, table.cdCargo),
   index("tse_party_votes_party_idx").on(table.nrPartido),
-  index("tse_party_votes_municipio_idx").on(table.cdMunicipio),
-  index("idx_tse_pv_partido_legenda").on(table.sgPartido, table.qtVotosLegendaValidos),
-  index("idx_tse_pv_ano_uf").on(table.anoEleicao, table.sgUf),
   uniqueIndex("tse_party_votes_unique_idx").on(
     table.anoEleicao,
     table.cdEleicao,
@@ -589,6 +579,68 @@ export type InsertTseElectoralStatistics = z.infer<typeof insertTseElectoralStat
 export type TseElectoralStatistics = typeof tseElectoralStatistics.$inferSelect;
 export type InsertTsePartyVotes = z.infer<typeof insertTsePartyVotesSchema>;
 export type TsePartyVotes = typeof tsePartyVotes.$inferSelect;
+
+// Pre-aggregated summary tables for analytics performance
+export const summaryPartyVotes = pgTable("summary_party_votes", {
+  id: serial("id").primaryKey(),
+  anoEleicao: integer("ano_eleicao").notNull(),
+  sgUf: text("sg_uf").notNull(),
+  cdCargo: integer("cd_cargo").notNull(),
+  dsCargo: text("ds_cargo"),
+  nmTipoEleicao: text("nm_tipo_eleicao"),
+  sgPartido: text("sg_partido").notNull(),
+  nrPartido: integer("nr_partido"),
+  nmPartido: text("nm_partido"),
+  totalVotosNominais: bigint("total_votos_nominais", { mode: "number" }).default(0),
+  totalVotosLegenda: bigint("total_votos_legenda", { mode: "number" }).default(0),
+  totalVotosValidos: bigint("total_votos_validos", { mode: "number" }).default(0),
+  totalCandidatos: integer("total_candidatos").default(0),
+  totalMunicipios: integer("total_municipios").default(0),
+}, (table) => ({
+  uniq: uniqueIndex("summary_pv_unique_idx").on(table.anoEleicao, table.sgUf, table.cdCargo, table.sgPartido),
+  idxAnoCargo: index("summary_pv_ano_cargo_idx").on(table.anoEleicao, table.cdCargo),
+}));
+
+export const summaryCandidateVotes = pgTable("summary_candidate_votes", {
+  id: serial("id").primaryKey(),
+  anoEleicao: integer("ano_eleicao").notNull(),
+  sgUf: text("sg_uf").notNull(),
+  cdCargo: integer("cd_cargo").notNull(),
+  dsCargo: text("ds_cargo"),
+  nmTipoEleicao: text("nm_tipo_eleicao"),
+  sqCandidato: text("sq_candidato"),
+  nrCandidato: integer("nr_candidato"),
+  nmCandidato: text("nm_candidato"),
+  nmUrnaCandidato: text("nm_urna_candidato"),
+  sgPartido: text("sg_partido"),
+  nrPartido: integer("nr_partido"),
+  totalVotosNominais: bigint("total_votos_nominais", { mode: "number" }).default(0),
+  totalMunicipios: integer("total_municipios").default(0),
+  dsSitTotTurno: text("ds_sit_tot_turno"),
+}, (table) => ({
+  uniq: uniqueIndex("summary_cv_unique_idx").on(table.anoEleicao, table.sgUf, table.cdCargo, table.sqCandidato),
+  idxAnoCargoPartido: index("summary_cv_ano_cargo_partido_idx").on(table.anoEleicao, table.cdCargo, table.sgPartido),
+}));
+
+export const summaryStateVotes = pgTable("summary_state_votes", {
+  id: serial("id").primaryKey(),
+  anoEleicao: integer("ano_eleicao").notNull(),
+  sgUf: text("sg_uf").notNull(),
+  cdCargo: integer("cd_cargo").notNull(),
+  dsCargo: text("ds_cargo"),
+  nmTipoEleicao: text("nm_tipo_eleicao"),
+  totalVotos: bigint("total_votos", { mode: "number" }).default(0),
+  totalCandidatos: integer("total_candidatos").default(0),
+  totalPartidos: integer("total_partidos").default(0),
+  totalMunicipios: integer("total_municipios").default(0),
+}, (table) => ({
+  uniq: uniqueIndex("summary_sv_unique_idx").on(table.anoEleicao, table.sgUf, table.cdCargo),
+  idxAno: index("summary_sv_ano_idx").on(table.anoEleicao),
+}));
+
+export type SummaryPartyVotes = typeof summaryPartyVotes.$inferSelect;
+export type SummaryCandidateVotes = typeof summaryCandidateVotes.$inferSelect;
+export type SummaryStateVotes = typeof summaryStateVotes.$inferSelect;
 
 // Saved Reports
 export const savedReports = pgTable("saved_reports", {

@@ -1,11 +1,8 @@
-import OpenAI from "openai";
 import { z } from "zod";
 import { storage } from "./storage";
 import { db } from "./db";
 import { sql, eq, and, gt, lt } from "drizzle-orm";
 import { tseCandidateVotes } from "@shared/schema";
-
-const openai = new OpenAI();
 
 export interface ValidationIssue {
   type: string;
@@ -474,70 +471,26 @@ function buildSummary(issues: ValidationIssue[], totalRecords: number): Validati
 
 async function generateAiAnalysis(summary: ValidationSummary, job: any): Promise<unknown> {
   try {
-    const prompt = `Você é um especialista em análise de dados eleitorais brasileiros do TSE.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições, avaliações e recomendações devem ser em português. Nunca use inglês.
+    const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-Analise o seguinte relatório de validação de dados importados:
+    const userPrompt = `Validação de dados TSE importados:
+Importação: Ano=${job.year||"N/A"}, Tipo=${job.electionType||"N/A"}, Estado=${job.state||"Nacional"}
+Registros: ${summary.totalRecordsChecked.toLocaleString()}, Problemas: ${summary.issuesFound}
+Por tipo: ${Object.entries(summary.byType).map(([t,c]) => `${t}:${c}`).join(", ")}
+Por severidade: ${Object.entries(summary.bySeverity).map(([s,c]) => `${s}:${c}`).join(", ")}
+Exemplos: ${summary.sampleIssues.slice(0,5).map(i => `[${i.severity}] ${i.message}`).join("; ")}
 
-**Importação:**
-- Ano: ${job.year || "N/A"}
-- Tipo: ${job.electionType || "N/A"}
-- Estado: ${job.state || "Nacional"}
+Retorne JSON: {"analysis":"texto","recommendations":[{"issue":"str","severity":"error|warning|info","suggestedAction":"str","confidence":0-1,"affectedRecords":"str"}],"overallDataQuality":{"score":0-100,"assessment":"str","keyFindings":["str"],"risksIdentified":["str"]}}`;
 
-**Resumo da Validação:**
-- Total de registros verificados: ${summary.totalRecordsChecked.toLocaleString()}
-- Problemas encontrados: ${summary.issuesFound}
-
-**Distribuição por Tipo:**
-${Object.entries(summary.byType).map(([type, count]) => `- ${type}: ${count}`).join("\n")}
-
-**Distribuição por Severidade:**
-${Object.entries(summary.bySeverity).map(([sev, count]) => `- ${sev}: ${count}`).join("\n")}
-
-**Exemplos de Problemas:**
-${summary.sampleIssues.slice(0, 5).map(issue => `- [${issue.severity}] ${issue.message}`).join("\n")}
-
-Com base nesta análise, forneça:
-1. Uma avaliação geral da qualidade dos dados (0-100)
-2. Principais descobertas e padrões identificados
-3. Riscos potenciais para análises eleitorais
-4. Recomendações específicas de correção ou tratamento
-
-Responda em JSON com o formato:
-{
-  "analysis": "texto com análise detalhada",
-  "recommendations": [
-    {
-      "issue": "descrição do problema",
-      "severity": "error|warning|info",
-      "suggestedAction": "ação recomendada",
-      "confidence": 0.0-1.0,
-      "affectedRecords": "descrição dos registros afetados"
-    }
-  ],
-  "overallDataQuality": {
-    "score": 0-100,
-    "assessment": "avaliação geral",
-    "keyFindings": ["descoberta 1", "descoberta 2"],
-    "risksIdentified": ["risco 1", "risco 2"]
-  }
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
+    const result = await cachedAiCall({
+      model: "standard",
+      systemPrompt: SYSTEM_PROMPTS.dataAnalyst,
+      userPrompt,
     });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      return null;
-    }
-
-    const parsed = JSON.parse(content);
-    const validated = aiValidationResponseSchema.safeParse(parsed);
+    const validated = aiValidationResponseSchema.safeParse(result.data);
     
-    return validated.success ? validated.data : parsed;
+    return validated.success ? validated.data : result.data;
   } catch (error) {
     console.error("Failed to generate AI analysis:", error);
     return null;

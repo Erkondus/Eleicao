@@ -1,12 +1,6 @@
-import OpenAI from "openai";
 import { storage } from "./storage";
 import { fetchExternalData, type ExternalArticle } from "./external-data-service";
 import type { InsertSentimentAnalysisResult, InsertSentimentKeyword } from "@shared/schema";
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 export interface SentimentSource {
   type: "news" | "blog" | "forum" | "social";
@@ -192,69 +186,25 @@ export async function analyzeSentimentWithAI(
     ? `\nEntidades para análise específica: ${targetEntities.map(e => `${e.name} (${e.type}: ${e.id})`).join(", ")}`
     : "\nIdentifique e analise todas as entidades políticas (partidos e candidatos) mencionadas no conteúdo.";
 
-  const prompt = `Você é um especialista em análise de sentimento político e eleitoral brasileiro.
-IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, resumos, palavras-chave e descrições devem ser em português. Nunca use inglês.
-Analise o seguinte conteúdo de múltiplas fontes jornalísticas REAIS e forneça uma análise de sentimento detalhada e precisa.
+  const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-CONTEÚDO PARA ANÁLISE (${allContent.length} artigos de ${sources.length} fontes):
-${contentForAnalysis}
+  const userPrompt = `Analise sentimento político de ${allContent.length} artigos de ${sources.length} fontes reais.
 ${entitiesHint}
 
-Responda em JSON com a seguinte estrutura:
-{
-  "overallSentiment": "positive" | "negative" | "neutral" | "mixed",
-  "overallScore": número_de_-1_a_1,
-  "confidence": número_de_0_a_1,
-  "entities": [
-    {
-      "entityType": "party" | "candidate",
-      "entityId": "sigla_ou_id",
-      "entityName": "nome_completo",
-      "sentimentScore": número_de_-1_a_1,
-      "sentimentLabel": "positive" | "negative" | "neutral" | "mixed",
-      "confidence": número_de_0_a_1,
-      "mentionCount": número_de_menções_no_conteúdo,
-      "keywords": [{ "word": "palavra", "count": número, "sentiment": número_-1_a_1 }],
-      "sampleMentions": ["trecho_real_do_artigo_1", "trecho_real_do_artigo_2"]
-    }
-  ],
-  "keywords": [
-    { "word": "palavra_chave", "count": frequência, "sentiment": número_-1_a_1 }
-  ],
-  "sourceBreakdown": {
-    "news": { "count": número_artigos, "avgSentiment": número_-1_a_1 },
-    "blog": { "count": número, "avgSentiment": número },
-    "forum": { "count": número, "avgSentiment": número }
-  },
-  "timeline": [
-    { "date": "YYYY-MM-DD", "sentiment": número_-1_a_1, "volume": número_menções }
-  ],
-  "summary": "resumo_analítico_detalhado_em_português_sobre_o_cenário_atual"
-}
+CONTEÚDO:
+${contentForAnalysis}
 
-Regras importantes:
-- Baseie-se EXCLUSIVAMENTE no conteúdo fornecido - não invente dados
-- Alguns artigos podem conter apenas títulos ou resumos breves - analise com base no que está disponível
-- Extraia 20-40 palavras-chave relevantes para nuvem de palavras
-- Os trechos em sampleMentions devem ser baseados nos artigos fornecidos
-- Agrupe as palavras por tema (economia, saúde, educação, segurança, etc.)
-- Identifique tendências temporais com base nas datas dos artigos
-- Avalie o tom, contexto e viés das menções
-- Para cada entidade, indique a contagem real de menções no conteúdo`;
+Retorne JSON: {"overallSentiment":"positive|negative|neutral|mixed","overallScore":-1a1,"confidence":0a1,"entities":[{"entityType":"party|candidate","entityId":"str","entityName":"str","sentimentScore":-1a1,"sentimentLabel":"positive|negative|neutral|mixed","confidence":0a1,"mentionCount":N,"keywords":[{"word":"str","count":N,"sentiment":-1a1}],"sampleMentions":["str"]}],"keywords":[{"word":"str","count":N,"sentiment":-1a1}],"sourceBreakdown":{"news":{"count":N,"avgSentiment":-1a1}},"timeline":[{"date":"YYYY-MM-DD","sentiment":-1a1,"volume":N}],"summary":"str"}
+Regras: use apenas dados fornecidos, extraia 20-40 palavras-chave, agrupe por tema, identifique tendências temporais.`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4000,
+  const aiResult = await cachedAiCall({
+    model: "standard",
+    systemPrompt: SYSTEM_PROMPTS.sentimentAnalyst,
+    userPrompt,
+    maxTokens: 4000,
   });
 
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("Sem resposta da IA");
-  }
-
-  const result = JSON.parse(content);
+  const result = aiResult.data as any;
   const sourcesUsed = Array.from(new Set(allContent.map(a => a.source)));
 
   return {

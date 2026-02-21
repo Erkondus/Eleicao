@@ -673,7 +673,6 @@ export async function runForecastWithScenario(
   // Generate narrative with AI
   let narrative = "";
   try {
-    const openai = getOpenAI();
     const topParties = partyResults.slice(0, 5);
     const promptParts = [
       `Análise de previsão eleitoral para ${scenario.targetYear}:`,
@@ -701,22 +700,16 @@ export async function runForecastWithScenario(
       }
     }
     
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "Você é um analista político especializado em eleições brasileiras. IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, narrativas e recomendações devem ser em português. Nunca use inglês. Forneça uma análise concisa e objetiva das previsões eleitorais, destacando tendências, riscos e oportunidades.",
-        },
-        {
-          role: "user",
-          content: promptParts.join("\n") + "\n\nGere uma análise narrativa de 2-3 parágrafos sobre estas previsões, considerando o contexto histórico e os fatores incorporados no cenário.",
-        },
-      ],
-      max_tokens: 500,
+    const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
+    const result = await cachedAiCall<string>({
+      model: "fast",
+      systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
+      userPrompt: promptParts.join("\n") + "\n\nGere análise narrativa de 2-3 parágrafos sobre estas previsões, contexto histórico e fatores do cenário.",
+      maxTokens: 500,
+      jsonMode: false,
     });
     
-    narrative = response.choices[0]?.message?.content || "";
+    narrative = result.data || "";
   } catch (error) {
     console.error("Failed to generate AI narrative for scenario:", error);
     narrative = `Previsão para ${scenario.targetYear} baseada no cenário "${scenario.name}". Top 3 partidos: ${partyResults.slice(0, 3).map(p => `${p.party} (${p.predictedVoteShare?.toFixed(1)}%)`).join(", ")}.`;

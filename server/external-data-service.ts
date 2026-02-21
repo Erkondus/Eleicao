@@ -1,11 +1,5 @@
-import OpenAI from "openai";
 import { storage } from "./storage";
 import type { InsertSentimentArticle, InsertSentimentDataSource } from "@shared/schema";
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 export interface ExternalArticle {
   title: string;
@@ -190,35 +184,20 @@ async function enrichArticlesWithAI(articles: ExternalArticle[]): Promise<Extern
   const articlesToEnrich = articles.slice(0, 10);
 
   try {
-    const prompt = `IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises e descrições devem ser em português. Nunca use inglês.
-Analise os seguintes títulos de notícias sobre política brasileira e forneça um resumo expandido para cada um, mantendo o contexto eleitoral.
+    const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
-Títulos:
-${articlesToEnrich.map((a, i) => `${i + 1}. ${a.title}`).join("\n")}
+    const userPrompt = `Expanda títulos de notícias políticas brasileiras com contexto eleitoral (2-3 frases cada).
+Títulos: ${articlesToEnrich.map((a, i) => `${i+1}. ${a.title}`).join("; ")}
+Retorne JSON: {"enriched":[{"index":0,"expandedContent":"str","relevantParties":["sigla"],"sentiment":"positive|negative|neutral|mixed"}]}`;
 
-Responda em JSON com o formato:
-{
-  "enriched": [
-    {
-      "index": 0,
-      "expandedContent": "Descrição expandida em 2-3 frases sobre o contexto e implicações eleitorais",
-      "relevantParties": ["sigla1", "sigla2"],
-      "sentiment": "positive" | "negative" | "neutral" | "mixed"
-    }
-  ]
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 2000,
+    const aiResult = await cachedAiCall({
+      model: "fast",
+      systemPrompt: SYSTEM_PROMPTS.sentimentAnalyst,
+      userPrompt,
+      maxTokens: 2000,
     });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) return articles;
-
-    const result = JSON.parse(content);
+    const result = aiResult.data as any;
     
     for (const item of result.enriched || []) {
       if (item.index >= 0 && item.index < articlesToEnrich.length) {

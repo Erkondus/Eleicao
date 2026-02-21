@@ -16,12 +16,34 @@ import {
   emitBatchError,
 } from "../websocket";
 import { generateEmbeddingsForImportJob } from "../semantic-search";
+import { refreshAllSummaries } from "../summary-refresh";
 import type { InsertTseCandidateVote, TseImportBatch } from "@shared/schema";
 import { tseCandidateVotes } from "@shared/schema";
 
 const router = Router();
 
 const activeImportJobs = new Map<number, { cancelled: boolean; abortController?: AbortController }>();
+
+function postImportMaintenance(importType: string, jobId: number): void {
+  setTimeout(async () => {
+    try {
+      console.log(`TSE Import ${jobId}: Running post-import maintenance for ${importType}...`);
+      if (importType === "CANDIDATO" || importType === "PARTIDO") {
+        const tableName = importType === "CANDIDATO" ? "tse_candidate_votes" : "tse_party_votes";
+        try {
+          await db.execute(sql.raw(`ANALYZE ${tableName}`));
+          console.log(`TSE Import ${jobId}: ANALYZE ${tableName} completed`);
+        } catch (analyzeErr) {
+          console.warn(`TSE Import ${jobId}: ANALYZE ${tableName} skipped (non-fatal):`, analyzeErr);
+        }
+      }
+      await refreshAllSummaries();
+      console.log(`TSE Import ${jobId}: Summary tables refreshed`);
+    } catch (error) {
+      console.error(`TSE Import ${jobId}: Post-import maintenance error (non-fatal):`, error);
+    }
+  }, 2000);
+}
 
 function isJobCancelled(jobId: number): boolean {
   const job = activeImportJobs.get(jobId);
@@ -602,6 +624,8 @@ router.delete("/api/imports/tse/:id", requireAuth, requireRole("admin"), async (
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 
     await logAudit(req, "delete", "tse_import", String(jobId), { filename: job.filename });
+
+    refreshAllSummaries().catch((err) => console.error("[DELETE] Summary refresh failed:", err));
 
     res.json({ success: true, message: "Importação excluída com sucesso" });
   } catch (error: any) {
@@ -1285,7 +1309,7 @@ const processCSVImportInternal = async (jobId: number, filePath: string) => {
   let filteredCount = 0;
   let insertedCount = 0;
   let errorCount = 0;
-  const BATCH_SIZE = 10000;
+  const BATCH_SIZE = 2000;
 
   const firstRowPromise = new Promise<string[]>((resolve, reject) => {
     const parser = createReadStream(filePath)
@@ -1592,6 +1616,8 @@ const processCSVImportInternal = async (jobId: number, filePath: string) => {
     validatedAt: new Date(),
   });
 
+  postImportMaintenance("CANDIDATO", jobId).catch(() => {});
+
   if (process.env.OPENAI_API_KEY) {
     console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
     generateEmbeddingsForImportJob(jobId)
@@ -1699,7 +1725,7 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
     let duplicateCount = 0;
     let insertedCount = 0;
     let errorCount = 0;
-    const BATCH_SIZE = 10000;
+    const BATCH_SIZE = 2000;
 
     const fieldMap: { [key: number]: string } = {
       0: "dtGeracao", 1: "hhGeracao", 2: "anoEleicao", 3: "cdTipoEleicao", 4: "nmTipoEleicao",
@@ -1870,6 +1896,8 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
       validationMessage: validationMessage,
     });
 
+    postImportMaintenance("DETALHE", jobId).catch(() => {});
+
     await unlink(zipPath).catch(() => {});
     await unlink(csvPath).catch(() => {});
     activeImportJobs.delete(jobId);
@@ -1973,7 +2001,7 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
     let duplicateCount = 0;
     let insertedCount = 0;
     let errorCount = 0;
-    const BATCH_SIZE = 10000;
+    const BATCH_SIZE = 2000;
 
     const firstRowPromise = new Promise<string[]>((resolve, reject) => {
       const parser = createReadStream(csvPath, { encoding: "latin1" })
@@ -2226,6 +2254,8 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
       validationMessage: validationMessage,
     });
 
+    postImportMaintenance("PARTIDO", jobId).catch(() => {});
+
     await unlink(zipPath).catch(() => {});
     await unlink(csvPath).catch(() => {});
     activeImportJobs.delete(jobId);
@@ -2300,7 +2330,7 @@ const processCSVImport = async (jobId: number, filePath: string) => {
     let rowCount = 0;
     let filteredCount = 0;
     let errorCount = 0;
-    const BATCH_SIZE = 10000;
+    const BATCH_SIZE = 2000;
 
     const parser = createReadStream(filePath)
       .pipe(iconv.decodeStream("latin1"))
@@ -2441,6 +2471,8 @@ const processCSVImport = async (jobId: number, filePath: string) => {
     });
 
     console.log(`TSE Import ${jobId} completed: ${rowCount} rows, ${errorCount} errors`);
+
+    postImportMaintenance("CANDIDATO", jobId).catch(() => {});
 
     if (process.env.OPENAI_API_KEY) {
       console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
