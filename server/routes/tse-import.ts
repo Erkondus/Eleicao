@@ -28,8 +28,13 @@ function postImportMaintenance(importType: string, jobId: number): void {
   setTimeout(async () => {
     try {
       console.log(`TSE Import ${jobId}: Running post-import maintenance for ${importType}...`);
-      if (importType === "CANDIDATO" || importType === "PARTIDO") {
-        const tableName = importType === "CANDIDATO" ? "tse_candidate_votes" : "tse_party_votes";
+      const tableMap: Record<string, string> = {
+        CANDIDATO: "tse_candidate_votes",
+        PARTIDO: "tse_party_votes",
+        DETALHE: "tse_electoral_statistics",
+      };
+      const tableName = tableMap[importType];
+      if (tableName) {
         try {
           await db.execute(sql.raw(`ANALYZE ${tableName}`));
           console.log(`TSE Import ${jobId}: ANALYZE ${tableName} completed`);
@@ -1616,7 +1621,7 @@ const processCSVImportInternal = async (jobId: number, filePath: string) => {
     validatedAt: new Date(),
   });
 
-  postImportMaintenance("CANDIDATO", jobId).catch(() => {});
+  postImportMaintenance("CANDIDATO", jobId);
 
   if (process.env.OPENAI_API_KEY) {
     console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
@@ -1754,126 +1759,144 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
 
     const numericFields = [2, 3, 5, 6, 13, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44];
 
-    const allRows: string[][] = [];
-    await new Promise<void>((resolve, reject) => {
-      const parser = createReadStream(csvPath, { encoding: "latin1" })
-        .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2 }));
-
-      parser.on("data", (row: string[]) => {
-        allRows.push(row);
-      });
-      parser.on("end", () => resolve());
-      parser.on("error", reject);
-    });
-
-    console.log(`[DETALHE] Parsed ${allRows.length} rows, processing in batches...`);
-    
-    await storage.updateTseImportJob(jobId, { 
-      totalFileRows: allRows.length,
-      stage: "processing",
-      updatedAt: new Date()
-    });
-
     await storage.deleteBatchesByJob(jobId);
-    
-    const filteredRows: { index: number; row: string[] }[] = [];
-    for (let i = 0; i < allRows.length; i++) {
-      const row = allRows[i];
-      const cdCargo = parseValue(row[16], true);
-      if (cargoFilter && cdCargo !== cargoFilter) {
-        cargoFilteredCount++;
-        continue;
-      }
-      filteredRows.push({ index: i, row });
-    }
-    
-    console.log(`[DETALHE] After cargo filter: ${filteredRows.length} rows to process (${cargoFilteredCount} filtered)`);
-    
-    const totalBatches = Math.ceil(filteredRows.length / BATCH_SIZE);
-    
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-      const startIdx = batchIndex * BATCH_SIZE;
-      const endIdx = Math.min(startIdx + BATCH_SIZE, filteredRows.length);
-      const batchRows = filteredRows.slice(startIdx, endIdx);
-      
-      const originalRowStart = batchRows[0].index + 2;
-      const originalRowEnd = batchRows[batchRows.length - 1].index + 2;
-      
-      const batchRecord = await storage.createImportBatch({
-        importJobId: jobId,
-        batchIndex,
-        status: "processing",
-        rowStart: originalRowStart,
-        rowEnd: originalRowEnd,
-        totalRows: batchRows.length,
-        processedRows: 0,
-        insertedRows: 0,
-        skippedRows: 0,
-        errorCount: 0,
-        startedAt: new Date(),
-      });
-      
-      let batchInserted = 0;
-      let batchSkipped = 0;
-      let batchErrors = 0;
-      let batchErrorSummary = "";
-      
-      try {
-        const batchRecords: any[] = [];
-        for (const { row } of batchRows) {
-          rowCount++;
-          const record: any = { importJobId: jobId };
-          for (const [index, field] of Object.entries(fieldMap)) {
-            const idx = parseInt(index);
-            if (idx < row.length) {
-              record[field] = parseValue(row[idx], numericFields.includes(idx));
-            }
-          }
-          batchRecords.push(record);
+
+    const parser = createReadStream(csvPath, { encoding: "latin1" })
+      .pipe(parse({ delimiter: ";", relax_quotes: true, relax_column_count: true, skip_empty_lines: true, from_line: 2 }));
+
+    let batchRecords: any[] = [];
+    let batchIndex = 0;
+    let batchFirstRow = 0;
+    let batchLastRow = 0;
+    let currentBatchRecord: TseImportBatch | null = null;
+    let batchInserted = 0;
+    let batchSkipped = 0;
+    let batchErrors = 0;
+    let totalFileRows = 0;
+
+    const finalizeBatch = async () => {
+      if (batchRecords.length === 0 && !currentBatchRecord) return;
+
+      if (batchRecords.length > 0) {
+        try {
+          const inserted = await storage.insertTseElectoralStatisticsBatch(batchRecords);
+          batchInserted = inserted;
+          batchSkipped = batchRecords.length - inserted;
+          insertedCount += batchInserted;
+          duplicateCount += batchSkipped;
+        } catch (err: any) {
+          console.error(`[DETALHE] Batch ${batchIndex + 1} error:`, err);
+          batchErrors = batchRecords.length;
+          errorCount += batchErrors;
         }
-        
-        const inserted = await storage.insertTseElectoralStatisticsBatch(batchRecords);
-        batchInserted = inserted;
-        batchSkipped = batchRecords.length - inserted;
-        insertedCount += batchInserted;
-        duplicateCount += batchSkipped;
-        
-        await storage.updateImportBatch(batchRecord.id, {
-          status: "completed",
-          processedRows: batchRows.length,
+      }
+
+      if (currentBatchRecord) {
+        await storage.updateImportBatch(currentBatchRecord.id, {
+          status: batchErrors > 0 ? "failed" : "completed",
+          rowEnd: batchLastRow,
+          totalRows: batchRecords.length,
+          processedRows: batchRecords.length,
           insertedRows: batchInserted,
           skippedRows: batchSkipped,
-          errorCount: 0,
-          completedAt: new Date(),
-        });
-      } catch (err: any) {
-        console.error(`[DETALHE] Batch ${batchIndex + 1} error:`, err);
-        batchErrors = batchRows.length;
-        batchErrorSummary = err.message || "Unknown error";
-        errorCount += batchErrors;
-        
-        await storage.updateImportBatch(batchRecord.id, {
-          status: "failed",
-          processedRows: 0,
           errorCount: batchErrors,
-          errorSummary: batchErrorSummary,
+          errorSummary: batchErrors > 0 ? "Batch insert errors" : undefined,
           completedAt: new Date(),
         });
       }
-      
-      if ((batchIndex + 1) % 5 === 0 || batchIndex === totalBatches - 1) {
+
+      if ((batchIndex + 1) % 5 === 0) {
         const totalSkipped = cargoFilteredCount + duplicateCount;
-        await storage.updateTseImportJob(jobId, { 
+        await storage.updateTseImportJob(jobId, {
           processedRows: insertedCount,
           skippedRows: totalSkipped,
           errorCount,
           updatedAt: new Date()
         });
-        console.log(`[DETALHE] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
+        console.log(`[DETALHE] Batch ${batchIndex + 1}: ${insertedCount} inserted, ${duplicateCount} duplicates, ${cargoFilteredCount} filtered`);
       }
-      
+
+      batchRecords = [];
+      batchInserted = 0;
+      batchSkipped = 0;
+      batchErrors = 0;
+      batchIndex++;
+      batchFirstRow = 0;
+      batchLastRow = 0;
+      currentBatchRecord = null;
+
       await new Promise(resolve => setImmediate(resolve));
+    };
+
+    for await (const row of parser) {
+      try {
+        totalFileRows++;
+
+        const cdCargo = parseValue(row[16], true);
+        if (cargoFilter && cdCargo !== cargoFilter) {
+          cargoFilteredCount++;
+          continue;
+        }
+
+        rowCount++;
+
+        if (batchFirstRow === 0) {
+          batchFirstRow = totalFileRows;
+        }
+        batchLastRow = totalFileRows;
+
+        if (!currentBatchRecord) {
+          currentBatchRecord = await storage.createImportBatch({
+            importJobId: jobId,
+            batchIndex,
+            status: "processing",
+            rowStart: batchFirstRow,
+            rowEnd: batchFirstRow + BATCH_SIZE - 1,
+            totalRows: BATCH_SIZE,
+            processedRows: 0,
+            insertedRows: 0,
+            skippedRows: 0,
+            errorCount: 0,
+            startedAt: new Date(),
+          });
+        }
+
+        const record: any = { importJobId: jobId };
+        for (const [index, field] of Object.entries(fieldMap)) {
+          const idx = parseInt(index);
+          if (idx < row.length) {
+            record[field] = parseValue(row[idx], numericFields.includes(idx));
+          }
+        }
+        batchRecords.push(record);
+
+        if (batchRecords.length >= BATCH_SIZE) {
+          await finalizeBatch();
+        }
+
+        if (totalFileRows % 50000 === 0) {
+          await storage.updateTseImportJob(jobId, {
+            totalFileRows: totalFileRows,
+            updatedAt: new Date()
+          });
+        }
+      } catch (err: any) {
+        batchErrors++;
+        errorCount++;
+      }
     }
+
+    if (batchRecords.length > 0 || currentBatchRecord) {
+      await finalizeBatch();
+    }
+
+    console.log(`[DETALHE] Streaming complete: ${totalFileRows} file rows, ${rowCount} processed`);
+    
+    await storage.updateTseImportJob(jobId, {
+      totalFileRows: totalFileRows,
+      stage: "processing",
+      updatedAt: new Date()
+    });
 
     const totalSkipped = cargoFilteredCount + duplicateCount;
     const validationMessage = insertedCount === 0 && duplicateCount > 0
@@ -1896,7 +1919,7 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
       validationMessage: validationMessage,
     });
 
-    postImportMaintenance("DETALHE", jobId).catch(() => {});
+    postImportMaintenance("DETALHE", jobId);
 
     await unlink(zipPath).catch(() => {});
     await unlink(csvPath).catch(() => {});
@@ -2082,157 +2105,160 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
       return value.replace(/"/g, "").trim();
     };
 
-    const allRows: string[][] = [];
-    await new Promise<void>((resolve, reject) => {
-      const parser = createReadStream(csvPath, { encoding: "latin1" })
-        .pipe(parse({ delimiter: ";", relax_quotes: true, skip_empty_lines: true, from_line: 2 }));
-
-      parser.on("data", (row: string[]) => {
-        allRows.push(row);
-      });
-      parser.on("end", () => resolve());
-      parser.on("error", reject);
-    });
-
-    console.log(`[PARTIDO] Parsed ${allRows.length} rows, processing in batches...`);
-    
-    await storage.updateTseImportJob(jobId, { 
-      totalFileRows: allRows.length,
-      stage: "processing",
-      updatedAt: new Date()
-    });
-
     await storage.deleteBatchesByJob(jobId);
-    
-    const filteredRows: { index: number; row: string[] }[] = [];
-    for (let i = 0; i < allRows.length; i++) {
-      const row = allRows[i];
-      const cdCargo = parseValue(row[idxCdCargo], true);
-      if (cargoFilter && cdCargo !== cargoFilter) {
-        cargoFilteredCount++;
-        continue;
-      }
-      filteredRows.push({ index: i, row });
-    }
-    
-    console.log(`[PARTIDO] After cargo filter: ${filteredRows.length} rows to process (${cargoFilteredCount} filtered)`);
-    
+
     const seenKeys = new Set<string>();
-    const deduplicatedRows: { index: number; row: string[] }[] = [];
     let csvDuplicateCount = 0;
-    
-    for (const item of filteredRows) {
-      const row = item.row;
-      const key = [
-        parseValue(row[idxAnoEleicao], true),
-        parseValue(row[idxCdEleicao], true),
-        parseValue(row[idxNrTurno], true),
-        parseValue(row[idxSgUf], false),
-        parseValue(row[idxCdMunicipio], true),
-        parseValue(row[idxNrZona], true),
-        parseValue(row[idxCdCargo], true),
-        parseValue(row[idxNrPartido], true),
-        idxStVotoEmTransito >= 0 ? parseValue(row[idxStVotoEmTransito], false) : "N",
-      ].join('|');
-      
-      if (seenKeys.has(key)) {
-        csvDuplicateCount++;
-      } else {
-        seenKeys.add(key);
-        deduplicatedRows.push(item);
-      }
-    }
-    
-    if (csvDuplicateCount > 0) {
-      console.log(`[PARTIDO] Found ${csvDuplicateCount} duplicate rows in CSV file (exact same unique key), keeping ${deduplicatedRows.length} unique rows`);
-    }
-    
-    const rowsToProcess = deduplicatedRows;
-    
-    const totalBatches = Math.ceil(rowsToProcess.length / BATCH_SIZE);
-    
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-      const startIdx = batchIndex * BATCH_SIZE;
-      const endIdx = Math.min(startIdx + BATCH_SIZE, rowsToProcess.length);
-      const batchRows = rowsToProcess.slice(startIdx, endIdx);
-      
-      const originalRowStart = batchRows[0].index + 2;
-      const originalRowEnd = batchRows[batchRows.length - 1].index + 2;
-      
-      const batchRecord = await storage.createImportBatch({
-        importJobId: jobId,
-        batchIndex,
-        status: "processing",
-        rowStart: originalRowStart,
-        rowEnd: originalRowEnd,
-        totalRows: batchRows.length,
-        processedRows: 0,
-        insertedRows: 0,
-        skippedRows: 0,
-        errorCount: 0,
-        startedAt: new Date(),
-      });
-      
-      let batchInserted = 0;
-      let batchSkipped = 0;
-      let batchErrors = 0;
-      let batchErrorSummary = "";
-      
-      try {
-        const batchRecords: any[] = [];
-        for (const { row } of batchRows) {
-          rowCount++;
-          const record: any = { importJobId: jobId };
-          for (const [index, field] of Object.entries(fieldMap)) {
-            const idx = parseInt(index);
-            if (idx < row.length) {
-              record[field] = parseValue(row[idx], numericFields.includes(idx));
-            }
-          }
-          batchRecords.push(record);
+    let totalFileRows = 0;
+
+    const parser = createReadStream(csvPath, { encoding: "latin1" })
+      .pipe(parse({ delimiter: ";", relax_quotes: true, relax_column_count: true, skip_empty_lines: true, from_line: 2 }));
+
+    let batchRecords: any[] = [];
+    let batchIndex = 0;
+    let batchFirstRow = 0;
+    let batchLastRow = 0;
+    let currentBatchRecord: TseImportBatch | null = null;
+    let batchInserted = 0;
+    let batchSkipped = 0;
+    let batchErrors = 0;
+
+    const finalizeBatch = async () => {
+      if (batchRecords.length === 0 && !currentBatchRecord) return;
+
+      if (batchRecords.length > 0) {
+        try {
+          const inserted = await storage.insertTsePartyVotesBatch(batchRecords);
+          batchInserted = inserted;
+          batchSkipped = batchRecords.length - inserted;
+          insertedCount += batchInserted;
+          duplicateCount += batchSkipped;
+        } catch (err: any) {
+          console.error(`[PARTIDO] Batch ${batchIndex + 1} error:`, err);
+          batchErrors = batchRecords.length;
+          errorCount += batchErrors;
         }
-        
-        const inserted = await storage.insertTsePartyVotesBatch(batchRecords);
-        batchInserted = inserted;
-        batchSkipped = batchRecords.length - inserted;
-        insertedCount += batchInserted;
-        duplicateCount += batchSkipped;
-        
-        await storage.updateImportBatch(batchRecord.id, {
-          status: "completed",
-          processedRows: batchRows.length,
+      }
+
+      if (currentBatchRecord) {
+        await storage.updateImportBatch(currentBatchRecord.id, {
+          status: batchErrors > 0 ? "failed" : "completed",
+          rowEnd: batchLastRow,
+          totalRows: batchRecords.length,
+          processedRows: batchRecords.length,
           insertedRows: batchInserted,
           skippedRows: batchSkipped,
-          errorCount: 0,
-          completedAt: new Date(),
-        });
-      } catch (err: any) {
-        console.error(`[PARTIDO] Batch ${batchIndex + 1} error:`, err);
-        batchErrors = batchRows.length;
-        batchErrorSummary = err.message || "Unknown error";
-        errorCount += batchErrors;
-        
-        await storage.updateImportBatch(batchRecord.id, {
-          status: "failed",
-          processedRows: 0,
           errorCount: batchErrors,
-          errorSummary: batchErrorSummary,
+          errorSummary: batchErrors > 0 ? "Batch insert errors" : undefined,
           completedAt: new Date(),
         });
       }
-      
-      if ((batchIndex + 1) % 5 === 0 || batchIndex === totalBatches - 1) {
-        const totalSkipped = cargoFilteredCount + duplicateCount;
-        await storage.updateTseImportJob(jobId, { 
+
+      if ((batchIndex + 1) % 5 === 0) {
+        const totalSkipped = cargoFilteredCount + duplicateCount + csvDuplicateCount;
+        await storage.updateTseImportJob(jobId, {
           processedRows: insertedCount,
           skippedRows: totalSkipped,
           errorCount,
           updatedAt: new Date()
         });
-        console.log(`[PARTIDO] Batch ${batchIndex + 1}/${totalBatches}: ${insertedCount} inserted, ${duplicateCount} duplicates`);
+        console.log(`[PARTIDO] Batch ${batchIndex + 1}: ${insertedCount} inserted, ${duplicateCount} DB dupes, ${csvDuplicateCount} CSV dupes`);
       }
-      
+
+      batchRecords = [];
+      batchInserted = 0;
+      batchSkipped = 0;
+      batchErrors = 0;
+      batchIndex++;
+      batchFirstRow = 0;
+      batchLastRow = 0;
+      currentBatchRecord = null;
+
       await new Promise(resolve => setImmediate(resolve));
+    };
+
+    for await (const row of parser) {
+      try {
+        totalFileRows++;
+
+        const cdCargo = parseValue(row[idxCdCargo], true);
+        if (cargoFilter && cdCargo !== cargoFilter) {
+          cargoFilteredCount++;
+          continue;
+        }
+
+        const key = [
+          parseValue(row[idxAnoEleicao], true),
+          parseValue(row[idxCdEleicao], true),
+          parseValue(row[idxNrTurno], true),
+          parseValue(row[idxSgUf], false),
+          parseValue(row[idxCdMunicipio], true),
+          parseValue(row[idxNrZona], true),
+          parseValue(row[idxCdCargo], true),
+          parseValue(row[idxNrPartido], true),
+          idxStVotoEmTransito >= 0 ? parseValue(row[idxStVotoEmTransito], false) : "N",
+        ].join('|');
+
+        if (seenKeys.has(key)) {
+          csvDuplicateCount++;
+          continue;
+        }
+        seenKeys.add(key);
+
+        rowCount++;
+
+        if (batchFirstRow === 0) {
+          batchFirstRow = totalFileRows;
+        }
+        batchLastRow = totalFileRows;
+
+        if (!currentBatchRecord) {
+          currentBatchRecord = await storage.createImportBatch({
+            importJobId: jobId,
+            batchIndex,
+            status: "processing",
+            rowStart: batchFirstRow,
+            rowEnd: batchFirstRow + BATCH_SIZE - 1,
+            totalRows: BATCH_SIZE,
+            processedRows: 0,
+            insertedRows: 0,
+            skippedRows: 0,
+            errorCount: 0,
+            startedAt: new Date(),
+          });
+        }
+
+        const record: any = { importJobId: jobId };
+        for (const [index, field] of Object.entries(fieldMap)) {
+          const idx = parseInt(index);
+          if (idx < row.length) {
+            record[field] = parseValue(row[idx], numericFields.includes(idx));
+          }
+        }
+        batchRecords.push(record);
+
+        if (batchRecords.length >= BATCH_SIZE) {
+          await finalizeBatch();
+        }
+
+        if (totalFileRows % 50000 === 0) {
+          await storage.updateTseImportJob(jobId, {
+            totalFileRows: totalFileRows,
+            updatedAt: new Date()
+          });
+        }
+      } catch (err: any) {
+        batchErrors++;
+        errorCount++;
+      }
+    }
+
+    if (batchRecords.length > 0 || currentBatchRecord) {
+      await finalizeBatch();
+    }
+
+    if (csvDuplicateCount > 0) {
+      console.log(`[PARTIDO] Found ${csvDuplicateCount} duplicate rows in CSV (exact same unique key)`);
     }
 
     const partiesResult = await storage.syncPartiesFromTseImport(jobId);
@@ -2245,16 +2271,17 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
         ? `Importação concluída: ${insertedCount.toLocaleString("pt-BR")} inseridos, ${csvDuplicateCount > 0 ? `${csvDuplicateCount.toLocaleString("pt-BR")} duplicados CSV + ` : ''}${duplicateCount.toLocaleString("pt-BR")} duplicados DB`
         : null;
 
-    console.log(`[PARTIDO] Completed: ${allRows.length} total file rows, ${insertedCount} inserted, ${csvDuplicateCount} CSV duplicates removed, ${duplicateCount} DB duplicates, ${cargoFilteredCount} cargo-filtered, ${errorCount} errors`);
+    console.log(`[PARTIDO] Completed: ${totalFileRows} total file rows, ${insertedCount} inserted, ${csvDuplicateCount} CSV duplicates, ${duplicateCount} DB duplicates, ${cargoFilteredCount} cargo-filtered, ${errorCount} errors`);
 
     await storage.updateTseImportJob(jobId, {
       status: "completed", stage: "completed", totalRows: rowCount,
+      totalFileRows: totalFileRows,
       processedRows: insertedCount, skippedRows: totalSkipped,
       errorCount, completedAt: new Date(), updatedAt: new Date(),
       validationMessage: validationMessage,
     });
 
-    postImportMaintenance("PARTIDO", jobId).catch(() => {});
+    postImportMaintenance("PARTIDO", jobId);
 
     await unlink(zipPath).catch(() => {});
     await unlink(csvPath).catch(() => {});
@@ -2322,168 +2349,7 @@ const processCSVImport = async (jobId: number, filePath: string) => {
       startedAt: new Date(),
       updatedAt: new Date()
     });
-    
-    const job = await storage.getTseImportJob(jobId);
-    const cargoFilter = job?.cargoFilter;
-
-    const records: InsertTseCandidateVote[] = [];
-    let rowCount = 0;
-    let filteredCount = 0;
-    let errorCount = 0;
-    const BATCH_SIZE = 2000;
-
-    const parser = createReadStream(filePath)
-      .pipe(iconv.decodeStream("latin1"))
-      .pipe(parse({
-        delimiter: ";",
-        quote: '"',
-        relax_quotes: true,
-        relax_column_count: true,
-        skip_empty_lines: true,
-        from_line: 2,
-      }));
-
-    const fieldMap: { [key: number]: keyof InsertTseCandidateVote } = {
-      0: "dtGeracao",
-      1: "hhGeracao",
-      2: "anoEleicao",
-      3: "cdTipoEleicao",
-      4: "nmTipoEleicao",
-      5: "nrTurno",
-      6: "cdEleicao",
-      7: "dsEleicao",
-      8: "dtEleicao",
-      9: "tpAbrangencia",
-      10: "sgUf",
-      11: "sgUe",
-      12: "nmUe",
-      13: "cdMunicipio",
-      14: "nmMunicipio",
-      15: "nrZona",
-      16: "cdCargo",
-      17: "dsCargo",
-      18: "sqCandidato",
-      19: "nrCandidato",
-      20: "nmCandidato",
-      21: "nmUrnaCandidato",
-      22: "nmSocialCandidato",
-      23: "cdSituacaoCandidatura",
-      24: "dsSituacaoCandidatura",
-      25: "cdDetalheSituacaoCand",
-      26: "dsDetalheSituacaoCand",
-      27: "cdSituacaoJulgamento",
-      28: "dsSituacaoJulgamento",
-      29: "cdSituacaoCassacao",
-      30: "dsSituacaoCassacao",
-      31: "cdSituacaoDconstDiploma",
-      32: "dsSituacaoDconstDiploma",
-      33: "tpAgremiacao",
-      34: "nrPartido",
-      35: "sgPartido",
-      36: "nmPartido",
-      37: "nrFederacao",
-      38: "nmFederacao",
-      39: "sgFederacao",
-      40: "dsComposicaoFederacao",
-      41: "sqColigacao",
-      42: "nmColigacao",
-      43: "dsComposicaoColigacao",
-      44: "stVotoEmTransito",
-      45: "qtVotosNominais",
-      46: "nmTipoDestinacaoVotos",
-      47: "qtVotosNominaisValidos",
-      48: "cdSitTotTurno",
-      49: "dsSitTotTurno",
-    };
-
-    const parseValue = (value: string, field: string): any => {
-      if (value === "#NULO" || value === "#NE" || value === "") {
-        return null;
-      }
-      const intFields = [
-        "anoEleicao", "cdTipoEleicao", "nrTurno", "cdEleicao", "cdMunicipio",
-        "nrZona", "cdCargo", "nrCandidato", "cdSituacaoCandidatura",
-        "cdDetalheSituacaoCand", "cdSituacaoJulgamento", "cdSituacaoCassacao",
-        "cdSituacaoDconstDiploma", "nrPartido", "nrFederacao", "qtVotosNominais",
-        "qtVotosNominaisValidos", "cdSitTotTurno"
-      ];
-      if (intFields.includes(field)) {
-        const num = parseInt(value);
-        if (isNaN(num) || num === -1 || num === -3) return null;
-        return num;
-      }
-      return value;
-    };
-
-    for await (const row of parser) {
-      try {
-        rowCount++;
-        const record: any = { importJobId: jobId };
-
-        for (let i = 0; i < row.length; i++) {
-          const field = fieldMap[i];
-          if (field) {
-            record[field] = parseValue(row[i], field);
-          }
-        }
-
-        if (cargoFilter && record.cdCargo !== cargoFilter) {
-          filteredCount++;
-        } else {
-          records.push(record);
-        }
-
-        if (records.length >= BATCH_SIZE) {
-          await storage.bulkInsertTseCandidateVotes(records);
-          await storage.updateTseImportJob(jobId, { 
-            processedRows: rowCount,
-            updatedAt: new Date()
-          });
-          records.length = 0;
-        }
-      } catch (err: any) {
-        errorCount++;
-        await storage.createTseImportError({
-          importJobId: jobId,
-          rowNumber: rowCount,
-          errorType: "parse_error",
-          errorMessage: err.message,
-          rawData: JSON.stringify(row).substring(0, 1000),
-        });
-      }
-    }
-
-    if (records.length > 0) {
-      await storage.bulkInsertTseCandidateVotes(records);
-    }
-
-    const partiesResult = await storage.syncPartiesFromTseImport(jobId);
-    console.log(`TSE Import ${jobId}: Synced parties - ${partiesResult.created} created, ${partiesResult.updated} updated, ${partiesResult.existing} existing`);
-
-    await storage.updateTseImportJob(jobId, {
-      status: "completed",
-      stage: "completed",
-      totalRows: rowCount,
-      processedRows: rowCount,
-      errorCount,
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    console.log(`TSE Import ${jobId} completed: ${rowCount} rows, ${errorCount} errors`);
-
-    postImportMaintenance("CANDIDATO", jobId).catch(() => {});
-
-    if (process.env.OPENAI_API_KEY) {
-      console.log(`TSE Import ${jobId}: Starting background embedding generation...`);
-      generateEmbeddingsForImportJob(jobId)
-        .then(result => {
-          console.log(`TSE Import ${jobId}: Embeddings generated - ${result.processed} processed, ${result.skipped} skipped, ${result.errors} errors`);
-        })
-        .catch(error => {
-          console.error(`TSE Import ${jobId}: Embedding generation failed:`, error);
-        });
-    }
+    await processCSVImportInternal(jobId, filePath);
   } catch (error: any) {
     console.error(`TSE Import ${jobId} failed:`, error);
     await storage.updateTseImportJob(jobId, {

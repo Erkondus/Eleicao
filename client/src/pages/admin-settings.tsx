@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { AlertTriangle, Database, Trash2, Shield, Users, FileText, BarChart3, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { AlertTriangle, Database, Trash2, Shield, Users, FileText, BarChart3, Loader2, CheckCircle, XCircle, RefreshCw, Wrench } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +73,26 @@ export default function AdminSettings() {
     onError: (error: any) => {
       toast({
         title: "Erro ao zerar banco de dados",
+        description: error.message || "Falha na operação",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const refreshSummariesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/analytics/refresh-summaries");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Resumos atualizados",
+        description: `Tabelas atualizadas em ${data.duration || 0}ms: ${(data.tables || []).join(", ")}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar resumos",
         description: error.message || "Falha na operação",
         variant: "destructive",
       });
@@ -195,6 +215,48 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Wrench className="h-5 w-5" />
+            Manutenção do Sistema
+          </CardTitle>
+          <CardDescription>
+            Ferramentas de manutenção e otimização do banco de dados
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
+            <div>
+              <h4 className="font-medium">Atualizar Tabelas de Resumo</h4>
+              <p className="text-sm text-muted-foreground">
+                Recalcula os resumos de votos por partido, candidato e estado para acelerar as consultas de análise. 
+                Isso acontece automaticamente após cada importação, mas pode ser feito manualmente se necessário.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => refreshSummariesMutation.mutate()}
+              disabled={refreshSummariesMutation.isPending}
+              data-testid="button-refresh-summaries"
+              className="ml-4 shrink-0"
+            >
+              {refreshSummariesMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Atualizando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Atualizar Resumos
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-destructive/50">
         <CardHeader>
