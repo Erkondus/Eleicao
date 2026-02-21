@@ -1938,7 +1938,11 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
+    const [countResult] = await db.select({ count: sql<number>`COUNT(*)` }).from(tseCandidateVotes);
+    console.log(`[getTopCandidates] Total rows in tse_candidate_votes: ${countResult?.count}`);
+
     const conditions = this.buildCandidateVoteConditions(filters);
+    console.log(`[getTopCandidates] Filters: ${JSON.stringify(filters)}, conditions count: ${conditions.length}`);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const results = await db
@@ -1963,6 +1967,8 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`)
       .limit(filters.limit ?? 20);
+
+    console.log(`[getTopCandidates] Query returned ${results.length} results`);
 
     const data = results.map((r) => ({
       name: r.name || "N/A",

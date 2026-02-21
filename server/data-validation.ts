@@ -475,6 +475,7 @@ function buildSummary(issues: ValidationIssue[], totalRecords: number): Validati
 async function generateAiAnalysis(summary: ValidationSummary, job: any): Promise<unknown> {
   try {
     const prompt = `Você é um especialista em análise de dados eleitorais brasileiros do TSE.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições, avaliações e recomendações devem ser em português. Nunca use inglês.
 
 Analise o seguinte relatório de validação de dados importados:
 

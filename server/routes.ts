@@ -1717,6 +1717,7 @@ export async function registerRoutes(
       const openai = new OpenAI();
 
       const prompt = `Você é um especialista em direito eleitoral brasileiro e análise de eleições proporcionais.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições, justificativas e recomendações devem ser em português. Nunca use inglês.
 Analise o cenário abaixo e forneça previsões PRECISAS baseadas nas regras oficiais do TSE.
 
 === REGRAS TSE PARA ELEIÇÕES PROPORCIONAIS ===
@@ -1850,8 +1851,9 @@ Filtros Aplicados: ${JSON.stringify(filters || { info: "Todos os dados" })}
           {
             role: "system",
             content: `Você é um assistente especializado em análise de dados eleitorais brasileiros do TSE.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e explicações devem ser em português. Nunca use inglês.
 Responda perguntas sobre os dados eleitorais usando APENAS as informações fornecidas abaixo.
-Seja preciso, cite números específicos quando disponíveis, e responda em português.
+Seja preciso, cite números específicos quando disponíveis.
 Se não houver dados suficientes para responder, informe isso educadamente.
 Não invente dados que não estejam no contexto fornecido.`
           },
@@ -1911,6 +1913,7 @@ Não invente dados que não estejam no contexto fornecido.`
 
       const openai = new OpenAI();
       const prompt = `Você é um analista político especializado em tendências eleitorais brasileiras.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições, observações e justificativas devem ser em português. Nunca use inglês.
 Analise os dados históricos de votação abaixo e forneça previsões para futuras eleições.
 
 DADOS HISTÓRICOS:
@@ -2015,6 +2018,7 @@ Responda em JSON com a estrutura:
 
       const openai = new OpenAI();
       const prompt = `Você é um especialista em detecção de anomalias em dados eleitorais brasileiros.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e recomendações devem ser em português. Nunca use inglês.
 Analise os dados estatísticos abaixo e identifique possíveis anomalias, padrões incomuns ou pontos que merecem investigação.
 NÃO afirme que há fraude - apenas aponte padrões estatisticamente incomuns que podem merecer verificação.
 
@@ -2136,6 +2140,7 @@ Responda em JSON:
       }
       
       const { candidateNumber, candidateName, party, year, uf, electionType } = parsed.data;
+      console.log("[AI CandidateSuccess Route] Request body:", JSON.stringify(parsed.data));
       
       const cacheKey = `candidate_${candidateNumber || 'all'}_${party || 'all'}_${year || 'all'}_${uf || 'all'}`;
       const cached = await storage.getAiPrediction(cacheKey);
@@ -2165,7 +2170,8 @@ Responda em JSON:
       res.json(predictions);
     } catch (error: any) {
       console.error("AI Candidate Success error:", error);
-      res.status(500).json({ error: error.message || "Failed to generate candidate success predictions" });
+      const isDataError = error.message?.includes("Nenhum dado de candidato");
+      res.status(isDataError ? 400 : 500).json({ error: error.message || "Falha ao gerar previsões de sucesso de candidatos" });
     }
   });
 
@@ -3578,6 +3584,7 @@ Responda em JSON:
       // Build comparison using AI
       const openai = new OpenAI();
       const prompt = `Você é um analista político especializado em eleições brasileiras.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições, forças, fraquezas e narrativas devem ser em português. Nunca use inglês.
 Compare os seguintes candidatos e forneça uma análise detalhada:
 
 Candidatos para comparação:
@@ -3720,6 +3727,7 @@ Responda em JSON:
 
       const openai = new OpenAI();
       const prompt = `Você é um analista político especializado em previsões eleitorais brasileiras.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições, narrativas e recomendações devem ser em português. Nunca use inglês.
 Analise o impacto do seguinte evento nas eleições:
 
 EVENTO: ${prediction.eventDescription}
@@ -3865,6 +3873,7 @@ Forneça projeções ANTES e DEPOIS do evento em JSON:
 
       const openai = new OpenAI();
       const prompt = `Você é um analista político especializado em simulações eleitorais brasileiras.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições, narrativas e resultados devem ser em português. Nunca use inglês.
 Simule o seguinte cenário "E se...":
 
 TIPO DE SIMULAÇÃO: ${simulation.simulationType}
@@ -4608,7 +4617,8 @@ Analise o impacto dessa mudança hipotética e forneça:
       if (field.startsWith("sq")) {
         return value;
       }
-      if (field.startsWith("qt") || field.startsWith("nr") || field.startsWith("cd")) {
+      // Integer fields: qt*, nr*, cd*, ano*, nrTurno
+      if (field.startsWith("qt") || field.startsWith("nr") || field.startsWith("cd") || field === "anoEleicao" || field === "nrTurno") {
         const num = parseInt(value, 10);
         return isNaN(num) ? null : num;
       }
@@ -6114,6 +6124,7 @@ Analise o impacto dessa mudança hipotética e forneça:
           {
             role: "system",
             content: `Você é um analista de dados eleitorais especializado no sistema eleitoral brasileiro.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, títulos, descrições, sugestões e análises devem ser em português. Nunca use inglês.
 Analise os dados fornecidos e sugira gráficos e relatórios úteis.
 Responda em JSON com o seguinte formato:
 {
@@ -8952,7 +8963,7 @@ Forneça até 5 recomendações de KPIs estratégicos no formato JSON:
         body: JSON.stringify({
           model: "gpt-4o",
           messages: [
-            { role: "system", content: "Você é um estrategista político especialista em campanhas eleitorais brasileiras. Responda apenas em JSON válido." },
+            { role: "system", content: "Você é um estrategista político especialista em campanhas eleitorais brasileiras. IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises e recomendações devem ser em português. Nunca use inglês. Responda apenas em JSON válido." },
             { role: "user", content: prompt }
           ],
           temperature: 0.7,

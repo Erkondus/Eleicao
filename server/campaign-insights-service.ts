@@ -121,6 +121,7 @@ class CampaignInsightsService {
 
     // Build prompt for GPT-4o analysis
     const prompt = `Você é um cientista de dados especialista em marketing político brasileiro.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e recomendações devem ser em português. Nunca use inglês.
 
 Analise os dados demográficos e de sentimento para identificar os 5-7 segmentos de eleitores de MAIOR IMPACTO para uma campanha eleitoral em ${electionYear}.
 
@@ -234,6 +235,7 @@ Responda em JSON com o seguinte formato:
     const sentimentData = await this.getSentimentContext(session.targetPartyId);
 
     const prompt = `Você é um especialista em comunicação política e marketing de campanhas eleitorais no Brasil.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, estratégias, mensagens e análises devem ser em português. Nunca use inglês.
 
 Com base nos segmentos de eleitores identificados e nos dados de sentimento, desenvolva estratégias de mensagem personalizadas.
 
@@ -346,6 +348,7 @@ Responda em JSON:
     const demographicData = await this.getDemographicContext(session.targetRegion);
 
     const prompt = `Você é um cientista de dados especializado em modelagem preditiva para campanhas políticas.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, narrativas e recomendações devem ser em português. Nunca use inglês.
 
 Preveja o impacto de um investimento de campanha com base nos dados fornecidos.
 
@@ -455,6 +458,7 @@ Responda em JSON:
     if (!session) throw new Error("Session not found");
 
     const prompt = `Você é um consultor estratégico de marketing político.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, relatórios, insights e recomendações devem ser em português. Nunca use inglês.
 
 Gere um relatório executivo completo com base na análise de campanha.
 

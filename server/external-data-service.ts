@@ -190,7 +190,8 @@ async function enrichArticlesWithAI(articles: ExternalArticle[]): Promise<Extern
   const articlesToEnrich = articles.slice(0, 10);
 
   try {
-    const prompt = `Analise os seguintes títulos de notícias sobre política brasileira e forneça um resumo expandido para cada um, mantendo o contexto eleitoral.
+    const prompt = `IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises e descrições devem ser em português. Nunca use inglês.
+Analise os seguintes títulos de notícias sobre política brasileira e forneça um resumo expandido para cada um, mantendo o contexto eleitoral.
 
 Títulos:
 ${articlesToEnrich.map((a, i) => `${i + 1}. ${a.title}`).join("\n")}

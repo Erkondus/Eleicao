@@ -322,6 +322,7 @@ export async function predictVoterTurnout(filters: {
   const votesByState = filters.uf ? [] : await storage.getVotesByState({ year: availableYears[0] });
 
   const prompt = `Você é um especialista em análise eleitoral brasileira e previsão de comparecimento eleitoral.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e recomendações devem ser em português. Nunca use inglês.
 
 DADOS HISTÓRICOS DE VOTAÇÃO:
 ${historicalData.map(d => `Ano ${d.year}: ${d.totalVotes.toLocaleString("pt-BR")} votos totais, ${d.candidates} candidatos`).join("\n")}
@@ -383,19 +384,48 @@ export async function predictCandidateSuccess(filters: {
   uf?: string;
   electionType?: string;
 }): Promise<CandidateSuccessPrediction[]> {
-  const allCandidates = await storage.getTopCandidates({
+  console.log("[AI CandidateSuccess] Filters received:", JSON.stringify(filters));
+  
+  let allCandidates = await storage.getTopCandidates({
     year: filters.year,
     uf: filters.uf,
     electionType: filters.electionType,
     limit: 200
   });
 
+  console.log(`[AI CandidateSuccess] Found ${allCandidates.length} candidates with filters: year=${filters.year}, uf=${filters.uf}, electionType=${filters.electionType}`);
+
+  if (allCandidates.length === 0 && (filters.year || filters.uf || filters.electionType)) {
+    console.log("[AI CandidateSuccess] No results with filters, trying without electionType...");
+    allCandidates = await storage.getTopCandidates({
+      year: filters.year,
+      uf: filters.uf,
+      limit: 200
+    });
+    console.log(`[AI CandidateSuccess] Without electionType: ${allCandidates.length} candidates`);
+  }
+
+  if (allCandidates.length === 0 && (filters.year || filters.uf)) {
+    console.log("[AI CandidateSuccess] Still no results, trying with year only...");
+    allCandidates = await storage.getTopCandidates({
+      year: filters.year,
+      limit: 200
+    });
+    console.log(`[AI CandidateSuccess] With year only: ${allCandidates.length} candidates`);
+  }
+
+  if (allCandidates.length === 0) {
+    console.log("[AI CandidateSuccess] Trying without any filters...");
+    allCandidates = await storage.getTopCandidates({ limit: 200 });
+    console.log(`[AI CandidateSuccess] Without filters: ${allCandidates.length} candidates`);
+  }
+
   const topCandidates = filters.party 
     ? allCandidates.filter(c => c.party === filters.party)
     : allCandidates;
 
   if (topCandidates.length === 0) {
-    throw new Error("No candidate data available for the specified filters");
+    throw new Error("Nenhum dado de candidato disponível. Verifique se os dados de votação por candidato (votacao_candidato_munzona) foram importados corretamente do TSE.");
   }
 
   const votesByParty = await storage.getVotesByParty({
@@ -431,6 +461,7 @@ export async function predictCandidateSuccess(filters: {
     : topCandidates.slice(0, 20);
 
   const prompt = `Você é um especialista em análise eleitoral brasileira.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e recomendações devem ser em português. Nunca use inglês.
 Analise os seguintes candidatos e preveja suas chances de sucesso eleitoral.
 
 CANDIDATOS A ANALISAR:
@@ -537,6 +568,7 @@ export async function predictPartyPerformance(filters: {
   }
 
   const prompt = `Você é um especialista em análise político-eleitoral brasileira.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e previsões devem ser em português. Nunca use inglês.
 Analise os dados históricos dos partidos e forneça previsões de desempenho.
 
 DADOS HISTÓRICOS POR ANO:
@@ -631,6 +663,7 @@ export async function analyzeElectoralSentiment(input: {
   ].join("\n\n");
 
   const prompt = `Você é um especialista em análise de sentimento político e eleitoral brasileiro.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e resumos devem ser em português. Nunca use inglês.
 Analise o conteúdo abaixo e forneça uma análise de sentimento detalhada.
 
 CONTEÚDO PARA ANÁLISE:
@@ -700,6 +733,7 @@ export async function classifyArticleSentiment(article: {
   summary: string;
 }> {
   const prompt = `Você é um especialista em análise de sentimento político brasileiro.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e classificações devem ser em português. Nunca use inglês.
 Analise o seguinte artigo e classifique o sentimento geral e por entidade.
 
 ARTIGO:
@@ -898,6 +932,7 @@ export async function generateComparisonNarrative(entities: {
   ).join("\n");
 
   const prompt = `Você é um analista político especializado em eleições brasileiras.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, comparações e narrativas devem ser em português. Nunca use inglês.
 Compare o sentimento público entre estas entidades políticas:
 
 ${entitiesSummary}
@@ -951,6 +986,7 @@ export async function generateElectoralInsights(filters: {
   }
 
   const prompt = `Você é um especialista em análise eleitoral brasileira.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, insights e recomendações devem ser em português. Nunca use inglês.
 Analise os dados eleitorais e gere insights estratégicos abrangentes.
 
 RESUMO DOS DADOS:
@@ -1065,6 +1101,7 @@ export async function generateProjectionReport(params: {
   const totalRecords = historicalData.reduce((sum, d) => sum + d.candidates, 0);
   
   const prompt = `Você é um especialista em análise eleitoral brasileira e projeções de resultados eleitorais.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, projeções, narrativas e recomendações devem ser em português. Nunca use inglês.
 Você deve gerar um relatório de projeção completo e detalhado para a eleição de ${targetYear}.
 
 CONTEXTO DA ANÁLISE:

@@ -193,6 +193,7 @@ export async function analyzeSentimentWithAI(
     : "\nIdentifique e analise todas as entidades políticas (partidos e candidatos) mencionadas no conteúdo.";
 
   const prompt = `Você é um especialista em análise de sentimento político e eleitoral brasileiro.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, resumos, palavras-chave e descrições devem ser em português. Nunca use inglês.
 Analise o seguinte conteúdo de múltiplas fontes jornalísticas REAIS e forneça uma análise de sentimento detalhada e precisa.
 
 CONTEÚDO PARA ANÁLISE (${allContent.length} artigos de ${sources.length} fontes):

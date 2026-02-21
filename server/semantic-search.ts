@@ -133,10 +133,10 @@ export async function generateAnswer(
   ).join("\n\n");
   
   const systemPrompt = `Você é um assistente especializado em dados eleitorais brasileiros. 
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, descrições e explicações devem ser em português. Nunca use inglês.
 Responda perguntas de forma concisa e factual, baseando-se exclusivamente nos dados fornecidos.
 Cite as fontes usando o formato [número] quando usar informações específicas.
-Se não houver dados suficientes para responder, diga claramente.
-Responda em português brasileiro.`;
+Se não houver dados suficientes para responder, diga claramente.`;
 
   const userPrompt = `Pergunta: ${query}
 

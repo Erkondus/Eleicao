@@ -325,6 +325,7 @@ async function generateAINarrative(
   
   const prompt = `
 Você é um analista político brasileiro especializado em previsões eleitorais.
+IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, narrativas e recomendações devem ser em português. Nunca use inglês.
 Baseado nos seguintes dados de previsão para o ano ${forecastRun.targetYear}, gere uma análise narrativa concisa (3-4 parágrafos):
 
 Previsões por Partido (top 5):
@@ -705,7 +706,7 @@ export async function runForecastWithScenario(
       messages: [
         {
           role: "system",
-          content: "Você é um analista político especializado em eleições brasileiras. Forneça uma análise concisa e objetiva das previsões eleitorais, destacando tendências, riscos e oportunidades. Responda em português brasileiro.",
+          content: "Você é um analista político especializado em eleições brasileiras. IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, narrativas e recomendações devem ser em português. Nunca use inglês. Forneça uma análise concisa e objetiva das previsões eleitorais, destacando tendências, riscos e oportunidades.",
         },
         {
           role: "user",

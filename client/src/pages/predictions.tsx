@@ -226,7 +226,8 @@ export default function Predictions() {
   const predictionMutation = useMutation({
     mutationFn: async (scenarioId: number) => {
       const response = await apiRequest("POST", "/api/ai/predict", { scenarioId });
-      return response as unknown as AIPrediction;
+      const data = await response.json();
+      return data as AIPrediction;
     },
     onSuccess: (data) => {
       setPrediction(data);
@@ -675,7 +676,7 @@ export default function Predictions() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {prediction.predictions.map((pred) => {
+                    {(prediction.predictions || []).map((pred) => {
                       const party = parties?.find((p) => p.id === pred.partyId);
                       const TrendIcon = trendIcons[pred.trend];
                       const trendColor = trendColors[pred.trend];
@@ -725,7 +726,7 @@ export default function Predictions() {
                 </CardContent>
               </Card>
 
-              {prediction.recommendations.length > 0 && (
+              {(prediction.recommendations || []).length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -735,7 +736,7 @@ export default function Predictions() {
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-2">
-                      {prediction.recommendations.map((rec, idx) => (
+                      {(prediction.recommendations || []).map((rec, idx) => (
                         <li key={idx} className="flex items-start gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-medium shrink-0">
                             {idx + 1}
