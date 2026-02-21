@@ -13,6 +13,18 @@ SimulaVoto is a comprehensive web system designed to simulate Brazilian proporti
 ## System Architecture
 The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend, an Express.js + TypeScript backend, and PostgreSQL with Drizzle ORM for the database. Authentication is handled via `passport-local` and `express-session`, implementing Role-Based Access Control (RBAC) with `admin`, `analyst`, and `viewer` roles.
 
+**Backend Route Structure (Modularized):**
+- `server/routes/index.ts` - Main entry: session/passport setup, router mounting
+- `server/routes/shared.ts` - Shared middleware: requireAuth, requireRole, logAudit, upload, calculateNextRun
+- `server/routes/auth.ts` - Authentication, users, health, stats, audit
+- `server/routes/electoral.ts` - Parties, candidates, scenarios, simulations, electoral calculation (D'Hondt)
+- `server/routes/tse-import.ts` - TSE CSV import with queue system, batch processing, historical elections
+- `server/routes/analytics.ts` - Analytics dashboard, data export, drill-down queries
+- `server/routes/ai.ts` - AI predictions, forecasts, semantic search, reports, dashboards, suggestions
+- `server/routes/sentiment.ts` - Sentiment analysis, monitoring sessions, crisis alerts, notifications
+- `server/routes/ibge.ts` - IBGE data import (municipios, populacao, indicadores)
+- `server/routes/campaigns.ts` - Campaign management, insights, team, KPI, calendar, budgets
+
 **Key Features and Implementations:**
 - **Electoral Calculation:** Implements the Brazilian proportional electoral system with full TSE compliance:
   - Quociente Eleitoral (QE) = floor(votos_válidos / vagas) (Art. 106 CE)

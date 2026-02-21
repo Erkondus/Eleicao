@@ -276,20 +276,8 @@ export async function runSafeMigrations(): Promise<void> {
         const existingSet = new Set(existingIndexes.rows.map((r: any) => r.indexname));
 
         const allIndexes: { name: string; sql: string }[] = [
-          { name: "idx_tse_cv_ano_eleicao", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_ano_eleicao ON tse_candidate_votes (ano_eleicao)` },
-          { name: "idx_tse_cv_sg_uf", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sg_uf ON tse_candidate_votes (sg_uf)` },
-          { name: "idx_tse_cv_cd_cargo", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_cd_cargo ON tse_candidate_votes (cd_cargo)` },
-          { name: "idx_tse_cv_sg_partido", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sg_partido ON tse_candidate_votes (sg_partido)` },
-          { name: "idx_tse_cv_ano_uf", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_ano_uf ON tse_candidate_votes (ano_eleicao, sg_uf)` },
-          { name: "idx_tse_cv_ano_uf_cargo", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_ano_uf_cargo ON tse_candidate_votes (ano_eleicao, sg_uf, cd_cargo)` },
-          { name: "idx_tse_cv_nm_tipo_eleicao", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_tipo_eleicao ON tse_candidate_votes (nm_tipo_eleicao)` },
-          { name: "idx_tse_cv_uf_municipio", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_uf_municipio ON tse_candidate_votes (sg_uf, cd_municipio, nm_municipio)` },
-          { name: "idx_tse_cv_sq_candidato", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_sq_candidato ON tse_candidate_votes (sq_candidato)` },
           { name: "idx_tse_cv_nm_urna_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)` },
           { name: "idx_tse_cv_nm_cand_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_cand_upper ON tse_candidate_votes (UPPER(nm_candidato) text_pattern_ops)` },
-          { name: "idx_tse_cv_partido_votos", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_partido_votos ON tse_candidate_votes (sg_partido, nr_partido, qt_votos_nominais)` },
-          { name: "idx_tse_pv_partido_legenda", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_pv_partido_legenda ON tse_party_votes (sg_partido, qt_votos_legenda_validos)` },
-          { name: "idx_tse_pv_ano_uf", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_pv_ano_uf ON tse_party_votes (ano_eleicao, sg_uf)` },
         ];
         if (hasTrgm) {
           allIndexes.push(
@@ -300,9 +288,14 @@ export async function runSafeMigrations(): Promise<void> {
 
         const missing = allIndexes.filter(i => !existingSet.has(i.name));
         if (missing.length === 0) {
-          console.log("[Migration] All performance indexes already exist. Skipping.");
+          console.log(`[Migration] All ${allIndexes.length} special indexes already exist (expression/GIN). Skipping.`);
         } else {
-          console.log(`[Migration] ${missing.length} indexes missing, creating in background (server will start now)...`);
+          const existingNames = allIndexes.filter(i => existingSet.has(i.name)).map(i => i.name);
+          if (existingNames.length > 0) {
+            console.log(`[Migration] Existing special indexes: ${existingNames.join(', ')}`);
+          }
+          console.log(`[Migration] ${missing.length} special indexes missing: ${missing.map(i => i.name).join(', ')}`);
+          console.log(`[Migration] Creating in background (server will start now)...`);
           client.release();
           clientReleased = true;
           createIndexesInBackground(missing, _pool!);

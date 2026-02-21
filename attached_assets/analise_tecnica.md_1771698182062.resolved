@@ -1,0 +1,42 @@
+# Análise Técnica Geral - Projeto Eleicao
+
+Esta análise foi realizada para identificar possíveis erros, gargalos de manutenção e oportunidades de melhoria lógica no sistema.
+
+## 1. Arquitetura e Estrutura de Código
+
+### 🚩 Pontos de Atenção Críticos (Backend)
+*   **Arquivos Monolíticos**: O arquivo [routes.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/routes.ts) possui mais de **9.500 linhas**, e a função [registerRoutes](file:///Users/denisbezerra/Downloads/Eleicao/server/routes.ts#245-9339) centraliza quase toda a lógica da API. Isso torna a manutenção extremamente difícil, aumenta o risco de bugs e dificulta a implementação de testes unitários.
+*   **Storage Excessivo**: O arquivo [storage.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts) (aprox. 4.000 linhas) segue o mesmo padrão, acumulando centenas de métodos em uma única classe/interface.
+*   **Inicialização do Banco**: A lógica de [db.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/db.ts) inclui resoluções customizadas de DNS (IPv4) e criação de índices em background. Embora proativo, isso pode mascarar falhas de infraestrutura e causar locks inesperados no banco de dados se não for gerenciado por ferramentas de migração padrão.
+
+### ✅ Pontos Fortes
+*   **Stack Moderna**: O uso de Vite, React, Tailwind CSS, TanStack Query e Drizzle ORM é excelente e segue as melhores práticas atuais para performance e produtividade.
+*   **Integração de IA**: O sistema possui uma infraestrutura robusta para insights de IA, análise de sentimento e busca semântica (pgvector).
+*   **Gerenciamento de Estado**: O uso de `TanStack Query` e `Context API` no frontend está bem estruturado.
+
+---
+
+## 2. Sugestões de Melhoria e Refatoração
+
+### Estrutural (Prioridade Alta)
+1.  **Modularização de Rotas**: Dividir [routes.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/routes.ts) em controladores menores por domínio (ex: `authRoutes.ts`, `tseRoutes.ts`, `scenarioRoutes.ts`).
+2.  **Service Layer**: Extrair a lógica de negócio complexa de [storage.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts) para serviços dedicados. O `storage` deve apenas lidar com operações de persistência.
+3.  **Padronização de Erros**: Implementar um middleware global de tratamento de erros no Express para evitar blocos `try/catch` repetitivos e garantir respostas consistentes.
+
+### Lógica e Performance
+1.  **Migrações**: Mover a criação de índices e Alter Tables de [db.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/db.ts) para arquivos de migração oficiais do Drizzle.
+2.  **Fila de Importação**: Revisar o consumo de memória durante o processamento de grandes arquivos CSV do TSE para garantir que o uso de streams está otimizado (pipeline de streams).
+3.  **Caching**: O cache em memória no [storage.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts) é simples. Para ambientes produtivos com escala, considere Redis, especialmente para as previsões de IA.
+
+---
+
+## 3. Segurança
+*   **Validação**: O uso de `zod` para validação de entrada é ótimo. Certifique-se de que *todas* as rotas de escrita estão protegidas por esses esquemas.
+*   **Permissões**: O sistema de roles (`admin`, `analyst`, `viewer`) parece bem definido, mas deve ser auditado para garantir que não existam rotas "esquecidas" sem o [requireRole](file:///Users/denisbezerra/Downloads/Eleicao/server/routes.ts#233-244).
+
+---
+
+> [!IMPORTANT]
+> A principal recomendação imediata é a interrupção do crescimento dos arquivos [routes.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/routes.ts) e [storage.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts) através de uma estratégia de refatoração para sub-módulos.
+
+**Deseja que eu aprofunde a análise em algum desses pontos ou que eu proponha um plano de ação para as refatorações?**

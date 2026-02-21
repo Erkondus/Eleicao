@@ -1,0 +1,54 @@
+# Plano de Ação: Modularização e Otimização do Backend
+
+Este plano visa resolver os problemas de manutenibilidade identificados na análise técnica, transformando o backend monolítico em uma arquitetura modular e escalável.
+
+## 1. Análise Aprofundada dos Riscos Atuais
+
+### ⚠️ O "Gargalo Monolítico"
+*   **Debug Inviável**: Localizar um erro em [routes.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/routes.ts) exige navegar por 9.500 linhas. Ferramentas de IDE começam a travar ou ficar lentas com arquivos desse tamanho.
+*   **Conflitos de Merge**: Em um ambiente de equipe, múltiplos desenvolvedores alterando o mesmo arquivo causariam conflitos constantes e difíceis de resolver.
+*   **Dívida Técnica Exponencial**: Cada nova funcionalidade adicionada a esses arquivos aumenta a complexidade de forma não linear, tornando futuras mudanças cada vez mais caras e arriscadas.
+
+---
+
+## 2. Proposta de Nova Arquitetura
+
+A ideia é migrar para um padrão **Controller-Service-Repository**:
+
+```mermaid
+graph TD
+    App[server/index.ts] --> Router[server/routes/index.ts]
+    Router --> AuthCtrl[server/controllers/authController.ts]
+    Router --> TSECtrl[server/controllers/tseController.ts]
+    TSECtrl --> TSESvc[server/services/tseService.ts]
+    TSESvc --> Storage[server/storage/...]
+```
+
+---
+
+## 3. Plano de Ação em Etapas
+
+### Fase 1: Fundação (Curto Prazo)
+- **Criação da Estrutura**: Criar os diretórios `server/routes/`, `server/controllers/` e `server/services/`.
+- **Limpeza do [storage.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts)**: Dividir a interface [IStorage](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts#86-390) e a classe [DatabaseStorage](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts#425-3973) em arquivos menores (ex: `userStorage.ts`, `electoralStorage.ts`).
+
+### Fase 2: Extração por Domínios (Médio Prazo) - Padrão "Shadow Routes"
+Para garantir que o frontend não quebre, adotaremos uma abordagem progressiva:
+1.  **Módulo de Autenticação**: Extrair rotas `/api/auth` para `server/routes/auth.ts` e `server/controllers/authController.ts`. O arquivo [index.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/index.ts) passará a importar e montar essas rotas.
+2.  **Módulo de Importação TSE**: Isolar a complexa lógica de processamento de CSVs, streams e filas em `server/services/tseImportService.ts`. O controlador (`tseController.ts`) apenas chamará o serviço.
+3.  **Módulo de Cenários e IA**: Criar `scenarioService.ts` e isolar integrações com OpenAI em `aiInsightsService.ts`.
+4.  **Testes e Paralelismo**: Durante a transição, manter as rotas antigas em [routes.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/routes.ts) comentadas ou desativadas condicionalmente, ativando as rotas modulares uma por uma e testando o frontend correspondente.
+
+### Fase 3: Modernização de Dados e Performance (Longo Prazo)
+- **Normalização de Migrações**: Migrar a lógica de [db.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/db.ts) (criação de index e pg_trgm) para arquivos `.sql` gerenciados pelo `drizzle-kit`.
+- **Implementação de Redis (Opcional)**: Adicionar uma camada de cache para consultas agregadas do TSE (`tseElectoralStatistics`).
+- **Middleware Global de Erros**: Garantir que todos os `catch` nos controladores repassem o erro (`next(err)`) para um tratador global no [index.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/index.ts).
+
+---
+
+## 4. Próximos Passos Sugeridos
+
+> [!IMPORTANT]
+> Recomendo começar pela **Fase 1**, especificamente pela divisão do [storage.ts](file:///Users/denisbezerra/Downloads/Eleicao/server/storage.ts), que é a base de dados do sistema.
+
+**Você autoriza o início da Fase 1 através de uma refatoração estrutural (sem alteração de lógica)?**
