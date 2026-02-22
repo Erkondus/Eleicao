@@ -19,6 +19,7 @@ import aiRouter from "./ai";
 import sentimentRouter from "./sentiment";
 import ibgeRouter from "./ibge";
 import campaignsRouter from "./campaigns";
+import adminAiRouter from "./admin-ai";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -112,6 +113,7 @@ export async function registerRoutes(
   app.use(sentimentRouter);
   app.use(ibgeRouter);
   app.use(campaignsRouter);
+  app.use(adminAiRouter);
 
   return httpServer;
 }

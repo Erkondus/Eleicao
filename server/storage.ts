@@ -51,6 +51,8 @@ import {
   summaryPartyVotes,
   summaryCandidateVotes,
   summaryStateVotes,
+  type AiProvider, type InsertAiProvider, aiProviders,
+  type AiTaskConfig, type InsertAiTaskConfig, aiTaskConfigs,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -194,6 +196,20 @@ export interface IStorage {
   getAiPrediction(cacheKey: string): Promise<AiPrediction | undefined>;
   saveAiPrediction(data: { cacheKey: string; predictionType: string; prediction: unknown; expiresAt: Date }): Promise<AiPrediction>;
   deleteExpiredAiPredictions(): Promise<number>;
+
+  // AI Provider management
+  getAiProviders(): Promise<AiProvider[]>;
+  getAiProvider(id: number): Promise<AiProvider | undefined>;
+  getDefaultAiProvider(): Promise<AiProvider | undefined>;
+  createAiProvider(data: InsertAiProvider): Promise<AiProvider>;
+  updateAiProvider(id: number, data: Partial<InsertAiProvider>): Promise<AiProvider | undefined>;
+  deleteAiProvider(id: number): Promise<boolean>;
+
+  // AI Task Config management
+  getAiTaskConfigs(): Promise<AiTaskConfig[]>;
+  getAiTaskConfig(taskKey: string): Promise<AiTaskConfig | undefined>;
+  upsertAiTaskConfig(data: InsertAiTaskConfig): Promise<AiTaskConfig>;
+  deleteAiTaskConfig(taskKey: string): Promise<boolean>;
 
   // Validation methods
   createValidationRun(data: InsertValidationRun): Promise<ValidationRunRecord>;
@@ -1571,15 +1587,7 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<{ totalRecords: number; years: number[]; ufs: string[]; cargos: { code: number; name: string }[] }>(cacheKey);
     if (cached) return cached;
 
-    const [countResult, yearsResult, ufsResult, cargosResult] = await Promise.all([
-      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_candidate_votes'`),
-      db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`),
-      db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`),
-      db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`),
-    ]);
-
-    const validUfs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
-
+    const countResult = await db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_candidate_votes'`);
     const countRows = countResult.rows ?? countResult;
     let estimatedCount = Number((countRows as any)[0]?.count || 0);
 
@@ -1588,12 +1596,36 @@ export class DatabaseStorage implements IStorage {
       estimatedCount = Number(exactCount[0]?.count || 0);
     }
 
-    const result = {
-      totalRecords: estimatedCount,
-      years: yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a),
-      ufs: validUfs,
-      cargos: cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! })),
-    };
+    let years: number[] = [];
+    let ufs: string[] = [];
+    let cargos: { code: number; name: string }[] = [];
+
+    try {
+      const [yearsResult, ufsResult, cargosResult] = await Promise.all([
+        db.selectDistinct({ year: summaryCandidateVotes.anoEleicao }).from(summaryCandidateVotes),
+        db.selectDistinct({ uf: summaryCandidateVotes.sgUf }).from(summaryCandidateVotes),
+        db.selectDistinct({ code: summaryCandidateVotes.cdCargo, name: summaryCandidateVotes.dsCargo }).from(summaryCandidateVotes),
+      ]);
+
+      years = yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a);
+      ufs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
+      cargos = cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! }));
+    } catch (e) {
+      // fallback
+    }
+
+    if (years.length === 0) {
+      const [yearsResult, ufsResult, cargosResult] = await Promise.all([
+        db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`),
+        db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`),
+        db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`),
+      ]);
+      years = yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a);
+      ufs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
+      cargos = cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! }));
+    }
+
+    const result = { totalRecords: estimatedCount, years, ufs, cargos };
     this.analyticsCache.set(cacheKey, result, 30 * 60 * 1000);
     return result;
   }
@@ -1786,6 +1818,30 @@ export class DatabaseStorage implements IStorage {
     const cached = this.defaultPositionCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.position;
 
+    try {
+      const conditions: SQL[] = [];
+      if (year) conditions.push(eq(summaryCandidateVotes.anoEleicao, year));
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const [result] = await db
+        .select({
+          position: summaryCandidateVotes.dsCargo,
+          total: sql<number>`COALESCE(SUM(${summaryCandidateVotes.totalVotosNominais}), 0)`,
+        })
+        .from(summaryCandidateVotes)
+        .where(whereClause)
+        .groupBy(summaryCandidateVotes.dsCargo)
+        .orderBy(sql`SUM(${summaryCandidateVotes.totalVotosNominais}) DESC`)
+        .limit(1);
+
+      if (result?.position) {
+        this.defaultPositionCache.set(cacheKey, { position: result.position, expiresAt: Date.now() + 30 * 60 * 1000 });
+        return result.position;
+      }
+    } catch (e) {
+      // fallback to raw table
+    }
+
     const conditions: SQL[] = [];
     if (year) conditions.push(eq(tseCandidateVotes.anoEleicao, year));
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -1837,6 +1893,68 @@ export class DatabaseStorage implements IStorage {
     if (!filters.position) {
       filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
     }
+
+    const cacheKey = `analytics_summary_${filters.year ?? 'all'}_${filters.uf ?? 'all'}_${filters.electionType ?? 'all'}_${filters.position ?? 'all'}_${filters.party ?? 'all'}_${filters.municipality ?? 'all'}`;
+    const cached = this.analyticsCache.get<any>(cacheKey);
+    if (cached) return cached;
+
+    if (!filters.municipality && !filters.minVotes && !filters.maxVotes) {
+      try {
+        const candConditions: SQL[] = [];
+        if (filters.year) candConditions.push(eq(summaryCandidateVotes.anoEleicao, filters.year));
+        if (filters.uf) candConditions.push(eq(summaryCandidateVotes.sgUf, filters.uf));
+        if (filters.position) candConditions.push(eq(summaryCandidateVotes.dsCargo, filters.position));
+        if (filters.electionType) candConditions.push(eq(summaryCandidateVotes.nmTipoEleicao, filters.electionType));
+        if (filters.party) candConditions.push(eq(summaryCandidateVotes.sgPartido, filters.party));
+        const candWhere = candConditions.length > 0 ? and(...candConditions) : undefined;
+
+        const [candResult] = await db
+          .select({
+            totalVotesNominais: sql<number>`COALESCE(SUM(${summaryCandidateVotes.totalVotosNominais}), 0)`,
+            totalCandidates: sql<number>`COUNT(DISTINCT ${summaryCandidateVotes.sqCandidato})`,
+            totalParties: sql<number>`COUNT(DISTINCT ${summaryCandidateVotes.sgPartido})`,
+            totalMunicipalities: sql<number>`COALESCE(SUM(${summaryCandidateVotes.totalMunicipios}), 0)`,
+          })
+          .from(summaryCandidateVotes)
+          .where(candWhere);
+
+        const partyConditions: SQL[] = [];
+        if (filters.year) partyConditions.push(eq(summaryPartyVotes.anoEleicao, filters.year));
+        if (filters.uf) partyConditions.push(eq(summaryPartyVotes.sgUf, filters.uf));
+        if (filters.electionType) partyConditions.push(eq(summaryPartyVotes.nmTipoEleicao, filters.electionType));
+        if (filters.position) partyConditions.push(eq(summaryPartyVotes.dsCargo, filters.position));
+        if (filters.party) partyConditions.push(eq(summaryPartyVotes.sgPartido, filters.party));
+        const partyWhere = partyConditions.length > 0 ? and(...partyConditions) : undefined;
+
+        const [legendResult] = await db
+          .select({
+            totalVotesLegenda: sql<number>`COALESCE(SUM(${summaryPartyVotes.totalVotosLegenda}), 0)`,
+          })
+          .from(summaryPartyVotes)
+          .where(partyWhere);
+
+        const nominais = Number(candResult?.totalVotesNominais ?? 0);
+        const legenda = Number(legendResult?.totalVotesLegenda ?? 0);
+
+        if (nominais > 0 || legenda > 0) {
+          const totalValidos = nominais + legenda;
+          const result = {
+            totalVotes: totalValidos,
+            totalVotesNominais: nominais,
+            totalVotesLegenda: legenda,
+            totalVotesValidos: totalValidos,
+            totalCandidates: Number(candResult?.totalCandidates ?? 0),
+            totalParties: Number(candResult?.totalParties ?? 0),
+            totalMunicipalities: Number(candResult?.totalMunicipalities ?? 0),
+          };
+          this.analyticsCache.set(cacheKey, result, 30 * 60 * 1000);
+          return result;
+        }
+      } catch (e) {
+        console.warn("[Analytics] Summary tables fallback:", e);
+      }
+    }
+
     const conditions = this.buildCandidateVoteConditions(filters);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -1870,7 +1988,7 @@ export class DatabaseStorage implements IStorage {
     const legenda = Number(legendResult?.totalVotesLegenda ?? 0);
 
     const totalValidos = nominais + legenda;
-    return {
+    const result = {
       totalVotes: totalValidos,
       totalVotesNominais: nominais,
       totalVotesLegenda: legenda,
@@ -1879,6 +1997,8 @@ export class DatabaseStorage implements IStorage {
       totalParties: Number(candidateResult?.totalParties ?? 0),
       totalMunicipalities: Number(candidateResult?.totalMunicipalities ?? 0),
     };
+    this.analyticsCache.set(cacheKey, result, 30 * 60 * 1000);
+    return result;
   }
 
   async getVotesByParty(filters: {
@@ -2119,6 +2239,10 @@ export class DatabaseStorage implements IStorage {
       filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
     }
 
+    const cacheKey = `votes_state_${filters.year ?? 'all'}_${filters.uf ?? 'all'}_${filters.electionType ?? 'all'}_${filters.position ?? 'all'}_${filters.party ?? 'all'}_${filters.municipality ?? 'all'}`;
+    const cached = this.analyticsCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     if (!filters.municipality && !filters.party) {
       const conditions: SQL[] = [];
       if (filters.year) conditions.push(eq(summaryStateVotes.anoEleicao, filters.year));
@@ -2140,12 +2264,14 @@ export class DatabaseStorage implements IStorage {
         .orderBy(sql`SUM(${summaryStateVotes.totalVotos}) DESC`);
 
       if (results.length > 0) {
-        return results.map((r) => ({
+        const data = results.map((r) => ({
           state: r.state || "N/A",
           votes: Number(r.votes),
           candidateCount: Number(r.candidateCount),
           partyCount: Number(r.partyCount),
         }));
+        this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
+        return data;
       }
     }
 
@@ -2174,12 +2300,14 @@ export class DatabaseStorage implements IStorage {
       .groupBy(tseCandidateVotes.sgUf)
       .orderBy(sql`SUM(${tseCandidateVotes.qtVotosNominais}) DESC`);
 
-    return results.map((r) => ({
+    const data = results.map((r) => ({
       state: r.state || "N/A",
       votes: Number(r.votes),
       candidateCount: Number(r.candidateCount),
       partyCount: Number(r.partyCount),
     }));
+    this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
+    return data;
   }
 
   async getVotesByMunicipality(filters: { year?: number; uf?: string; electionType?: string; position?: string; party?: string; municipality?: string; limit?: number }): Promise<{
@@ -2193,6 +2321,11 @@ export class DatabaseStorage implements IStorage {
     if (!filters.position) {
       filters = { ...filters, position: await this.resolveDefaultPosition(filters.year) };
     }
+
+    const cacheKey = `votes_mun_${filters.year ?? 'all'}_${filters.uf ?? 'all'}_${filters.electionType ?? 'all'}_${filters.position ?? 'all'}_${filters.party ?? 'all'}_${filters.municipality ?? 'all'}_${filters.limit ?? 50}`;
+    const cached = this.analyticsCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const conditions: SQL[] = [
       sql`${tseCandidateVotes.sgUf} != 'ZZ'`
     ];
@@ -2220,7 +2353,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`COALESCE(SUM(${tseCandidateVotes.qtVotosNominais}), 0) DESC`)
       .limit(filters.limit ?? 50);
 
-    return results.map((r) => ({
+    const data = results.map((r) => ({
       municipality: r.municipality || "N/A",
       municipalityCode: r.municipalityCode || 0,
       state: r.state || "N/A",
@@ -2228,6 +2361,8 @@ export class DatabaseStorage implements IStorage {
       candidateCount: r.candidateCount,
       partyCount: r.partyCount,
     }));
+    this.analyticsCache.set(cacheKey, data, 15 * 60 * 1000);
+    return data;
   }
 
   async getAvailableElectionYears(): Promise<number[]> {
@@ -2352,6 +2487,29 @@ export class DatabaseStorage implements IStorage {
     const cacheKey = `parties_${filters.year ?? 'all'}_${filters.uf ?? 'all'}`;
     const cached = this.analyticsCache.get<{ party: string; number: number }[]>(cacheKey);
     if (cached) return cached;
+
+    try {
+      const conditions: any[] = [sql`${summaryPartyVotes.sgPartido} IS NOT NULL`];
+      if (filters.year) conditions.push(eq(summaryPartyVotes.anoEleicao, filters.year));
+      if (filters.uf) conditions.push(eq(summaryPartyVotes.sgUf, filters.uf));
+
+      const results = await db
+        .selectDistinct({
+          party: summaryPartyVotes.sgPartido,
+          number: summaryPartyVotes.nrPartido
+        })
+        .from(summaryPartyVotes)
+        .where(and(...conditions))
+        .orderBy(summaryPartyVotes.sgPartido);
+
+      if (results.length > 0) {
+        const data = results.filter(r => r.party).map(r => ({ party: r.party!, number: r.number || 0 }));
+        this.analyticsCache.set(cacheKey, data, 30 * 60 * 1000);
+        return data;
+      }
+    } catch (e) {
+      // fallback
+    }
 
     const conditions: any[] = [sql`${tsePartyVotes.sgPartido} IS NOT NULL`];
     if (filters.year) conditions.push(eq(tsePartyVotes.anoEleicao, filters.year));
@@ -2740,6 +2898,74 @@ export class DatabaseStorage implements IStorage {
       .delete(aiPredictions)
       .where(sql`${aiPredictions.validUntil} < NOW()`);
     return result.rowCount ?? 0;
+  }
+
+  // AI Provider management
+  async getAiProviders(): Promise<AiProvider[]> {
+    return db.select().from(aiProviders).orderBy(asc(aiProviders.name));
+  }
+
+  async getAiProvider(id: number): Promise<AiProvider | undefined> {
+    const [provider] = await db.select().from(aiProviders).where(eq(aiProviders.id, id));
+    return provider;
+  }
+
+  async getDefaultAiProvider(): Promise<AiProvider | undefined> {
+    const [provider] = await db.select().from(aiProviders)
+      .where(and(eq(aiProviders.isDefault, true), eq(aiProviders.enabled, true)));
+    return provider;
+  }
+
+  async createAiProvider(data: InsertAiProvider): Promise<AiProvider> {
+    if (data.isDefault) {
+      await db.update(aiProviders).set({ isDefault: false }).where(eq(aiProviders.isDefault, true));
+    }
+    const [provider] = await db.insert(aiProviders).values(data).returning();
+    return provider;
+  }
+
+  async updateAiProvider(id: number, data: Partial<InsertAiProvider>): Promise<AiProvider | undefined> {
+    if (data.isDefault) {
+      await db.update(aiProviders).set({ isDefault: false }).where(eq(aiProviders.isDefault, true));
+    }
+    const [provider] = await db.update(aiProviders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(aiProviders.id, id))
+      .returning();
+    return provider;
+  }
+
+  async deleteAiProvider(id: number): Promise<boolean> {
+    const result = await db.delete(aiProviders).where(eq(aiProviders.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // AI Task Config management
+  async getAiTaskConfigs(): Promise<AiTaskConfig[]> {
+    return db.select().from(aiTaskConfigs).orderBy(asc(aiTaskConfigs.taskKey));
+  }
+
+  async getAiTaskConfig(taskKey: string): Promise<AiTaskConfig | undefined> {
+    const [config] = await db.select().from(aiTaskConfigs).where(eq(aiTaskConfigs.taskKey, taskKey));
+    return config;
+  }
+
+  async upsertAiTaskConfig(data: InsertAiTaskConfig): Promise<AiTaskConfig> {
+    const existing = await this.getAiTaskConfig(data.taskKey);
+    if (existing) {
+      const [updated] = await db.update(aiTaskConfigs)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(aiTaskConfigs.taskKey, data.taskKey))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(aiTaskConfigs).values(data).returning();
+    return created;
+  }
+
+  async deleteAiTaskConfig(taskKey: string): Promise<boolean> {
+    const result = await db.delete(aiTaskConfigs).where(eq(aiTaskConfigs.taskKey, taskKey));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Projection Reports CRUD

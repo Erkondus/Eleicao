@@ -72,6 +72,7 @@ const adminNavItems = [
   { title: "Auditoria", url: "/audit", icon: ClipboardList, permission: "view_audit" },
   { title: "Usuários", url: "/users", icon: Shield, permission: "manage_users" },
   { title: "Admin Sistema", url: "/admin-settings", icon: Database, permission: "manage_users" },
+  { title: "Config. IA", url: "/admin-ai", icon: Settings, permission: "manage_users" },
 ];
 
 function ImportStatusIndicator() {

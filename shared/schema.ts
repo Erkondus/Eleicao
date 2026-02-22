@@ -2136,6 +2136,113 @@ export const campaignNotificationsRelations = relations(campaignNotifications, (
   inAppNotification: one(inAppNotifications, { fields: [campaignNotifications.inAppNotificationId], references: [inAppNotifications.id] }),
 }));
 
+export const AI_PROVIDER_TYPES = ["openai", "anthropic", "gemini", "openai_compatible"] as const;
+export type AiProviderType = typeof AI_PROVIDER_TYPES[number];
+
+export const AI_TASK_KEYS = [
+  "scenario_predict",
+  "historical_predict",
+  "data_validation",
+  "semantic_search",
+  "anomaly_detect",
+  "ai_suggestions",
+  "sentiment_analysis",
+  "article_enrichment",
+  "article_sentiment",
+  "entity_comparison",
+  "electoral_insights",
+  "forecast_narrative",
+  "voter_turnout",
+  "candidate_success",
+  "party_performance",
+  "election_forecast",
+  "assistant",
+  "embeddings",
+] as const;
+export type AiTaskKey = typeof AI_TASK_KEYS[number];
+
+export const AI_TASK_LABELS: Record<AiTaskKey, string> = {
+  scenario_predict: "Predição de Cenário",
+  historical_predict: "Predição Histórica",
+  data_validation: "Validação de Dados",
+  semantic_search: "Busca Semântica",
+  anomaly_detect: "Detecção de Anomalias",
+  ai_suggestions: "Sugestões de IA",
+  sentiment_analysis: "Análise de Sentimento",
+  article_enrichment: "Enriquecimento de Artigos",
+  article_sentiment: "Sentimento de Artigos",
+  entity_comparison: "Comparação de Entidades",
+  electoral_insights: "Insights Eleitorais",
+  forecast_narrative: "Narrativa de Previsão",
+  voter_turnout: "Comparecimento Eleitoral",
+  candidate_success: "Sucesso de Candidatos",
+  party_performance: "Desempenho Partidário",
+  election_forecast: "Previsão Eleitoral",
+  assistant: "Assistente Geral",
+  embeddings: "Embeddings (Vetores)",
+};
+
+export const AI_TASK_DEFAULT_TIER: Record<AiTaskKey, "fast" | "standard"> = {
+  scenario_predict: "standard",
+  historical_predict: "standard",
+  data_validation: "standard",
+  semantic_search: "fast",
+  anomaly_detect: "fast",
+  ai_suggestions: "fast",
+  sentiment_analysis: "standard",
+  article_enrichment: "fast",
+  article_sentiment: "fast",
+  entity_comparison: "fast",
+  electoral_insights: "standard",
+  forecast_narrative: "fast",
+  voter_turnout: "standard",
+  candidate_success: "standard",
+  party_performance: "standard",
+  election_forecast: "standard",
+  assistant: "fast",
+  embeddings: "fast",
+};
+
+export const aiProviders = pgTable("ai_providers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  providerType: text("provider_type").notNull(),
+  apiKeyEnvVar: text("api_key_env_var"),
+  baseUrl: text("base_url"),
+  enabled: boolean("enabled").notNull().default(true),
+  isDefault: boolean("is_default").notNull().default(false),
+  capabilities: jsonb("capabilities").default(["chat"]),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertAiProviderSchema = createInsertSchema(aiProviders).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAiProvider = z.infer<typeof insertAiProviderSchema>;
+export type AiProvider = typeof aiProviders.$inferSelect;
+
+export const aiTaskConfigs = pgTable("ai_task_configs", {
+  id: serial("id").primaryKey(),
+  taskKey: text("task_key").notNull().unique(),
+  providerId: integer("provider_id").references(() => aiProviders.id, { onDelete: "set null" }),
+  modelId: text("model_id"),
+  fallbackProviderId: integer("fallback_provider_id").references(() => aiProviders.id, { onDelete: "set null" }),
+  fallbackModelId: text("fallback_model_id"),
+  maxTokens: integer("max_tokens"),
+  temperature: decimal("temperature"),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertAiTaskConfigSchema = createInsertSchema(aiTaskConfigs).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAiTaskConfig = z.infer<typeof insertAiTaskConfigSchema>;
+export type AiTaskConfig = typeof aiTaskConfigs.$inferSelect;
+
+export const aiTaskConfigsRelations = relations(aiTaskConfigs, ({ one }) => ({
+  provider: one(aiProviders, { fields: [aiTaskConfigs.providerId], references: [aiProviders.id] }),
+  fallbackProvider: one(aiProviders, { fields: [aiTaskConfigs.fallbackProviderId], references: [aiProviders.id] }),
+}));
+
 export const userSessions = pgTable("user_sessions", {
   sid: varchar("sid").primaryKey(),
   sess: jsonb("sess").notNull(),

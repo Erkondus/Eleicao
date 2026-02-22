@@ -78,8 +78,21 @@ The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend,
   - Post-import async maintenance: ANALYZE + summary refresh via `postImportMaintenance()` (2s delayed, non-blocking)
   - Manual refresh endpoint: `POST /api/analytics/refresh-summaries` (admin-only)
 
+- **Multi-Provider AI Configuration:**
+  - Admin UI at `/admin-ai` for managing AI providers and per-task model assignment
+  - Database tables: `ai_providers` (provider configs), `ai_task_configs` (task→provider+model mapping)
+  - Supported providers: OpenAI, Anthropic (Claude), Google Gemini, OpenAI-compatible (local LLMs like Ollama, LM Studio)
+  - Multi-provider abstraction in `server/ai-client.ts` with adapters for each provider type
+  - `cachedAiCall` resolves provider/model per task: task config → fallback provider → default provider → direct OpenAI
+  - API keys stored as env var references (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), never exposed to frontend
+  - 18 configurable AI tasks (scenario_predict, sentiment_analysis, etc.) with per-task model, maxTokens, temperature
+  - Admin routes in `server/routes/admin-ai.ts`: CRUD for providers, model listing via API, connection testing, task config management
+  - Zero-config backward compatibility: system works with no providers configured (falls back to direct OpenAI)
+
 ## External Dependencies
 - **OpenAI:** GPT-4o and GPT-4o-mini for AI integrations (validation, insights, sentiment, predictions, suggestions) via centralized `cachedAiCall`, and `text-embedding-3-small` for semantic search.
+- **Anthropic:** Claude models as alternative AI provider (optional, configurable via admin panel).
+- **Google Gemini:** Gemini models as alternative AI provider (optional, configurable via admin panel).
 - **Resend:** For sending automated reports and email alerts.
 - **PostgreSQL:** Primary database.
 - **Drizzle ORM:** Object-Relational Mapper.
