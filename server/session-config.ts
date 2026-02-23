@@ -50,17 +50,18 @@ export function getSessionConfig(sessionSecret: string | undefined): session.Ses
   }
 
   const isProduction = process.env.NODE_ENV === "production";
+  const isReplit = !!process.env.REPL_ID || !!process.env.REPLIT_DEPLOYMENT;
 
   return {
     store: getSessionStore(),
     secret: sessionSecret || (!isProduction ? "dev-secret-inseguro" : undefined!),
     resave: false,
     saveUninitialized: false,
-    proxy: isProduction,
+    proxy: true,
     cookie: {
-      secure: isProduction ? "auto" as any : false,
+      secure: isProduction || isReplit ? true : false,
       httpOnly: true,
-      sameSite: "lax" as const,
+      sameSite: isReplit ? "none" as const : "lax" as const,
       maxAge: 24 * 60 * 60 * 1000,
     },
   };

@@ -198,6 +198,39 @@ router.put("/api/admin/ai/tasks/:taskKey", requireAuth, requirePermission("ai_co
   }
 });
 
+router.post("/api/admin/ai/tasks/:taskKey/apply-to-all", requireAuth, requirePermission("ai_config"), async (req, res) => {
+  try {
+    const { taskKey } = req.params;
+    const sourceConfig = await storage.getAiTaskConfig(taskKey);
+    if (!sourceConfig) {
+      return res.status(404).json({ error: "Configuração de origem não encontrada" });
+    }
+
+    let count = 0;
+    for (const key of AI_TASK_KEYS) {
+      if (key === taskKey) continue;
+      const defaults = AI_TASK_DEFAULTS[key as AiTaskKey];
+      await storage.upsertAiTaskConfig({
+        taskKey: key,
+        providerId: sourceConfig.providerId,
+        modelId: sourceConfig.modelId,
+        fallbackProviderId: sourceConfig.fallbackProviderId,
+        fallbackModelId: sourceConfig.fallbackModelId,
+        maxTokens: defaults.maxTokens,
+        temperature: String(defaults.temperature),
+        enabled: true,
+      });
+      count++;
+    }
+
+    await logAudit(req, "apply_to_all", "ai_task_config", taskKey, { tasksUpdated: count });
+    clearAiConfigCache();
+    res.json({ success: true, tasksUpdated: count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.delete("/api/admin/ai/tasks/:taskKey", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const { taskKey } = req.params;

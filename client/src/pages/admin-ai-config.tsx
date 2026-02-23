@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
-  Brain, Plus, Pencil, Trash2, TestTube, Loader2, CheckCircle, XCircle,
+  Brain, Plus, Pencil, Trash2, TestTube, Loader2, CheckCircle, XCircle, Copy,
   RefreshCw, Settings2, Zap, Shield, Globe, Server, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -225,6 +225,32 @@ export default function AdminAiConfig() {
     },
     onError: (error: any) => {
       toast({ title: "Erro ao restaurar tarefa", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const applyToAllMutation = useMutation({
+    mutationFn: async (taskKey: string) => {
+      const pid = taskForm.providerId && taskForm.providerId !== "none" ? parseInt(taskForm.providerId) : null;
+      const fpid = taskForm.fallbackProviderId && taskForm.fallbackProviderId !== "none" ? parseInt(taskForm.fallbackProviderId) : null;
+      await apiRequest("PUT", `/api/admin/ai/tasks/${taskKey}`, {
+        providerId: pid,
+        modelId: taskForm.modelId || null,
+        fallbackProviderId: fpid,
+        fallbackModelId: taskForm.fallbackModelId || null,
+        maxTokens: taskForm.maxTokens ? parseInt(taskForm.maxTokens) : null,
+        temperature: taskForm.temperature ? parseFloat(taskForm.temperature) : null,
+        enabled: taskForm.enabled,
+      });
+      const response = await apiRequest("POST", `/api/admin/ai/tasks/${taskKey}/apply-to-all`);
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      toast({ title: "Modelo aplicado a todas as tarefas", description: `${data.tasksUpdated} tarefas atualizadas com este provedor/modelo` });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/ai/tasks"] });
+      setEditingTask(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao aplicar para todas", description: error.message, variant: "destructive" });
     },
   });
 
@@ -901,18 +927,35 @@ export default function AdminAiConfig() {
               <Label>Tarefa ativada</Label>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingTask(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSaveTask}
-              disabled={updateTaskMutation.isPending}
-              data-testid="button-save-task"
-            >
-              {updateTaskMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Salvar
-            </Button>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <div className="flex-1">
+              {taskForm.providerId && taskForm.providerId !== "none" && taskForm.modelId && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => editingTask && applyToAllMutation.mutate(editingTask.taskKey)}
+                  disabled={applyToAllMutation.isPending}
+                  data-testid="button-apply-to-all"
+                >
+                  {applyToAllMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  <Copy className="h-4 w-4 mr-2" />
+                  Aplicar provedor/modelo a todas as tarefas
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditingTask(null)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSaveTask}
+                disabled={updateTaskMutation.isPending}
+                data-testid="button-save-task"
+              >
+                {updateTaskMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Salvar
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
