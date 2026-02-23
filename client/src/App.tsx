@@ -37,6 +37,7 @@ import SentimentAnalysis from "@/pages/sentiment-analysis";
 import CampaignInsights from "@/pages/campaign-insights";
 import Campaigns from "@/pages/campaigns";
 import IBGEData from "@/pages/ibge-data";
+import Changelog from "@/pages/changelog";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
 
@@ -69,6 +70,7 @@ function Router() {
       <Route path="/ibge-data" component={IBGEData} />
       <Route path="/campaigns" component={Campaigns} />
       <Route path="/campaign-insights" component={CampaignInsights} />
+      <Route path="/changelog" component={Changelog} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -75,6 +75,25 @@ const adminNavItems = [
   { title: "Config. IA", url: "/admin-ai", icon: Settings, permission: "ai_config" },
 ];
 
+function VersionBadge() {
+  const { data } = useQuery<{ version: string; buildDate: string }>({
+    queryKey: ["/api/version"],
+    staleTime: 60 * 60 * 1000,
+  });
+
+  if (!data) return null;
+
+  return (
+    <Link href="/changelog" data-testid="link-version">
+      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+        <span>SimulaVoto v{data.version}</span>
+        <span className="text-muted-foreground/50">•</span>
+        <span>{data.buildDate}</span>
+      </div>
+    </Link>
+  );
+}
+
 function ImportStatusIndicator() {
   const { data: jobs } = useQuery<TseImportJob[]>({
     queryKey: ["/api/imports/tse"],
@@ -276,6 +295,7 @@ export function AppSidebar() {
                 <span>Sair</span>
               </SidebarMenuButton>
             </div>
+            <VersionBadge />
           </div>
         )}
       </SidebarFooter>

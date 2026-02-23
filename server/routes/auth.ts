@@ -1,6 +1,8 @@
 import { Router } from "express";
 import passport from "passport";
 import bcrypt from "bcrypt";
+import fs from "fs";
+import path from "path";
 import { sql } from "drizzle-orm";
 import { requireAuth, requireRole, requirePermission, logAudit } from "./shared";
 import { storage } from "../storage";
@@ -26,13 +28,27 @@ import type { User } from "@shared/schema";
 
 const router = Router();
 
+function readVersionFile() {
+  try {
+    const filePath = path.resolve(process.cwd(), "version.json");
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    return { version: "0.0.0", buildDate: "", changelog: [] };
+  }
+}
+
+router.get("/api/version", (_req, res) => {
+  res.json(readVersionFile());
+});
+
 router.get("/api/health", async (_req, res) => {
+  const version = readVersionFile().version;
   try {
     const stats = await storage.getStats();
     res.json({
       status: "healthy",
       timestamp: new Date().toISOString(),
-      version: "1.0.0",
+      version,
       database: "connected",
       stats: {
         parties: stats.parties,
