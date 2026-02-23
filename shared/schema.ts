@@ -5,6 +5,81 @@ import { z } from "zod";
 
 export * from "./models/chat";
 
+export const ALL_PERMISSIONS = [
+  "manage_users",
+  "manage_parties",
+  "manage_candidates",
+  "manage_scenarios",
+  "run_simulations",
+  "view_audit",
+  "ai_predictions",
+  "ai_config",
+  "export_reports",
+  "import_tse",
+  "import_ibge",
+  "sentiment_analysis",
+  "semantic_search",
+  "manage_campaigns",
+  "manage_dashboards",
+  "report_automation",
+  "admin_system",
+] as const;
+
+export type Permission = (typeof ALL_PERMISSIONS)[number];
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  manage_users: "Gerenciar Usuários",
+  manage_parties: "Gerenciar Partidos",
+  manage_candidates: "Gerenciar Candidatos",
+  manage_scenarios: "Gerenciar Cenários",
+  run_simulations: "Executar Simulações",
+  view_audit: "Visualizar Auditoria",
+  ai_predictions: "Previsões e Insights IA",
+  ai_config: "Configurar Provedores IA",
+  export_reports: "Exportar Relatórios",
+  import_tse: "Importar Dados TSE",
+  import_ibge: "Importar Dados IBGE",
+  sentiment_analysis: "Análise de Sentimento",
+  semantic_search: "Busca Semântica",
+  manage_campaigns: "Gestão de Campanhas",
+  manage_dashboards: "Dashboards e Análises",
+  report_automation: "Automação de Relatórios",
+  admin_system: "Administração do Sistema",
+};
+
+export const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] = [
+  {
+    label: "Dados Eleitorais",
+    permissions: ["manage_parties", "manage_candidates", "manage_scenarios", "run_simulations"],
+  },
+  {
+    label: "Inteligência Artificial",
+    permissions: ["ai_predictions", "ai_config", "sentiment_analysis", "semantic_search"],
+  },
+  {
+    label: "Importação e Relatórios",
+    permissions: ["import_tse", "import_ibge", "export_reports", "report_automation"],
+  },
+  {
+    label: "Campanhas e Dashboards",
+    permissions: ["manage_campaigns", "manage_dashboards"],
+  },
+  {
+    label: "Administração",
+    permissions: ["manage_users", "view_audit", "admin_system"],
+  },
+];
+
+export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
+  admin: [...ALL_PERMISSIONS],
+  analyst: [
+    "manage_parties", "manage_candidates", "manage_scenarios", "run_simulations",
+    "ai_predictions", "export_reports", "sentiment_analysis", "semantic_search",
+    "manage_campaigns", "manage_dashboards", "report_automation",
+  ],
+  viewer: ["run_simulations", "export_reports", "manage_dashboards"],
+};
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
@@ -12,6 +87,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   role: text("role").notNull().default("viewer"),
+  permissions: text("permissions").array(),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -2180,6 +2256,27 @@ export const AI_TASK_LABELS: Record<AiTaskKey, string> = {
   election_forecast: "Previsão Eleitoral",
   assistant: "Assistente Geral",
   embeddings: "Embeddings (Vetores)",
+};
+
+export const AI_TASK_DEFAULTS: Record<AiTaskKey, { maxTokens: number; temperature: number }> = {
+  scenario_predict: { maxTokens: 4000, temperature: 0.7 },
+  historical_predict: { maxTokens: 4000, temperature: 0.7 },
+  data_validation: { maxTokens: 2000, temperature: 0.3 },
+  semantic_search: { maxTokens: 1000, temperature: 0.5 },
+  anomaly_detect: { maxTokens: 1500, temperature: 0.3 },
+  ai_suggestions: { maxTokens: 1000, temperature: 0.8 },
+  sentiment_analysis: { maxTokens: 2000, temperature: 0.5 },
+  article_enrichment: { maxTokens: 500, temperature: 0.5 },
+  article_sentiment: { maxTokens: 500, temperature: 0.3 },
+  entity_comparison: { maxTokens: 1500, temperature: 0.5 },
+  electoral_insights: { maxTokens: 3000, temperature: 0.7 },
+  forecast_narrative: { maxTokens: 1000, temperature: 0.7 },
+  voter_turnout: { maxTokens: 2000, temperature: 0.5 },
+  candidate_success: { maxTokens: 2000, temperature: 0.5 },
+  party_performance: { maxTokens: 2000, temperature: 0.5 },
+  election_forecast: { maxTokens: 3000, temperature: 0.7 },
+  assistant: { maxTokens: 2000, temperature: 0.7 },
+  embeddings: { maxTokens: 300, temperature: 0 },
 };
 
 export const AI_TASK_DEFAULT_TIER: Record<AiTaskKey, "fast" | "standard"> = {

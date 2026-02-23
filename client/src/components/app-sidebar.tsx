@@ -56,23 +56,23 @@ const simulationNavItems = [
   { title: "Insights IA", url: "/ai-insights", icon: Sparkles, permission: "ai_predictions" },
   { title: "Previsões Eleitorais", url: "/forecasts", icon: Target, permission: "ai_predictions" },
   { title: "Relatórios de Projeção", url: "/projection-reports", icon: FileText, permission: "ai_predictions" },
-  { title: "Dashboard Eleitoral", url: "/electoral-dashboard", icon: PieChart, permission: null },
-  { title: "Painel Interativo", url: "/interactive-dashboard", icon: Layers, permission: null },
-  { title: "Análise de Dados", url: "/data-analysis", icon: BarChart3, permission: null },
-  { title: "Automação de Relatórios", url: "/report-automation", icon: Clock, permission: "ai_predictions" },
-  { title: "Análise de Sentimento", url: "/sentiment-analysis", icon: MessageSquare, permission: "ai_predictions" },
-  { title: "Busca Semântica", url: "/semantic-search", icon: Search, permission: "ai_predictions" },
-  { title: "Gestão de Campanhas", url: "/campaigns", icon: Megaphone, permission: "ai_predictions" },
-  { title: "Estrategista IA", url: "/campaign-insights", icon: Brain, permission: "ai_predictions" },
+  { title: "Dashboard Eleitoral", url: "/electoral-dashboard", icon: PieChart, permission: "manage_dashboards" },
+  { title: "Painel Interativo", url: "/interactive-dashboard", icon: Layers, permission: "manage_dashboards" },
+  { title: "Análise de Dados", url: "/data-analysis", icon: BarChart3, permission: "manage_dashboards" },
+  { title: "Automação de Relatórios", url: "/report-automation", icon: Clock, permission: "report_automation" },
+  { title: "Análise de Sentimento", url: "/sentiment-analysis", icon: MessageSquare, permission: "sentiment_analysis" },
+  { title: "Busca Semântica", url: "/semantic-search", icon: Search, permission: "semantic_search" },
+  { title: "Gestão de Campanhas", url: "/campaigns", icon: Megaphone, permission: "manage_campaigns" },
+  { title: "Estrategista IA", url: "/campaign-insights", icon: Brain, permission: "manage_campaigns" },
 ];
 
 const adminNavItems = [
-  { title: "Importação TSE", url: "/tse-import", icon: Upload, permission: "manage_users" },
-  { title: "Dados IBGE", url: "/ibge-data", icon: MapPin, permission: "manage_users" },
+  { title: "Importação TSE", url: "/tse-import", icon: Upload, permission: "import_tse" },
+  { title: "Dados IBGE", url: "/ibge-data", icon: MapPin, permission: "import_ibge" },
   { title: "Auditoria", url: "/audit", icon: ClipboardList, permission: "view_audit" },
   { title: "Usuários", url: "/users", icon: Shield, permission: "manage_users" },
-  { title: "Admin Sistema", url: "/admin-settings", icon: Database, permission: "manage_users" },
-  { title: "Config. IA", url: "/admin-ai", icon: Settings, permission: "manage_users" },
+  { title: "Admin Sistema", url: "/admin-settings", icon: Database, permission: "admin_system" },
+  { title: "Config. IA", url: "/admin-ai", icon: Settings, permission: "ai_config" },
 ];
 
 function ImportStatusIndicator() {

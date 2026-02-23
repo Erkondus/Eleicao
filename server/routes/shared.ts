@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { storage } from "../storage";
+import { ROLE_DEFAULT_PERMISSIONS, type Permission } from "@shared/schema";
 
 export const upload = multer({ 
   dest: "/tmp/uploads/",
@@ -21,10 +22,32 @@ declare global {
       name: string;
       email: string;
       role: string;
+      permissions: string[] | null;
       active: boolean;
       createdAt: Date;
     }
   }
+}
+
+export function getEffectivePermissions(user: Express.User): Permission[] {
+  if (user.permissions && user.permissions.length > 0) {
+    return user.permissions as Permission[];
+  }
+  return ROLE_DEFAULT_PERMISSIONS[user.role] || [];
+}
+
+export function requirePermission(...perms: Permission[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const effective = getEffectivePermissions(req.user);
+    const hasAll = perms.every(p => effective.includes(p));
+    if (!hasAll) {
+      return res.status(403).json({ error: "Permissão insuficiente" });
+    }
+    next();
+  };
 }
 
 export async function logAudit(req: Request, action: string, entity: string, entityId?: string, details?: object) {

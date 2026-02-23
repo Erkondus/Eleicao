@@ -32,6 +32,7 @@ interface DatabaseStats {
   scenarios: number;
   simulations: number;
   importJobs: number;
+  partyVotes: number;
   candidateVotes: number;
   forecasts: number;
   auditLogs: number;
@@ -101,7 +102,7 @@ export default function AdminSettings() {
 
   const totalRecords = stats 
     ? stats.users + stats.parties + stats.candidates + stats.scenarios + 
-      stats.simulations + stats.importJobs + stats.candidateVotes + 
+      stats.simulations + stats.importJobs + (stats.partyVotes || 0) + stats.candidateVotes + 
       stats.forecasts + stats.auditLogs
     : 0;
 
@@ -195,7 +196,19 @@ export default function AdminSettings() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Database className="h-4 w-4" />
-              Votos Importados
+              Votos por Partido
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{statsLoading ? "-" : (stats?.partyVotes || 0).toLocaleString("pt-BR")}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Votos por Candidato
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -329,7 +342,8 @@ export default function AdminSettings() {
                     <li>{stats?.scenarios || 0} cenários</li>
                     <li>{stats?.simulations || 0} simulações</li>
                     <li>{stats?.importJobs || 0} importações do TSE</li>
-                    <li>{(stats?.candidateVotes || 0).toLocaleString("pt-BR")} registros de votos</li>
+                    <li>{(stats?.partyVotes || 0).toLocaleString("pt-BR")} votos por partido</li>
+                    <li>{(stats?.candidateVotes || 0).toLocaleString("pt-BR")} votos por candidato</li>
                     <li>{stats?.forecasts || 0} previsões</li>
                     <li>{stats?.auditLogs || 0} logs de auditoria</li>
                   </ul>

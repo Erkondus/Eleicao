@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Shield, UserCheck, UserX } from "lucide-react";
+import { Plus, Edit, Trash2, Shield, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -23,18 +23,26 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/page-header";
 import { DataTable } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { User, InsertUser } from "@shared/schema";
+import type { User, InsertUser, Permission } from "@shared/schema";
+import {
+  PERMISSION_LABELS,
+  PERMISSION_GROUPS,
+  ROLE_DEFAULT_PERMISSIONS,
+} from "@shared/schema";
 
 export default function Users() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [useCustomPermissions, setUseCustomPermissions] = useState(false);
 
   const [formData, setFormData] = useState({
     username: "",
@@ -42,6 +50,7 @@ export default function Users() {
     name: "",
     email: "",
     role: "viewer",
+    permissions: [] as string[],
   });
 
   const { data: users, isLoading } = useQuery<User[]>({
@@ -49,7 +58,7 @@ export default function Users() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: InsertUser) => {
+    mutationFn: async (data: any) => {
       return apiRequest("POST", "/api/users", data);
     },
     onSuccess: () => {
@@ -63,7 +72,7 @@ export default function Users() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<InsertUser> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
       return apiRequest("PATCH", `/api/users/${id}`, data);
     },
     onSuccess: () => {
@@ -104,19 +113,23 @@ export default function Users() {
   });
 
   function resetForm() {
-    setFormData({ username: "", password: "", name: "", email: "", role: "viewer" });
+    setFormData({ username: "", password: "", name: "", email: "", role: "viewer", permissions: [] });
     setEditingUser(null);
     setIsDialogOpen(false);
+    setUseCustomPermissions(false);
   }
 
   function handleEdit(user: User) {
     setEditingUser(user);
+    const hasCustom = user.permissions && user.permissions.length > 0;
+    setUseCustomPermissions(!!hasCustom);
     setFormData({
       username: user.username,
       password: "",
       name: user.name,
       email: user.email,
       role: user.role,
+      permissions: hasCustom ? (user.permissions as string[]) : [],
     });
     setIsDialogOpen(true);
   }
@@ -128,6 +141,7 @@ export default function Users() {
       name: formData.name,
       email: formData.email,
       role: formData.role,
+      permissions: useCustomPermissions ? formData.permissions : null,
     };
     if (formData.password) {
       payload.password = formData.password;
@@ -137,14 +151,43 @@ export default function Users() {
       updateMutation.mutate({ id: editingUser.id, data: payload });
     } else {
       payload.password = formData.password;
-      createMutation.mutate(payload as InsertUser);
+      createMutation.mutate(payload);
     }
   }
 
+  function handleRoleChange(role: string) {
+    setFormData(f => ({ ...f, role }));
+    if (useCustomPermissions) {
+      setFormData(f => ({ ...f, role, permissions: [...(ROLE_DEFAULT_PERMISSIONS[role] || [])] }));
+    }
+  }
+
+  function togglePermission(perm: Permission) {
+    setFormData(f => ({
+      ...f,
+      permissions: f.permissions.includes(perm)
+        ? f.permissions.filter(p => p !== perm)
+        : [...f.permissions, perm],
+    }));
+  }
+
+  function handleToggleCustom(checked: boolean) {
+    setUseCustomPermissions(checked);
+    if (checked) {
+      setFormData(f => ({ ...f, permissions: [...(ROLE_DEFAULT_PERMISSIONS[f.role] || [])] }));
+    } else {
+      setFormData(f => ({ ...f, permissions: [] }));
+    }
+  }
+
+  const activePermissions = useCustomPermissions
+    ? formData.permissions
+    : (ROLE_DEFAULT_PERMISSIONS[formData.role] || []);
+
   const roles = [
     { value: "admin", label: "Administrador", description: "Acesso total ao sistema" },
-    { value: "analyst", label: "Analista", description: "Gerencia dados e executa simulações" },
-    { value: "viewer", label: "Visualizador", description: "Apenas visualiza e executa simulações" },
+    { value: "analyst", label: "Analista", description: "Dados eleitorais, IA e campanhas" },
+    { value: "viewer", label: "Visualizador", description: "Simulações e relatórios" },
   ];
 
   const roleLabels: Record<string, string> = {
@@ -158,6 +201,11 @@ export default function Users() {
     analyst: "secondary",
     viewer: "outline",
   };
+
+  function getUserPermissionCount(user: User): number {
+    if (user.permissions && user.permissions.length > 0) return user.permissions.length;
+    return (ROLE_DEFAULT_PERMISSIONS[user.role] || []).length;
+  }
 
   const columns = [
     {
@@ -187,9 +235,23 @@ export default function Users() {
       key: "role",
       header: "Função",
       cell: (user: User) => (
-        <Badge variant={roleVariants[user.role]}>
-          {roleLabels[user.role] || user.role}
-        </Badge>
+        <div className="flex flex-col gap-1">
+          <Badge variant={roleVariants[user.role]}>
+            {roleLabels[user.role] || user.role}
+          </Badge>
+          {user.permissions && user.permissions.length > 0 && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">Personalizado</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "permissions",
+      header: "Permissões",
+      cell: (user: User) => (
+        <span className="text-sm text-muted-foreground">
+          {getUserPermissionCount(user)} de {Object.keys(PERMISSION_LABELS).length}
+        </span>
       ),
     },
     {
@@ -285,14 +347,14 @@ export default function Users() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => !open && resetForm()}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingUser ? "Editar Usuário" : "Novo Usuário"}</DialogTitle>
             <DialogDescription>
-              {editingUser ? "Atualize as informações do usuário" : "Preencha os dados do novo usuário"}
+              {editingUser ? "Atualize as informações e permissões do usuário" : "Preencha os dados e defina as permissões do novo usuário"}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="name">Nome Completo</Label>
               <Input
@@ -349,7 +411,7 @@ export default function Users() {
                 <Label htmlFor="role">Função</Label>
                 <Select
                   value={formData.role}
-                  onValueChange={(v) => setFormData((f) => ({ ...f, role: v }))}
+                  onValueChange={handleRoleChange}
                 >
                   <SelectTrigger data-testid="select-user-role">
                     <SelectValue placeholder="Selecione" />
@@ -359,6 +421,7 @@ export default function Users() {
                       <SelectItem key={role.value} value={role.value}>
                         <div className="flex flex-col">
                           <span>{role.label}</span>
+                          <span className="text-xs text-muted-foreground">{role.description}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -366,6 +429,78 @@ export default function Users() {
                 </Select>
               </div>
             </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base">Permissões</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {useCustomPermissions
+                      ? "Permissões personalizadas para este usuário"
+                      : `Usando permissões padrão do perfil "${roleLabels[formData.role]}"`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={useCustomPermissions}
+                    onCheckedChange={handleToggleCustom}
+                    data-testid="switch-custom-permissions"
+                  />
+                  <Label className="text-sm">Personalizar</Label>
+                </div>
+              </div>
+
+              {!useCustomPermissions && (
+                <div className="p-3 bg-muted/50 rounded-lg border">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-sm text-muted-foreground">
+                      Ative "Personalizar" para ajustar individualmente quais funcionalidades este usuário pode acessar.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {PERMISSION_GROUPS.map((group) => (
+                  <div key={group.label} className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">{group.label}</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {group.permissions.map((perm) => {
+                        const isActive = activePermissions.includes(perm);
+                        return (
+                          <div
+                            key={perm}
+                            className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
+                              isActive
+                                ? "bg-primary/5 border-primary/20"
+                                : "bg-muted/30 border-transparent"
+                            } ${!useCustomPermissions ? "opacity-60" : ""}`}
+                          >
+                            <Checkbox
+                              checked={isActive}
+                              disabled={!useCustomPermissions}
+                              onCheckedChange={() => togglePermission(perm)}
+                              data-testid={`checkbox-perm-${perm}`}
+                            />
+                            <label className="text-sm cursor-pointer select-none">
+                              {PERMISSION_LABELS[perm]}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-xs text-muted-foreground text-right">
+                {activePermissions.length} de {Object.keys(PERMISSION_LABELS).length} permissões ativas
+              </div>
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={resetForm}>
                 Cancelar

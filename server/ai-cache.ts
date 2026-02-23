@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { createAiClient, type ChatMessage } from "./ai-client";
 import type { AiProvider, AiTaskKey } from "@shared/schema";
-import { AI_TASK_KEYS } from "@shared/schema";
+import { AI_TASK_KEYS, AI_TASK_DEFAULTS } from "@shared/schema";
 
 const PT_BR_INSTRUCTION = "Responda SEMPRE em português brasileiro. Nunca use inglês.";
 
@@ -195,8 +195,9 @@ export async function cachedAiCall<T = unknown>(options: AiCallOptions): Promise
   const taskKey = explicitTaskKey || (cachePrefix && (AI_TASK_KEYS as readonly string[]).includes(cachePrefix) ? cachePrefix : undefined);
   const resolved = await resolveProviderAndModel(taskKey, model);
 
-  const effectiveMaxTokens = resolved.maxTokens || maxTokens;
-  const effectiveTemperature = resolved.temperature;
+  const taskDefaults = taskKey ? AI_TASK_DEFAULTS[taskKey as AiTaskKey] : undefined;
+  const effectiveMaxTokens = resolved.maxTokens || maxTokens || taskDefaults?.maxTokens;
+  const effectiveTemperature = resolved.temperature ?? taskDefaults?.temperature;
 
   const messages: ChatMessage[] = [];
   if (systemPrompt) {

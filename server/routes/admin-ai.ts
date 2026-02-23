@@ -1,14 +1,15 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { requireAuth, requireRole, logAudit } from "./shared";
+import { requireAuth, requireRole, requirePermission, logAudit } from "./shared";
 import { createAiClient, clearAdapterCache } from "../ai-client";
 import { clearAiConfigCache } from "../ai-cache";
-import { AI_TASK_KEYS, AI_TASK_LABELS, AI_TASK_DEFAULT_TIER, AI_PROVIDER_TYPES } from "@shared/schema";
+import { AI_TASK_KEYS, AI_TASK_LABELS, AI_TASK_DEFAULT_TIER, AI_TASK_DEFAULTS, AI_PROVIDER_TYPES } from "@shared/schema";
+import type { AiTaskKey } from "@shared/schema";
 import type { AiProvider } from "@shared/schema";
 
 const router = Router();
 
-router.get("/api/admin/ai/providers", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/api/admin/ai/providers", requireAuth, requirePermission("ai_config"), async (_req, res) => {
   try {
     const providers = await storage.getAiProviders();
     const safe = providers.map(p => ({
@@ -22,7 +23,7 @@ router.get("/api/admin/ai/providers", requireAuth, requireRole("admin"), async (
   }
 });
 
-router.get("/api/admin/ai/providers/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.get("/api/admin/ai/providers/:id", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const provider = await storage.getAiProvider(parseInt(req.params.id));
     if (!provider) return res.status(404).json({ error: "Provedor não encontrado" });
@@ -35,7 +36,7 @@ router.get("/api/admin/ai/providers/:id", requireAuth, requireRole("admin"), asy
   }
 });
 
-router.post("/api/admin/ai/providers", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/api/admin/ai/providers", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const { name, providerType, apiKeyEnvVar, baseUrl, enabled, isDefault, capabilities } = req.body;
     if (!name || !providerType) {
@@ -64,7 +65,7 @@ router.post("/api/admin/ai/providers", requireAuth, requireRole("admin"), async 
   }
 });
 
-router.put("/api/admin/ai/providers/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.put("/api/admin/ai/providers/:id", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { name, providerType, apiKeyEnvVar, baseUrl, enabled, isDefault, capabilities } = req.body;
@@ -94,7 +95,7 @@ router.put("/api/admin/ai/providers/:id", requireAuth, requireRole("admin"), asy
   }
 });
 
-router.delete("/api/admin/ai/providers/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.delete("/api/admin/ai/providers/:id", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const deleted = await storage.deleteAiProvider(id);
@@ -109,7 +110,7 @@ router.delete("/api/admin/ai/providers/:id", requireAuth, requireRole("admin"), 
   }
 });
 
-router.get("/api/admin/ai/providers/:id/models", requireAuth, requireRole("admin"), async (req, res) => {
+router.get("/api/admin/ai/providers/:id/models", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const provider = await storage.getAiProvider(id);
@@ -123,7 +124,7 @@ router.get("/api/admin/ai/providers/:id/models", requireAuth, requireRole("admin
   }
 });
 
-router.get("/api/admin/ai/tasks", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/api/admin/ai/tasks", requireAuth, requirePermission("ai_config"), async (_req, res) => {
   try {
     const configs = await storage.getAiTaskConfigs();
     const providers = await storage.getAiProviders();
@@ -134,10 +135,12 @@ router.get("/api/admin/ai/tasks", requireAuth, requireRole("admin"), async (_req
       const provider = config?.providerId ? providerMap.get(config.providerId) : null;
       const fallbackProvider = config?.fallbackProviderId ? providerMap.get(config.fallbackProviderId) : null;
 
+      const defaults = AI_TASK_DEFAULTS[key];
       return {
         taskKey: key,
         label: AI_TASK_LABELS[key],
         defaultTier: AI_TASK_DEFAULT_TIER[key],
+        defaults,
         configured: !!config,
         config: config ? {
           id: config.id,
@@ -161,7 +164,7 @@ router.get("/api/admin/ai/tasks", requireAuth, requireRole("admin"), async (_req
   }
 });
 
-router.put("/api/admin/ai/tasks/:taskKey", requireAuth, requireRole("admin"), async (req, res) => {
+router.put("/api/admin/ai/tasks/:taskKey", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const { taskKey } = req.params;
     if (!AI_TASK_KEYS.includes(taskKey as any)) {
@@ -170,14 +173,20 @@ router.put("/api/admin/ai/tasks/:taskKey", requireAuth, requireRole("admin"), as
 
     const { providerId, modelId, fallbackProviderId, fallbackModelId, maxTokens, temperature, enabled } = req.body;
 
+    const defaults = AI_TASK_DEFAULTS[taskKey as AiTaskKey];
+    const parsedMaxTokens = maxTokens != null && maxTokens !== "" && maxTokens !== "null" ? parseInt(String(maxTokens), 10) : defaults.maxTokens;
+    const parsedTemperature = temperature != null && temperature !== "" && temperature !== "null" ? String(temperature) : String(defaults.temperature);
+    const parsedProviderId = providerId != null && providerId !== "" && providerId !== "null" ? parseInt(String(providerId), 10) : null;
+    const parsedFallbackProviderId = fallbackProviderId != null && fallbackProviderId !== "" && fallbackProviderId !== "null" ? parseInt(String(fallbackProviderId), 10) : null;
+
     const config = await storage.upsertAiTaskConfig({
       taskKey,
-      providerId: providerId || null,
+      providerId: parsedProviderId,
       modelId: modelId || null,
-      fallbackProviderId: fallbackProviderId || null,
+      fallbackProviderId: parsedFallbackProviderId,
       fallbackModelId: fallbackModelId || null,
-      maxTokens: maxTokens || null,
-      temperature: temperature !== undefined ? String(temperature) : null,
+      maxTokens: isNaN(parsedMaxTokens as number) ? null : parsedMaxTokens,
+      temperature: parsedTemperature,
       enabled: enabled !== false,
     });
 
@@ -189,7 +198,7 @@ router.put("/api/admin/ai/tasks/:taskKey", requireAuth, requireRole("admin"), as
   }
 });
 
-router.delete("/api/admin/ai/tasks/:taskKey", requireAuth, requireRole("admin"), async (req, res) => {
+router.delete("/api/admin/ai/tasks/:taskKey", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const { taskKey } = req.params;
     const deleted = await storage.deleteAiTaskConfig(taskKey);
@@ -203,7 +212,7 @@ router.delete("/api/admin/ai/tasks/:taskKey", requireAuth, requireRole("admin"),
   }
 });
 
-router.get("/api/admin/ai/provider-types", requireAuth, requireRole("admin"), async (_req, res) => {
+router.get("/api/admin/ai/provider-types", requireAuth, requirePermission("ai_config"), async (_req, res) => {
   res.json(AI_PROVIDER_TYPES.map(t => ({
     value: t,
     label: {
@@ -215,7 +224,7 @@ router.get("/api/admin/ai/provider-types", requireAuth, requireRole("admin"), as
   })));
 });
 
-router.post("/api/admin/ai/test-provider/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/api/admin/ai/test-provider/:id", requireAuth, requirePermission("ai_config"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const provider = await storage.getAiProvider(id);

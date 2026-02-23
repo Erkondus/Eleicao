@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import type { User } from "@shared/schema";
+import type { User, Permission } from "@shared/schema";
+import { ROLE_DEFAULT_PERMISSIONS } from "@shared/schema";
 
 type AuthContextType = {
   user: User | null;
@@ -8,15 +9,17 @@ type AuthContextType = {
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   hasPermission: (permission: string) => boolean;
+  getUserPermissions: () => Permission[];
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const rolePermissions: Record<string, string[]> = {
-  admin: ["manage_users", "manage_parties", "manage_candidates", "manage_scenarios", "run_simulations", "view_audit", "ai_predictions", "export_reports"],
-  analyst: ["manage_parties", "manage_candidates", "manage_scenarios", "run_simulations", "ai_predictions", "export_reports"],
-  viewer: ["run_simulations", "export_reports"],
-};
+export function getEffectivePermissions(user: User): Permission[] {
+  if (user.permissions && user.permissions.length > 0) {
+    return user.permissions as Permission[];
+  }
+  return ROLE_DEFAULT_PERMISSIONS[user.role] || [];
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -66,23 +69,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function getUserPermissions(): Permission[] {
+    if (!user) return [];
+    return getEffectivePermissions(user);
+  }
+
   function hasPermission(permission: string): boolean {
     if (!user) return false;
-    const permissions = rolePermissions[user.role] || [];
-    return permissions.includes(permission);
+    const perms = getEffectivePermissions(user);
+    return perms.includes(permission as Permission);
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, isAuthenticated: !!user, hasPermission }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, isAuthenticated: !!user, hasPermission, getUserPermissions }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 }

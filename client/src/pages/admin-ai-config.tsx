@@ -67,6 +67,7 @@ interface TaskConfig {
   taskKey: string;
   label: string;
   defaultTier: "fast" | "standard";
+  defaults: { maxTokens: number; temperature: number };
   configured: boolean;
   config: {
     id: number;
@@ -861,17 +862,20 @@ export default function AdminAiConfig() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Max Tokens (opcional)</Label>
+                <Label>Max Tokens</Label>
                 <Input
                   type="number"
                   value={taskForm.maxTokens}
                   onChange={e => setTaskForm(f => ({ ...f, maxTokens: e.target.value }))}
-                  placeholder="Auto"
+                  placeholder={`Padrão: ${editingTask?.defaults?.maxTokens ?? ""}`}
                   data-testid="input-task-max-tokens"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Deixe vazio para usar o padrão ({editingTask?.defaults?.maxTokens})
+                </p>
               </div>
               <div className="space-y-2">
-                <Label>Temperatura (opcional)</Label>
+                <Label>Temperatura</Label>
                 <Input
                   type="number"
                   step="0.1"
@@ -879,9 +883,12 @@ export default function AdminAiConfig() {
                   max="2"
                   value={taskForm.temperature}
                   onChange={e => setTaskForm(f => ({ ...f, temperature: e.target.value }))}
-                  placeholder="Auto"
+                  placeholder={`Padrão: ${editingTask?.defaults?.temperature ?? ""}`}
                   data-testid="input-task-temperature"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Deixe vazio para usar o padrão ({editingTask?.defaults?.temperature})
+                </p>
               </div>
             </div>
 

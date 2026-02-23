@@ -11,11 +11,11 @@ SimulaVoto is a comprehensive web system designed to simulate Brazilian proporti
 - Suporte a tema claro/escuro
 
 ## System Architecture
-The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend, an Express.js + TypeScript backend, and PostgreSQL with Drizzle ORM for the database. Authentication is handled via `passport-local` and `express-session`, implementing Role-Based Access Control (RBAC) with `admin`, `analyst`, and `viewer` roles.
+The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend, an Express.js + TypeScript backend, and PostgreSQL with Drizzle ORM for the database. Authentication is handled via `passport-local` and `express-session`, implementing granular Role-Based Access Control (RBAC) with `admin`, `analyst`, and `viewer` roles. Each role has default permissions, but individual users can have custom permission overrides stored in the `permissions` text array column. The system defines 17 granular permissions across 5 groups (Dados Eleitorais, IA, Importação/Relatórios, Campanhas/Dashboards, Administração). Permission constants and labels are centralized in `shared/schema.ts` (`ALL_PERMISSIONS`, `PERMISSION_LABELS`, `PERMISSION_GROUPS`, `ROLE_DEFAULT_PERMISSIONS`). Backend enforcement uses `requirePermission()` middleware in `server/routes/shared.ts`, with `getEffectivePermissions()` resolving custom overrides vs. role defaults.
 
 **Backend Route Structure (Modularized):**
 - `server/routes/index.ts` - Main entry: session/passport setup, router mounting
-- `server/routes/shared.ts` - Shared middleware: requireAuth, requireRole, logAudit, upload, calculateNextRun
+- `server/routes/shared.ts` - Shared middleware: requireAuth, requireRole, requirePermission, getEffectivePermissions, logAudit, upload, calculateNextRun
 - `server/routes/auth.ts` - Authentication, users, health, stats, audit
 - `server/routes/electoral.ts` - Parties, candidates, scenarios, simulations, electoral calculation (D'Hondt)
 - `server/routes/tse-import.ts` - TSE CSV import with queue system, batch processing, historical elections
