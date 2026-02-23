@@ -270,30 +270,45 @@ export async function runSafeMigrations(): Promise<void> {
         SELECT 1 FROM information_schema.tables WHERE table_name = 'tse_candidate_votes' LIMIT 1
       `);
       if (tableCheck.rows.length > 0) {
+        const invalidIndexes = await client.query(`
+          SELECT ci.relname AS indexname
+          FROM pg_index i
+          JOIN pg_class ci ON ci.oid = i.indexrelid
+          JOIN pg_class ct ON ct.oid = i.indrelid
+          WHERE ct.relname = 'tse_candidate_votes'
+            AND NOT i.indisvalid
+            AND ci.relname LIKE 'idx_tse_cv_%'
+        `);
+        for (const row of invalidIndexes.rows) {
+          console.log(`[Migration] Dropping invalid index ${row.indexname}...`);
+          await client.query(`DROP INDEX IF EXISTS ${row.indexname}`);
+        }
+
         const existingIndexes = await client.query(`
-          SELECT indexname FROM pg_indexes WHERE tablename IN ('tse_candidate_votes', 'tse_party_votes')
+          SELECT ci.relname AS indexname
+          FROM pg_index i
+          JOIN pg_class ci ON ci.oid = i.indexrelid
+          JOIN pg_class ct ON ct.oid = i.indrelid
+          WHERE ct.relname = 'tse_candidate_votes'
+            AND i.indisvalid
         `);
         const existingSet = new Set(existingIndexes.rows.map((r: any) => r.indexname));
 
         const allIndexes: { name: string; sql: string }[] = [
-          { name: "idx_tse_cv_nm_urna_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)` },
-          { name: "idx_tse_cv_nm_cand_upper", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_cand_upper ON tse_candidate_votes (UPPER(nm_candidato) text_pattern_ops)` },
+          { name: "idx_tse_cv_nm_urna_upper", sql: `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)` },
+          { name: "idx_tse_cv_nm_cand_upper", sql: `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_cand_upper ON tse_candidate_votes (UPPER(nm_candidato) text_pattern_ops)` },
         ];
         if (hasTrgm) {
           allIndexes.push(
-            { name: "idx_tse_cv_nm_candidato_trgm", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_candidato_trgm ON tse_candidate_votes USING gin (nm_candidato gin_trgm_ops)` },
-            { name: "idx_tse_cv_nm_urna_trgm", sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tse_cv_nm_urna_trgm ON tse_candidate_votes USING gin (nm_urna_candidato gin_trgm_ops)` },
+            { name: "idx_tse_cv_nm_candidato_trgm", sql: `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_candidato_trgm ON tse_candidate_votes USING gin (nm_candidato gin_trgm_ops)` },
+            { name: "idx_tse_cv_nm_urna_trgm", sql: `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_trgm ON tse_candidate_votes USING gin (nm_urna_candidato gin_trgm_ops)` },
           );
         }
 
         const missing = allIndexes.filter(i => !existingSet.has(i.name));
         if (missing.length === 0) {
-          console.log(`[Migration] All ${allIndexes.length} special indexes already exist (expression/GIN). Skipping.`);
+          console.log(`[Migration] All ${allIndexes.length} special indexes already exist. Skipping.`);
         } else {
-          const existingNames = allIndexes.filter(i => existingSet.has(i.name)).map(i => i.name);
-          if (existingNames.length > 0) {
-            console.log(`[Migration] Existing special indexes: ${existingNames.join(', ')}`);
-          }
           console.log(`[Migration] ${missing.length} special indexes missing: ${missing.map(i => i.name).join(', ')}`);
           console.log(`[Migration] Creating in background (server will start now)...`);
           client.release();
