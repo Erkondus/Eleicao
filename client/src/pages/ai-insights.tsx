@@ -554,8 +554,8 @@ export default function AIInsightsPage() {
                         <CardTitle className="text-lg">Projeção de Votação</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <ResponsiveContainer width="100%" height={300}>
-                          <BarChart data={partyPerformanceMutation.data.slice(0, 10)} layout="vertical">
+                        <ResponsiveContainer width="100%" height={Math.max(300, partyPerformanceMutation.data.length * 32)}>
+                          <BarChart data={partyPerformanceMutation.data} layout="vertical">
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis type="number" />
                             <YAxis dataKey="party" type="category" width={60} />
@@ -574,14 +574,14 @@ export default function AIInsightsPage() {
                         <ResponsiveContainer width="100%" height={300}>
                           <RechartsPie>
                             <Pie
-                              data={partyPerformanceMutation.data.slice(0, 8)}
+                              data={partyPerformanceMutation.data}
                               dataKey="predictedVoteShare"
                               nameKey="party"
                               cx="50%"
                               cy="50%"
                               outerRadius={100}
                             >
-                              {partyPerformanceMutation.data.slice(0, 8).map((entry: any, index: number) => (
+                              {partyPerformanceMutation.data.map((entry: any, index: number) => (
                                 <Cell key={entry.party} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                               ))}
                             </Pie>
@@ -914,8 +914,10 @@ export default function AIInsightsPage() {
                           </CardHeader>
                           <CardContent>
                             <div className="flex flex-wrap gap-2">
-                              {sentimentMutation.data.topics.map((topic: string, index: number) => (
-                                <Badge key={index} variant="outline">{topic}</Badge>
+                              {sentimentMutation.data.topics.map((topic: any, index: number) => (
+                                <Badge key={index} variant="outline">
+                                  {typeof topic === 'string' ? topic : topic.topic || JSON.stringify(topic)}
+                                </Badge>
                               ))}
                             </div>
                           </CardContent>

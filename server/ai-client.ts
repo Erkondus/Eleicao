@@ -101,9 +101,12 @@ class OpenAIAdapter implements AiClientAdapter {
           });
         }
       }
-      return chatModels.sort((a, b) => a.id.localeCompare(b.id));
+      if (chatModels.length > 0) {
+        return chatModels.sort((a, b) => a.id.localeCompare(b.id));
+      }
+      throw new Error("No chat models found via API");
     } catch (e: any) {
-      console.warn(`[AI Client] Failed to list OpenAI models:`, e.message);
+      console.warn(`[AI Client] Failed to list OpenAI models dynamically, using fallback list:`, e.message);
       return [
         { id: "gpt-4o", name: "GPT-4o", provider: this.providerName },
         { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: this.providerName },

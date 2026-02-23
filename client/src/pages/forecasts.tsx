@@ -382,7 +382,7 @@ export default function ForecastsPage() {
 
     const { run, topParties, swingRegions } = forecastSummary;
 
-    const partyChartData = topParties.slice(0, 10).map((party, index) => ({
+    const partyChartData = topParties.map((party, index) => ({
       name: party.entityName,
       voteShare: parseFloat(party.predictedVoteShare || "0"),
       lower: parseFloat(party.voteShareLower || "0"),
@@ -462,7 +462,7 @@ export default function ForecastsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-80">
+                <div style={{ height: Math.max(320, partyChartData.length * 36) }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={partyChartData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" />

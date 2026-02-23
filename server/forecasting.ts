@@ -320,7 +320,6 @@ async function generateAINarrative(
   partyResults: InsertForecastResult[],
   swingRegions: InsertSwingRegion[]
 ): Promise<string> {
-  const topParties = partyResults.slice(0, 5);
   const topSwingRegions = swingRegions.slice(0, 3);
   
   const prompt = `
@@ -328,8 +327,10 @@ Você é um analista político brasileiro especializado em previsões eleitorais
 IMPORTANTE: Responda SEMPRE em português brasileiro. Todos os textos, análises, narrativas e recomendações devem ser em português. Nunca use inglês.
 Baseado nos seguintes dados de previsão para o ano ${forecastRun.targetYear}, gere uma análise narrativa concisa (3-4 parágrafos):
 
-Previsões por Partido (top 5):
-${topParties.map(p => `- ${p.entityName}: ${parseFloat(p.predictedVoteShare || "0").toFixed(1)}% (IC: ${parseFloat(p.voteShareLower || "0").toFixed(1)}% - ${parseFloat(p.voteShareUpper || "0").toFixed(1)}%), Tendência: ${p.trendDirection}`).join("\n")}
+IMPORTANTE: Mencione TODOS os ${partyResults.length} partidos na análise, sem omitir nenhum.
+
+Previsões por Partido:
+${partyResults.map(p => `- ${p.entityName}: ${parseFloat(p.predictedVoteShare || "0").toFixed(1)}% (IC: ${parseFloat(p.voteShareLower || "0").toFixed(1)}% - ${parseFloat(p.voteShareUpper || "0").toFixed(1)}%), Tendência: ${p.trendDirection}`).join("\n")}
 
 Regiões Voláteis (swing regions):
 ${topSwingRegions.map(r => `- ${r.regionName}: Margem ${r.marginPercent}% entre ${r.leadingEntity} e ${r.challengingEntity}, Volatilidade: ${r.volatilityScore}`).join("\n")}
@@ -484,7 +485,7 @@ export async function getForecastSummary(runId: number): Promise<{
   
   return {
     run,
-    topParties: results.slice(0, 10),
+    topParties: results,
     swingRegions,
   };
 }
@@ -673,15 +674,16 @@ export async function runForecastWithScenario(
   // Generate narrative with AI
   let narrative = "";
   try {
-    const topParties = partyResults.slice(0, 5);
     const promptParts = [
       `Análise de previsão eleitoral para ${scenario.targetYear}:`,
       `Cenário: ${scenario.name}`,
       `Baseado em dados históricos de ${scenario.baseYear}`,
       scenario.state ? `Estado: ${scenario.state}` : "Âmbito Nacional",
       "",
-      "Partidos principais previstos:",
-      ...topParties.map((p, i) => 
+      `IMPORTANTE: Mencione TODOS os ${partyResults.length} partidos na narrativa.`,
+      "",
+      "Partidos previstos:",
+      ...partyResults.map((p, i) => 
         `${i + 1}. ${p.party}: ${p.predictedVoteShare?.toFixed(1)}% (IC: ${p.confidenceIntervalLower?.toFixed(1)}%-${p.confidenceIntervalUpper?.toFixed(1)}%)`
       ),
     ];
@@ -712,7 +714,7 @@ export async function runForecastWithScenario(
     narrative = result.data || "";
   } catch (error) {
     console.error("Failed to generate AI narrative for scenario:", error);
-    narrative = `Previsão para ${scenario.targetYear} baseada no cenário "${scenario.name}". Top 3 partidos: ${partyResults.slice(0, 3).map(p => `${p.party} (${p.predictedVoteShare?.toFixed(1)}%)`).join(", ")}.`;
+    narrative = `Previsão para ${scenario.targetYear} baseada no cenário "${scenario.name}". Partidos analisados: ${partyResults.map(p => `${p.party} (${p.predictedVoteShare?.toFixed(1)}%)`).join(", ")}.`;
   }
   
   await storage.updateForecastRun(runId, {

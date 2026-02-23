@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Brain, Plus, Pencil, Trash2, TestTube, Loader2, CheckCircle, XCircle,
@@ -135,7 +135,7 @@ export default function AdminAiConfig() {
 
   const [testingProviderId, setTestingProviderId] = useState<number | null>(null);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
-  const [loadingModels, setLoadingModels] = useState<number | null>(null);
+  const [loadingModels, setLoadingModels] = useState<Set<number>>(new Set());
   const [availableModels, setAvailableModels] = useState<Map<number, ModelInfo[]>>(new Map());
   const [expandedTasks, setExpandedTasks] = useState(false);
 
@@ -259,18 +259,34 @@ export default function AdminAiConfig() {
     setShowProviderDialog(true);
   }
 
-  async function loadModelsForProvider(providerId: number) {
-    setLoadingModels(providerId);
+  async function loadModelsForProvider(providerId: number, silent = false) {
+    setLoadingModels(prev => new Set(prev).add(providerId));
     try {
       const response = await apiRequest("GET", `/api/admin/ai/providers/${providerId}/models`);
       const models = await response.json();
       setAvailableModels(prev => new Map(prev).set(providerId, models));
     } catch (e: any) {
-      toast({ title: "Erro ao carregar modelos", description: e.message, variant: "destructive" });
+      if (!silent) {
+        toast({ title: "Erro ao carregar modelos", description: e.message, variant: "destructive" });
+      }
     } finally {
-      setLoadingModels(null);
+      setLoadingModels(prev => {
+        const next = new Set(prev);
+        next.delete(providerId);
+        return next;
+      });
     }
   }
+
+  useEffect(() => {
+    if (providers.length > 0) {
+      providers.filter(p => p.enabled).forEach(p => {
+        if (!availableModels.has(p.id)) {
+          loadModelsForProvider(p.id, true);
+        }
+      });
+    }
+  }, [providers]);
 
   async function testProvider(providerId: number, model?: string) {
     setTestingProviderId(providerId);
@@ -699,7 +715,7 @@ export default function AdminAiConfig() {
                 value={taskForm.providerId}
                 onValueChange={value => {
                   setTaskForm(f => ({ ...f, providerId: value, modelId: "" }));
-                  if (value) loadModelsForProvider(parseInt(value));
+                  if (value && value !== "none") loadModelsForProvider(parseInt(value));
                 }}
               >
                 <SelectTrigger data-testid="select-task-provider">
@@ -714,49 +730,59 @@ export default function AdminAiConfig() {
               </Select>
             </div>
 
-            {taskForm.providerId && taskForm.providerId !== "none" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Modelo</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => loadModelsForProvider(parseInt(taskForm.providerId))}
-                    disabled={loadingModels === parseInt(taskForm.providerId)}
-                    data-testid="button-refresh-models"
-                  >
-                    {loadingModels === parseInt(taskForm.providerId) ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3" />
-                    )}
-                    <span className="ml-1 text-xs">Atualizar lista</span>
-                  </Button>
+            {taskForm.providerId && taskForm.providerId !== "none" && (() => {
+              const pid = parseInt(taskForm.providerId);
+              const isLoading = loadingModels.has(pid);
+              const models = availableModels.get(pid) || [];
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Modelo</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => loadModelsForProvider(pid)}
+                      disabled={isLoading}
+                      data-testid="button-refresh-models"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      <span className="ml-1 text-xs">Atualizar lista</span>
+                    </Button>
+                  </div>
+                  {isLoading ? (
+                    <div className="flex items-center gap-2 p-2 border rounded-md text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Carregando modelos disponíveis...
+                    </div>
+                  ) : models.length > 0 ? (
+                    <Select
+                      value={taskForm.modelId}
+                      onValueChange={value => setTaskForm(f => ({ ...f, modelId: value }))}
+                    >
+                      <SelectTrigger data-testid="select-task-model">
+                        <SelectValue placeholder="Selecione um modelo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {models.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={taskForm.modelId}
+                      onChange={e => setTaskForm(f => ({ ...f, modelId: e.target.value }))}
+                      placeholder="Ex: gpt-4o, claude-3-5-sonnet-20241022"
+                      data-testid="input-task-model"
+                    />
+                  )}
                 </div>
-                {availableModels.get(parseInt(taskForm.providerId))?.length ? (
-                  <Select
-                    value={taskForm.modelId}
-                    onValueChange={value => setTaskForm(f => ({ ...f, modelId: value }))}
-                  >
-                    <SelectTrigger data-testid="select-task-model">
-                      <SelectValue placeholder="Selecione um modelo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableModels.get(parseInt(taskForm.providerId))?.map(m => (
-                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    value={taskForm.modelId}
-                    onChange={e => setTaskForm(f => ({ ...f, modelId: e.target.value }))}
-                    placeholder="Ex: gpt-4o, claude-3-5-sonnet-20241022"
-                    data-testid="input-task-model"
-                  />
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             <div className="space-y-2">
               <Label>Provedor de Fallback (opcional)</Label>
@@ -779,33 +805,59 @@ export default function AdminAiConfig() {
               </Select>
             </div>
 
-            {taskForm.fallbackProviderId && taskForm.fallbackProviderId !== "none" && (
-              <div className="space-y-2">
-                <Label>Modelo de Fallback</Label>
-                {availableModels.get(parseInt(taskForm.fallbackProviderId))?.length ? (
-                  <Select
-                    value={taskForm.fallbackModelId}
-                    onValueChange={value => setTaskForm(f => ({ ...f, fallbackModelId: value }))}
-                  >
-                    <SelectTrigger data-testid="select-task-fallback-model">
-                      <SelectValue placeholder="Selecione modelo de fallback" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableModels.get(parseInt(taskForm.fallbackProviderId))?.map(m => (
-                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    value={taskForm.fallbackModelId}
-                    onChange={e => setTaskForm(f => ({ ...f, fallbackModelId: e.target.value }))}
-                    placeholder="Ex: gpt-4o-mini"
-                    data-testid="input-task-fallback-model"
-                  />
-                )}
-              </div>
-            )}
+            {taskForm.fallbackProviderId && taskForm.fallbackProviderId !== "none" && (() => {
+              const fpid = parseInt(taskForm.fallbackProviderId);
+              const isLoading = loadingModels.has(fpid);
+              const models = availableModels.get(fpid) || [];
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Modelo de Fallback</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => loadModelsForProvider(fpid)}
+                      disabled={isLoading}
+                      data-testid="button-refresh-fallback-models"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      <span className="ml-1 text-xs">Atualizar</span>
+                    </Button>
+                  </div>
+                  {isLoading ? (
+                    <div className="flex items-center gap-2 p-2 border rounded-md text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Carregando modelos...
+                    </div>
+                  ) : models.length > 0 ? (
+                    <Select
+                      value={taskForm.fallbackModelId}
+                      onValueChange={value => setTaskForm(f => ({ ...f, fallbackModelId: value }))}
+                    >
+                      <SelectTrigger data-testid="select-task-fallback-model">
+                        <SelectValue placeholder="Selecione modelo de fallback" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {models.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={taskForm.fallbackModelId}
+                      onChange={e => setTaskForm(f => ({ ...f, fallbackModelId: e.target.value }))}
+                      placeholder="Ex: gpt-4o-mini"
+                      data-testid="input-task-fallback-model"
+                    />
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

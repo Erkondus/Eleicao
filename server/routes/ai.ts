@@ -84,6 +84,8 @@ ${federationInfo}${voteDataInfo}
 
 ${voteDataInfo ? "Calcule distribuição exata de vagas pelo sistema proporcional." : "Projete com base no perfil dos partidos."}
 
+IMPORTANTE: Inclua TODOS os ${parties.length} partidos no array predictions, sem exceção. Mesmo partidos com 0 vagas devem aparecer nos resultados.
+
 JSON: {"analysis":"análise 3-4 parágrafos com artigos CE","predictions":[{"partyId":id,"partyName":"sigla","predictedVotes":{"min":n,"max":n},"predictedSeats":{"min":n,"max":n},"meetsBarrier":bool,"confidence":0-1,"trend":"up|down|stable","reasoning":"texto"}],"seatDistribution":{"byQuotient":n,"byRemainder":n,"total":${availableSeats}},"recommendations":["r1","r2","r3"],"warnings":["w1"]}`;
 
     const { data: prediction } = await cachedAiCall({
@@ -93,7 +95,7 @@ JSON: {"analysis":"análise 3-4 parágrafos com artigos CE","predictions":[{"par
       model: "standard",
       systemPrompt: SYSTEM_PROMPTS.electoralLawExpert,
       userPrompt,
-      maxTokens: 3000,
+      maxTokens: 4000,
     });
 
     (prediction as any).generatedAt = new Date().toISOString();
@@ -128,8 +130,8 @@ router.post("/api/ai/assistant", requireAuth, requireRole("admin", "analyst"), a
     }
 
     const summary = await storage.getAnalyticsSummary(filters || {});
-    const votesByParty = await storage.getVotesByParty({ ...(filters || {}), limit: 15 });
-    const topCandidates = await storage.getTopCandidates({ ...(filters || {}), limit: 10 });
+    const votesByParty = await storage.getVotesByParty({ ...(filters || {}) });
+    const topCandidates = await storage.getTopCandidates({ ...(filters || {}) });
     const votesByState = await storage.getVotesByState(filters || {});
 
     const dataContext = `Resumo: ${summary.totalVotes.toLocaleString("pt-BR")} votos | ${summary.totalCandidates} candidatos | ${summary.totalParties} partidos | ${summary.totalMunicipalities} municípios
@@ -187,15 +189,16 @@ router.post("/api/ai/predict-historical", requireAuth, requireRole("admin", "ana
         year, 
         uf: filters?.uf, 
         electionType: filters?.electionType,
-        limit: 20 
       });
       historicalData.push({ year, parties: data });
     }
 
     const userPrompt = `Analise tendências eleitorais históricas e projete futuro.
 
-DADOS: ${historicalData.map((h) => `${h.year}: ${h.parties.slice(0, 10).map((p: any) => `${p.party}:${p.votes}`).join(",")}`).join(" | ")}
+DADOS: ${historicalData.map((h) => `${h.year}: ${h.parties.map((p: any) => `${p.party}:${p.votes}`).join(",")}`).join(" | ")}
 Anos: ${availableYears.join(",")} | Filtros: ${JSON.stringify(filters || {})}
+
+IMPORTANTE: Inclua TODOS os partidos nos arrays trends e predictions, sem exceção. Não omita nenhum partido dos resultados.
 
 JSON: {"analysis":"2-3 parágrafos","trends":[{"party":"sigla","trend":"crescimento|declínio|estável","changePercent":n,"observation":"texto"}],"predictions":[{"party":"sigla","expectedPerformance":"forte|moderado|fraco","confidence":0-1,"reasoning":"texto"}],"insights":["texto1","texto2"]}`;
 
@@ -206,7 +209,7 @@ JSON: {"analysis":"2-3 parágrafos","trends":[{"party":"sigla","trend":"crescime
       model: "standard",
       systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
       userPrompt,
-      maxTokens: 2000,
+      maxTokens: 4000,
     });
 
     (prediction as any).historicalYears = availableYears;
@@ -226,8 +229,8 @@ router.post("/api/ai/anomalies", requireAuth, requireRole("admin", "analyst"), a
   try {
     const { filters } = req.body;
 
-    const votesByParty = await storage.getVotesByParty({ ...(filters || {}), limit: 30 });
-    const topCandidates = await storage.getTopCandidates({ ...(filters || {}), limit: 50 });
+    const votesByParty = await storage.getVotesByParty({ ...(filters || {}) });
+    const topCandidates = await storage.getTopCandidates({ ...(filters || {}) });
     const votesByMunicipality = await storage.getVotesByMunicipality({ ...(filters || {}), limit: 100 });
     const summary = await storage.getAnalyticsSummary(filters || {});
 
@@ -1458,7 +1461,7 @@ router.post("/api/ai/generate-suggestions", requireAuth, requireRole("admin", "a
     const { filters } = req.body;
 
     const summary = await storage.getAnalyticsSummary(filters);
-    const partyData = await storage.getVotesByParty({ ...filters, limit: 10 });
+    const partyData = await storage.getVotesByParty({ ...filters });
     const stateData = await storage.getAvailableStates(filters?.year);
 
     const { data: parsed } = await cachedAiCall<{ suggestions: any[] }>({
@@ -1468,7 +1471,7 @@ router.post("/api/ai/generate-suggestions", requireAuth, requireRole("admin", "a
       model: "fast",
       systemPrompt: `${SYSTEM_PROMPTS.dataAnalyst} Sugira gráficos e relatórios úteis.`,
       userPrompt: `Dados: ${summary.totalVotes} votos, ${summary.totalCandidates} candidatos, ${summary.totalParties} partidos, ${summary.totalMunicipalities} municípios, ${stateData.length} estados
-Top partidos: ${partyData.slice(0, 5).map(p => `${p.party}:${p.votes}`).join(",")}
+Partidos: ${partyData.map(p => `${p.party}:${p.votes}`).join(",")}
 Filtros: ${JSON.stringify(filters || {})}
 
 Sugira 3-5 visualizações. JSON: {"suggestions":[{"type":"chart|report|insight","title":"texto","description":"texto","relevanceScore":0-100,"configuration":{"chartType":"bar|line|pie|area","metrics":["m"],"dimensions":["d"],"filters":{}}}]}`,
@@ -1576,8 +1579,7 @@ router.get("/api/sentiment/summary", requireAuth, async (req, res) => {
     }
     const entities = Array.from(entityMap.values())
       .map(e => ({ name: e.name, sentiment: e.totalMentions > 0 ? Math.round((e.totalScore / e.totalMentions) * 1000) / 1000 : 0, type: e.type }))
-      .sort((a, b) => Math.abs(b.sentiment) - Math.abs(a.sentiment))
-      .slice(0, 10);
+      .sort((a, b) => Math.abs(b.sentiment) - Math.abs(a.sentiment));
     res.json({ entities });
   } catch (error) {
     console.error("Sentiment summary error:", error);

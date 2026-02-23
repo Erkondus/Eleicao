@@ -395,7 +395,6 @@ export async function predictCandidateSuccess(filters: {
     year: filters.year,
     uf: filters.uf,
     electionType: filters.electionType,
-    limit: 20
   });
 
   const availableYears = await storage.getAvailableElectionYears();
@@ -406,7 +405,6 @@ export async function predictCandidateSuccess(filters: {
       year, 
       uf: filters.uf, 
       electionType: filters.electionType,
-      limit: 30 
     });
     for (const p of partyData) {
       if (!historicalPartyData[p.party]) {
@@ -420,16 +418,18 @@ export async function predictCandidateSuccess(filters: {
     ? topCandidates.filter(c => 
         (filters.candidateNumber && c.number === filters.candidateNumber) ||
         (filters.candidateName && c.name.toLowerCase().includes(filters.candidateName.toLowerCase()))
-      ).slice(0, 10)
-    : topCandidates.slice(0, 20);
+      )
+    : topCandidates;
 
   const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
   const userPrompt = `Analise candidatos e preveja chances de sucesso eleitoral.
 Candidatos: ${candidatesToAnalyze.map(c => `${c.name}(${c.party||'?'}/#${c.number||'?'}):${c.votes}votos`).join(" | ")}
-Partidos: ${votesByParty.slice(0, 10).map(p => `${p.party}:${p.votes}`).join(",")}
-Tendências: ${Object.entries(historicalPartyData).slice(0, 8).map(([party, data]) => `${party}:${data.map(d => `${d.year}=${d.votes}`).join("→")}`).join(" | ")}
+Partidos: ${votesByParty.map(p => `${p.party}:${p.votes}`).join(",")}
+Tendências: ${Object.entries(historicalPartyData).map(([party, data]) => `${party}:${data.map(d => `${d.year}=${d.votes}`).join("→")}`).join(" | ")}
 UF=${filters.uf || "Nacional"} Ano=${filters.year || "Recente"}
+
+IMPORTANTE: Inclua TODOS os ${candidatesToAnalyze.length} candidatos no array predictions, sem exceção. Não omita nenhum candidato dos resultados.
 
 JSON: {"predictions":[{"candidateName":"","candidateNumber":n,"party":"","position":"","successProbability":0-1,"confidence":0-1,"ranking":n,"factors":[{"factor":"","impact":"positive|negative|neutral","weight":0-1,"value":""}],"similarCandidates":[{"name":"","year":n,"votes":n,"result":"ELEITO|NÃO ELEITO","similarity":0-1}],"projectedVotes":{"min":n,"expected":n,"max":n},"recommendation":""}]}`;
 
@@ -437,7 +437,7 @@ JSON: {"predictions":[{"candidateName":"","candidateNumber":n,"party":"","positi
     model: "standard",
     systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
     userPrompt,
-    maxTokens: 2500,
+    maxTokens: 4000,
   });
   const generatedAt = new Date().toISOString();
   
@@ -462,7 +462,6 @@ export async function predictPartyPerformance(filters: {
       year,
       uf: filters.uf,
       electionType: filters.electionType,
-      limit: 25
     });
     historicalData.push({ year, parties: partyData });
   }
@@ -470,8 +469,8 @@ export async function predictPartyPerformance(filters: {
   const partiesToAnalyze = filters.party
     ? historicalData[0]?.parties.filter(p => 
         p.party.toLowerCase().includes(filters.party!.toLowerCase())
-      ).slice(0, 5)
-    : historicalData[0]?.parties.slice(0, 15);
+      )
+    : historicalData[0]?.parties;
 
   if (!partiesToAnalyze || partiesToAnalyze.length === 0) {
     throw new Error("No party data available for the specified filters");
@@ -480,8 +479,10 @@ export async function predictPartyPerformance(filters: {
   const { cachedAiCall, SYSTEM_PROMPTS } = await import("./ai-cache");
 
   const userPrompt = `Preveja desempenho partidário futuro baseado em dados históricos.
-Histórico: ${historicalData.map(h => `${h.year}:[${h.parties.slice(0, 10).map(p => `${p.party}:${p.votes}`).join(",")}]`).join(" | ")}
+Histórico: ${historicalData.map(h => `${h.year}:[${h.parties.map(p => `${p.party}:${p.votes}`).join(",")}]`).join(" | ")}
 Analisar: ${partiesToAnalyze.map(p => p.party).join(",")} | UF=${filters.uf || "Nacional"} Tipo=${filters.electionType || "Todos"} Alvo=${filters.targetYear || (availableYears[0] || 2022) + 4}
+
+IMPORTANTE: Inclua TODOS os ${partiesToAnalyze.length} partidos no array predictions, sem exceção. Não omita nenhum partido dos resultados.
 
 JSON: {"predictions":[{"party":"","predictedVoteShare":n,"predictedSeats":{"min":n,"expected":n,"max":n},"confidence":0-1,"trend":"growing|declining|stable","trendStrength":0-1,"historicalPerformance":[{"year":n,"votes":n,"voteShare":n,"seats":n}],"keyFactors":[""],"risks":[""],"opportunities":[""]}]}`;
 
@@ -489,7 +490,7 @@ JSON: {"predictions":[{"party":"","predictedVoteShare":n,"predictedSeats":{"min"
     model: "standard",
     systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
     userPrompt,
-    maxTokens: 2500,
+    maxTokens: 4000,
   });
   const generatedAt = new Date().toISOString();
   
@@ -776,8 +777,8 @@ export async function generateElectoralInsights(filters: {
 }): Promise<ElectoralInsights> {
   const summary = await storage.getAnalyticsSummary({ year: filters.year, uf: filters.uf, electionType: filters.electionType });
   const availableYears = await storage.getAvailableElectionYears();
-  const votesByParty = await storage.getVotesByParty({ year: filters.year, uf: filters.uf, electionType: filters.electionType, limit: 20 });
-  const topCandidates = await storage.getTopCandidates({ year: filters.year, uf: filters.uf, electionType: filters.electionType, limit: 30 });
+  const votesByParty = await storage.getVotesByParty({ year: filters.year, uf: filters.uf, electionType: filters.electionType });
+  const topCandidates = await storage.getTopCandidates({ year: filters.year, uf: filters.uf, electionType: filters.electionType });
   
   const historicalTrends: { year: number; totalVotes: number; parties: number }[] = [];
   for (const year of availableYears.slice(0, 5)) {
@@ -786,7 +787,7 @@ export async function generateElectoralInsights(filters: {
       uf: filters.uf, 
       electionType: filters.electionType 
     });
-    const partyData = await storage.getVotesByParty({ year, uf: filters.uf, electionType: filters.electionType, limit: 50 });
+    const partyData = await storage.getVotesByParty({ year, uf: filters.uf, electionType: filters.electionType });
     historicalTrends.push({
       year,
       totalVotes: yearSummary.totalVotes || 0,
@@ -798,8 +799,8 @@ export async function generateElectoralInsights(filters: {
 
   const userPrompt = `Gere insights estratégicos eleitorais.
 Dados: Votos=${summary.totalVotes||'N/D'} Candidatos=${summary.totalCandidates||'N/D'} Partidos=${votesByParty.length} Municípios=${summary.totalMunicipalities||'N/D'}
-Top Partidos: ${votesByParty.slice(0, 8).map(p => `${p.party}:${p.votes}`).join(",")}
-Top Candidatos: ${topCandidates.slice(0, 8).map(c => `${c.name}(${c.party||'?'}):${c.votes}`).join(",")}
+Partidos: ${votesByParty.map(p => `${p.party}:${p.votes}`).join(",")}
+Candidatos: ${topCandidates.map(c => `${c.name}(${c.party||'?'}):${c.votes}`).join(",")}
 Tendências: ${historicalTrends.map(t => `${t.year}:${t.totalVotes}/${t.parties}p`).join(",")}
 UF=${filters.uf || "Nacional"} Ano=${filters.year || "Todos"} Tipo=${filters.electionType || "Todos"}
 
@@ -856,7 +857,6 @@ export async function generateProjectionReport(params: {
   const topCandidates = await storage.getTopCandidates({
     year: availableYears[0],
     uf: scope === "state" ? state : undefined,
-    limit: 20
   });
   
   // Get votes by state for national scope
@@ -869,9 +869,11 @@ export async function generateProjectionReport(params: {
   const userPrompt = `Gere relatório de projeção eleitoral completo para ${targetYear}.
 Contexto: Tipo=${electionType} Escopo=${scope==="national"?"Nacional":`Estado:${state}`}${position?` Cargo:${position}`:''}
 Histórico: ${historicalData.map(d => `${d.year}:${d.totalVotes}v/${d.candidates}c/${d.parties}p`).join(" | ")}
-Partidos(${availableYears[0]}): ${votesByParty.slice(0, 12).map(p => `${p.party}:${p.votes}(${((p.votes/(historicalData[0]?.totalVotes||1))*100).toFixed(1)}%)`).join(",")}
-Top Candidatos: ${topCandidates.slice(0, 15).map(c => `${c.name}(${c.party||'?'}):${c.votes}`).join(",")}
+Partidos(${availableYears[0]}): ${votesByParty.map(p => `${p.party}:${p.votes}(${((p.votes/(historicalData[0]?.totalVotes||1))*100).toFixed(1)}%)`).join(",")}
+Candidatos: ${topCandidates.map(c => `${c.name}(${c.party||'?'}):${c.votes}`).join(",")}
 ${scope==="national"&&votesByState.length>0?`Estados: ${votesByState.map(s=>`${s.state}:${s.votes}`).join(",")}`:''}
+
+IMPORTANTE: Inclua TODOS os ${votesByParty.length} partidos em partyProjections e TODOS os ${topCandidates.length} candidatos em candidateProjections. Não omita nenhum.
 
 JSON compacto: {"executiveSummary":"3-4§","methodology":"","turnoutProjection":{"expected":n,"confidence":0-1,"marginOfError":{"lower":n,"upper":n},"historicalBasis":[{"year":n,"turnout":n}],"factors":[{"factor":"","impact":-1a1,"description":""}]},"partyProjections":[{"party":"","abbreviation":"","voteShare":{"expected":n,"min":n,"max":n},"seats":{"expected":n,"min":n,"max":n},"trend":"growing|declining|stable","confidence":0-1,"marginOfError":n}],"candidateProjections":[{"name":"","party":"","position":"","electionProbability":0-1,"projectedVotes":{"expected":n,"min":n,"max":n},"confidence":0-1,"ranking":n}],"scenarios":[{"name":"","description":"","probability":0-1,"outcomes":[{"party":"","seats":n,"voteShare":n}]}],"riskAssessment":{"overallRisk":"low|medium|high","risks":[{"risk":"","probability":0-1,"impact":"low|medium|high","category":"political|economic|social|technical","mitigation":""}]},"confidenceIntervals":{"overall":0-1,"turnout":0-1,"partyResults":0-1,"seatDistribution":0-1},"recommendations":[""]}`;
 
@@ -879,7 +881,7 @@ JSON compacto: {"executiveSummary":"3-4§","methodology":"","turnoutProjection":
     model: "standard",
     systemPrompt: SYSTEM_PROMPTS.politicalForecaster,
     userPrompt,
-    maxTokens: 3000,
+    maxTokens: 4000,
   });
   
   // Validate AI response with Zod schema and apply safe defaults
