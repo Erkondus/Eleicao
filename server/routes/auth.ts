@@ -3,6 +3,7 @@ import passport from "passport";
 import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { sql } from "drizzle-orm";
 import { requireAuth, requireRole, requirePermission, logAudit } from "./shared";
 import { storage } from "../storage";
@@ -28,13 +29,24 @@ import type { User } from "@shared/schema";
 
 const router = Router();
 
+const __auth_filename = fileURLToPath(import.meta.url);
+const __auth_dirname = path.dirname(__auth_filename);
+
 function readVersionFile() {
-  try {
-    const filePath = path.resolve(process.cwd(), "version.json");
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  } catch {
-    return { version: "0.0.0", buildDate: "", changelog: [] };
+  const candidates = [
+    path.resolve(process.cwd(), "version.json"),
+    path.resolve(__auth_dirname, "../../version.json"),
+    path.resolve(__auth_dirname, "../version.json"),
+    "/home/runner/workspace/version.json",
+  ];
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      }
+    } catch {}
   }
+  return { version: "0.0.0", buildDate: "", changelog: [] };
 }
 
 router.get("/api/version", (_req, res) => {
