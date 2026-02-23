@@ -27,6 +27,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/docker-entrypoint.sh ./
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/version.json ./
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 expressjs && \
