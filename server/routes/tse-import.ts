@@ -729,26 +729,16 @@ router.post("/api/imports/tse", requireAuth, requireRole("admin"), upload.single
       electionType
     );
 
-    if (existingImport) {
-      if (existingImport.isInProgress) {
-        return res.status(409).json({ 
-          error: "Importação em andamento",
-          message: `Este arquivo já está sendo processado. Aguarde a conclusão da importação atual.`,
-          existingJob: existingImport.job,
-          isInProgress: true
-        });
-      } else {
-        const importDate = existingImport.job.completedAt 
-          ? new Date(existingImport.job.completedAt).toLocaleDateString("pt-BR") 
-          : "data desconhecida";
-        return res.status(409).json({ 
-          error: "Dados já importados",
-          message: `Este arquivo já foi importado com sucesso em ${importDate}. Foram processados ${existingImport.job.processedRows?.toLocaleString("pt-BR") || 0} registros.`,
-          existingJob: existingImport.job,
-          isInProgress: false
-        });
-      }
+    if (existingImport && existingImport.isInProgress) {
+      return res.status(409).json({ 
+        error: "Importação em andamento",
+        message: `Este arquivo já está sendo processado. Aguarde a conclusão da importação atual.`,
+        existingJob: existingImport.job,
+        isInProgress: true
+      });
     }
+
+    const isReimport = existingImport && !existingImport.isInProgress;
 
     const job = await storage.createTseImportJob({
       filename: req.file.originalname,
@@ -761,11 +751,17 @@ router.post("/api/imports/tse", requireAuth, requireRole("admin"), upload.single
       createdBy: req.user?.id || null,
     });
 
-    await logAudit(req, "create", "tse_import", String(job.id), { filename: req.file.originalname });
+    await logAudit(req, "create", "tse_import", String(job.id), { filename: req.file.originalname, isReimport });
 
     processCSVImport(job.id, req.file.path);
 
-    res.json({ jobId: job.id, message: "Import started" });
+    res.json({ 
+      jobId: job.id, 
+      message: isReimport 
+        ? "Reimportação iniciada. Registros já existentes serão ignorados automaticamente, apenas dados novos serão inseridos."
+        : "Import started",
+      isReimport
+    });
   } catch (error) {
     console.error("TSE import error:", error);
     res.status(500).json({ error: "Failed to start import" });
@@ -799,26 +795,16 @@ router.post("/api/imports/tse/url", requireAuth, requireRole("admin"), async (re
       electionType || null
     );
 
-    if (existingImport) {
-      if (existingImport.isInProgress) {
-        return res.status(409).json({ 
-          error: "Importação em andamento",
-          message: `Esta URL já está sendo processada. Aguarde a conclusão da importação atual.`,
-          existingJob: existingImport.job,
-          isInProgress: true
-        });
-      } else {
-        const importDate = existingImport.job.completedAt 
-          ? new Date(existingImport.job.completedAt).toLocaleDateString("pt-BR") 
-          : "data desconhecida";
-        return res.status(409).json({ 
-          error: "Dados já importados",
-          message: `Estes dados do TSE já foram importados com sucesso em ${importDate}. Foram processados ${existingImport.job.processedRows?.toLocaleString("pt-BR") || 0} registros.`,
-          existingJob: existingImport.job,
-          isInProgress: false
-        });
-      }
+    if (existingImport && existingImport.isInProgress) {
+      return res.status(409).json({ 
+        error: "Importação em andamento",
+        message: `Esta URL já está sendo processada. Aguarde a conclusão da importação atual.`,
+        existingJob: existingImport.job,
+        isInProgress: true
+      });
     }
+
+    const isReimport = existingImport && !existingImport.isInProgress;
 
     const job = await storage.createTseImportJob({
       filename: fullFilename,
@@ -832,11 +818,17 @@ router.post("/api/imports/tse/url", requireAuth, requireRole("admin"), async (re
       createdBy: req.user?.id || null,
     });
 
-    await logAudit(req, "create", "tse_import_url", String(job.id), { url, filename, selectedFile });
+    await logAudit(req, "create", "tse_import_url", String(job.id), { url, filename, selectedFile, isReimport });
 
     processURLImport(job.id, url, selectedFile);
 
-    res.json({ jobId: job.id, message: "URL import started" });
+    res.json({ 
+      jobId: job.id, 
+      message: isReimport
+        ? "Reimportação iniciada. Registros já existentes serão ignorados automaticamente, apenas dados novos serão inseridos."
+        : "URL import started",
+      isReimport
+    });
   } catch (error) {
     console.error("TSE URL import error:", error);
     res.status(500).json({ error: "Failed to start URL import" });
@@ -948,6 +940,18 @@ router.post("/api/imports/tse/detalhe-votacao/url", requireAuth, requireRole("ad
     const fullFilename = `[DETALHE] ${filename}`;
     const parsedYear = electionYear ? parseInt(electionYear) : null;
 
+    const existingImport = await storage.findExistingImport(fullFilename, parsedYear, uf || null, electionType || null);
+    if (existingImport && existingImport.isInProgress) {
+      return res.status(409).json({ 
+        error: "Importação em andamento",
+        message: `Esta importação já está sendo processada. Aguarde a conclusão.`,
+        existingJob: existingImport.job,
+        isInProgress: true
+      });
+    }
+
+    const isReimport = existingImport && !existingImport.isInProgress;
+
     const job = await storage.createTseImportJob({
       filename: fullFilename,
       fileSize: 0,
@@ -966,11 +970,17 @@ router.post("/api/imports/tse/detalhe-votacao/url", requireAuth, requireRole("ad
       createdBy: req.user!.id,
     });
 
-    await logAudit(req, "create", "tse_import_detalhe", String(job.id), { url, filename, selectedFile });
+    await logAudit(req, "create", "tse_import_detalhe", String(job.id), { url, filename, selectedFile, isReimport });
 
     processDetalheVotacaoImport(job.id, url, selectedFile);
 
-    res.json({ jobId: job.id, message: "Electoral statistics import started" });
+    res.json({ 
+      jobId: job.id, 
+      message: isReimport
+        ? "Reimportação iniciada. Registros já existentes serão ignorados automaticamente."
+        : "Electoral statistics import started",
+      isReimport
+    });
   } catch (error) {
     console.error("TSE detalhe_votacao import error:", error);
     res.status(500).json({ error: "Failed to start electoral statistics import" });
@@ -993,6 +1003,18 @@ router.post("/api/imports/tse/partido/url", requireAuth, requireRole("admin"), a
     const fullFilename = `[PARTIDO] ${filename}`;
     const parsedYear = electionYear ? parseInt(electionYear) : null;
 
+    const existingImport = await storage.findExistingImport(fullFilename, parsedYear, uf || null, electionType || null);
+    if (existingImport && existingImport.isInProgress) {
+      return res.status(409).json({ 
+        error: "Importação em andamento",
+        message: `Esta importação já está sendo processada. Aguarde a conclusão.`,
+        existingJob: existingImport.job,
+        isInProgress: true
+      });
+    }
+
+    const isReimport = existingImport && !existingImport.isInProgress;
+
     const job = await storage.createTseImportJob({
       filename: fullFilename,
       fileSize: 0,
@@ -1011,11 +1033,17 @@ router.post("/api/imports/tse/partido/url", requireAuth, requireRole("admin"), a
       createdBy: req.user!.id,
     });
 
-    await logAudit(req, "create", "tse_import_partido", String(job.id), { url, filename, selectedFile });
+    await logAudit(req, "create", "tse_import_partido", String(job.id), { url, filename, selectedFile, isReimport });
 
     processPartidoVotacaoImport(job.id, url, selectedFile);
 
-    res.json({ jobId: job.id, message: "Party votes import started" });
+    res.json({ 
+      jobId: job.id, 
+      message: isReimport
+        ? "Reimportação iniciada. Registros já existentes serão ignorados automaticamente."
+        : "Party votes import started",
+      isReimport
+    });
   } catch (error) {
     console.error("TSE partido import error:", error);
     res.status(500).json({ error: "Failed to start party votes import" });

@@ -355,14 +355,19 @@ export function useTseImport() {
       if (!response.ok) {
         const error = await response.json();
         if (response.status === 409) {
-          throw new Error(error.message || "Dados já importados");
+          throw new Error(error.message || "Importação em andamento");
         }
         throw new Error(error.error || "Upload failed");
       }
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Importação iniciada", description: "O arquivo está sendo processado em segundo plano." });
+    onSuccess: (data: { jobId: number; message: string; isReimport?: boolean }) => {
+      toast({ 
+        title: data.isReimport ? "Reimportação iniciada" : "Importação iniciada", 
+        description: data.isReimport 
+          ? "Registros já existentes serão ignorados. Apenas dados novos serão inseridos."
+          : "O arquivo está sendo processado em segundo plano."
+      });
       setSelectedFile(null);
       setElectionYear("");
       setUf("");
@@ -371,9 +376,8 @@ export function useTseImport() {
     },
     onError: (error: Error) => {
       const isInProgress = error.message.includes("sendo processado");
-      const isDuplicate = error.message.includes("já foi importado");
       toast({
-        title: isInProgress ? "Importação em andamento" : (isDuplicate ? "Dados já importados" : "Erro no upload"),
+        title: isInProgress ? "Importação em andamento" : "Erro no upload",
         description: error.message,
         variant: "destructive"
       });
@@ -391,14 +395,19 @@ export function useTseImport() {
       if (!response.ok) {
         const error = await response.json();
         if (response.status === 409) {
-          throw new Error(error.message || "Dados já importados");
+          throw new Error(error.message || "Importação em andamento");
         }
         throw new Error(error.error || "Falha na importação");
       }
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Download iniciado", description: "O arquivo está sendo baixado e processado." });
+    onSuccess: (data: { jobId: number; message: string; isReimport?: boolean }) => {
+      toast({ 
+        title: data.isReimport ? "Reimportação iniciada" : "Download iniciado", 
+        description: data.isReimport
+          ? "Registros já existentes serão ignorados. Apenas dados novos serão inseridos."
+          : "O arquivo está sendo baixado e processado."
+      });
       setUrlInput("");
       setUrlYear("");
       setUrlCargo("");
@@ -406,9 +415,8 @@ export function useTseImport() {
     },
     onError: (error: Error) => {
       const isInProgress = error.message.includes("sendo processada");
-      const isDuplicate = error.message.includes("já foram importados");
       toast({
-        title: isInProgress ? "Importação em andamento" : (isDuplicate ? "Dados já importados" : "Erro na importação"),
+        title: isInProgress ? "Importação em andamento" : "Erro na importação",
         description: error.message,
         variant: "destructive"
       });
@@ -425,12 +433,20 @@ export function useTseImport() {
       });
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 409) {
+          throw new Error(error.message || "Importação em andamento");
+        }
         throw new Error(error.error || "Import failed");
       }
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Importação iniciada", description: "Estatísticas eleitorais estão sendo importadas." });
+    onSuccess: (data: { jobId: number; message: string; isReimport?: boolean }) => {
+      toast({ 
+        title: data.isReimport ? "Reimportação iniciada" : "Importação iniciada", 
+        description: data.isReimport
+          ? "Registros já existentes serão ignorados. Apenas dados novos serão inseridos."
+          : "Estatísticas eleitorais estão sendo importadas."
+      });
       setHistoricalUrl("");
       queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
     },
@@ -449,12 +465,20 @@ export function useTseImport() {
       });
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 409) {
+          throw new Error(error.message || "Importação em andamento");
+        }
         throw new Error(error.error || "Import failed");
       }
       return response.json();
     },
-    onSuccess: () => {
-      toast({ title: "Importação iniciada", description: "Votos por partido estão sendo importados." });
+    onSuccess: (data: { jobId: number; message: string; isReimport?: boolean }) => {
+      toast({ 
+        title: data.isReimport ? "Reimportação iniciada" : "Importação iniciada", 
+        description: data.isReimport
+          ? "Registros já existentes serão ignorados. Apenas dados novos serão inseridos."
+          : "Votos por partido estão sendo importados."
+      });
       setHistoricalUrl("");
       queryClient.invalidateQueries({ queryKey: ["/api/imports/tse"] });
     },

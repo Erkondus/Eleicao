@@ -1,0 +1,146 @@
+root@manager:/opt/simulavoto# docker compose -f docker-compose.supabase.yml up -d --build 
+[+] Building 269.5s (26/26) FINISHED                                                                                    
+ => [internal] load local bake definitions                                                                         0.0s
+ => => reading from stdin 504B                                                                                     0.0s
+ => [internal] load build definition from Dockerfile                                                               0.1s
+ => => transferring dockerfile: 1.18kB                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                  3.1s
+ => [internal] load .dockerignore                                                                                  0.0s
+ => => transferring context: 200B                                                                                  0.0s
+ => [internal] load build context                                                                                  0.2s
+ => => transferring context: 343.66kB                                                                              0.1s
+ => [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d2836  0.1s
+ => => resolve docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132  0.0s
+ => CACHED [builder 2/6] WORKDIR /app                                                                              0.0s
+ => CACHED [builder 3/6] COPY package*.json ./                                                                     0.0s
+ => CACHED [builder 4/6] RUN npm ci                                                                                0.0s
+ => [builder 5/6] COPY . .                                                                                         2.9s
+ => [builder 6/6] RUN npm run build                                                                               55.5s
+ => CACHED [runner  3/15] RUN apk add --no-cache dumb-init wget                                                    0.0s 
+ => [runner  4/15] COPY --from=builder /app/dist ./dist                                                            0.1s 
+ => [runner  5/15] COPY --from=builder /app/package*.json ./                                                       4.4s 
+ => [runner  6/15] COPY --from=builder /app/drizzle.config.ts ./                                                   0.1s 
+ => [runner  7/15] COPY --from=builder /app/shared ./shared                                                        0.1s 
+ => [runner  8/15] COPY --from=builder /app/server ./server                                                        0.1s 
+ => [runner  9/15] COPY --from=builder /app/node_modules ./node_modules                                           12.0s
+ => [runner 10/15] COPY --from=builder /app/docker-entrypoint.sh ./                                                0.4s
+ => [runner 11/15] COPY --from=builder /app/scripts ./scripts                                                      0.1s
+ => [runner 12/15] COPY --from=builder /app/migrations ./migrations                                                0.1s
+ => [runner 13/15] COPY --from=builder /app/version.json ./                                                        0.0s
+ => [runner 14/15] RUN addgroup --system --gid 1001 nodejs &&     adduser --system --uid 1001 expressjs &&     c  97.1s
+ => [runner 15/15] RUN chmod +x docker-entrypoint.sh                                                               0.6s
+ => exporting to image                                                                                            51.5s
+ => => exporting layers                                                                                           24.2s
+ => => exporting manifest sha256:ddf545c022429b5ce8875d2d0b8f06c0e09ff68a5abd1454f396889765bde0ae                  0.0s
+ => => exporting config sha256:2d9e5fd48df9a95b2bccb635c9e8e7cbdd26052d4dfae190b2dd6e7c2088db1b                    0.0s
+ => => exporting attestation manifest sha256:c1425a3109d121a4ab40283f02a01118dfaeaa660ac8ff28973bb5adf16520ba      0.0s
+ => => exporting manifest list sha256:264729efd932f904bc3cfa11cf9feb9f3d23c1c37d999283dc9486b9d7b0e857             0.0s
+ => => naming to docker.io/library/simulavoto-simulavoto:latest                                                    0.0s
+ => => unpacking to docker.io/library/simulavoto-simulavoto:latest                                                27.2s
+ => resolving provenance for metadata file                                                                         0.0s
+[+] up 2/2
+ ✔ Image simulavoto-simulavoto Built                                                                              269.9s
+ ✔ Container simulavoto        Recreated                                                                          5.1s
+root@manager:/opt/simulavoto# docker compose logs -f simulavoto
+WARN[0000] Found multiple config files with supported names: /opt/simulavoto/docker-compose.yml, /opt/simulavoto/docker-compose.yaml 
+WARN[0000] Using /opt/simulavoto/docker-compose.yml     
+simulavoto  | === SimulaVoto - Sistema Eleitoral Brasileiro ===
+simulavoto  | Environment: production
+simulavoto  | Port: 5000
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | Host: 72.60.255.204:5432
+simulavoto  | Host is already an IPv4 address: 72.60.255.204
+simulavoto  | DATABASE_SSL=auto
+simulavoto  | SSL: auto mode - testing connection...
+simulavoto  | SSL: SSL failed, testing without SSL...
+simulavoto  | SSL: connected WITHOUT SSL
+simulavoto  | Final host: 72.60.255.204
+simulavoto  | 
+simulavoto  | Running database schema sync (db:push)...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 db:push
+simulavoto  | > drizzle-kit push
+simulavoto  | 
+simulavoto  | No config path provided, using default 'drizzle.config.ts'
+simulavoto  | Reading config file '/app/drizzle.config.ts'
+simulavoto  | Using 'pg' driver for database querying
+simulavoto  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[✓] Pulling schema from database...
+simulavoto  | 
+simulavoto  | Is historical_vote_share column in forecast_results table created or renamed from another column?
+simulavoto  | ❯ + historical_vote_share                       create column
+simulavoto  |   ~ elected_probability › historical_vote_share rename column
+simulavoto  |   ~ historical_trend › historical_vote_share    rename columnnpm notice
+simulavoto  | npm notice New major version of npm available! 10.8.2 -> 11.10.1
+simulavoto  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.10.1
+simulavoto  | npm notice To update run: npm install -g npm@11.10.1
+simulavoto  | npm notice
+simulavoto  | db:push completed successfully!
+simulavoto  | 
+simulavoto  | Starting application...
+simulavoto  | 
+simulavoto  | > rest-express@1.0.0 start
+simulavoto  | > NODE_ENV=production node dist/index.cjs
+simulavoto  | 
+simulavoto  | Starting database initialization...
+simulavoto  | NODE_ENV: production
+simulavoto  | DATABASE_URL exists: true
+simulavoto  | Database mode: EXTERNAL (Supabase/cloud)
+simulavoto  | DATABASE_URL host: 72.60.255.204
+simulavoto  | DATABASE_URL port: 5432
+simulavoto  | DATABASE_URL protocol: postgresql:
+simulavoto  | Resolving external database hostname to IPv4...
+simulavoto  | SSL mode: auto (DATABASE_SSL=auto)
+simulavoto  | SSL: auto - trying with SSL first...
+simulavoto  | SSL: connection with SSL failed, trying without SSL...
+simulavoto  | SSL error: The server does not support SSL connections
+simulavoto  | SSL: connected successfully WITHOUT SSL
+simulavoto  | Database pool initialized successfully
+simulavoto  | Testing database connection...
+simulavoto  | Database connection test successful!
+simulavoto  | [Migration] All 4 special indexes already exist. Skipping.
+simulavoto  | Registering routes...
+simulavoto  | [Startup] Checking for stuck import jobs from previous crash...
+simulavoto  | [Startup] No stuck import jobs found.
+simulavoto  | [SessionStore] Session table ready
+simulavoto  | Routes registered successfully!
+simulavoto  | WebSocket server initialized on /ws/imports
+simulavoto  | WebSocket server initialized
+simulavoto  | 4:40:40 PM [express] serving on port 5000
+simulavoto  | Report scheduler started (checking every 5 minutes)
+simulavoto  | 4:40:43 PM [express] HEAD /api/health 200 in 25ms :: {"status":"healthy","timestamp":"2026-02-24T16:40:43.935Z","version":"1.6.0","database":"connected","stats":{"parties":52,"candidates":350}}
+simulavoto  | WebSocket client connected (user: 5098db65-fcf5-4371-b9b5-d106a86dce89). Total clients: 1
+simulavoto  | WebSocket client connected (user: 5098db65-fcf5-4371-b9b5-d106a86dce89). Total clients: 2
+simulavoto  | WebSocket client connected (user: 5098db65-fcf5-4371-b9b5-d106a86dce89). Total clients: 3
+simulavoto  | WebSocket client connected (user: 5098db65-fcf5-4371-b9b5-d106a86dce89). Total clients: 4
+
