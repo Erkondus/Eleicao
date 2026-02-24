@@ -1,4 +1,4 @@
-import { Layers, Download, Loader2, FileText, FileSearch, CheckCircle } from "lucide-react";
+import { Layers, Download, Loader2, FileText, FileSearch, CheckCircle, Files } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -136,10 +136,29 @@ export function HistoricalImport({ hook }: HistoricalImportProps) {
                 Selecionar Arquivo CSV
               </CardTitle>
               <CardDescription>
-                O arquivo consolidado _BRASIL não foi encontrado. Selecione um dos arquivos disponíveis:
+                O ZIP contém {hook.availableFiles.length} arquivos CSV (um por UF). 
+                Importe todos de uma vez ou selecione um arquivo específico:
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <Button
+                onClick={hook.handleImportAll}
+                className="w-full"
+                data-testid="button-import-all-files"
+              >
+                <Files className="h-4 w-4 mr-2" />
+                Importar Todos os {hook.availableFiles.length} Arquivos (Dados Nacionais)
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">ou selecione um arquivo</span>
+                </div>
+              </div>
+
               <div className="max-h-60 overflow-y-auto space-y-2">
                 {hook.availableFiles.map((file) => (
                   <label
@@ -160,9 +179,11 @@ export function HistoricalImport({ hook }: HistoricalImportProps) {
                     <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{file.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
+                      {file.size > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      )}
                     </div>
                     {hook.selectedCsvFile === file.path && (
                       <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />

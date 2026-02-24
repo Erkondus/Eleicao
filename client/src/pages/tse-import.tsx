@@ -88,9 +88,19 @@ export default function TseImport() {
           <CardContent>
             {hook.stats ? (
               <div className="space-y-4">
-                <div className="text-center p-4 bg-muted rounded-lg">
-                  <p className="text-3xl font-bold font-mono">{hook.stats.totalRecords.toLocaleString("pt-BR")}</p>
-                  <p className="text-sm text-muted-foreground">Registros totais</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="text-center p-4 bg-muted rounded-lg">
+                    <p className="text-2xl font-bold font-mono" data-testid="text-candidate-records">{hook.stats.totalRecords.toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground">Candidatos</p>
+                  </div>
+                  <div className="text-center p-4 bg-muted rounded-lg">
+                    <p className="text-2xl font-bold font-mono" data-testid="text-party-records">{(hook.stats.totalPartyRecords || 0).toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground">Votos Partido</p>
+                  </div>
+                  <div className="text-center p-4 bg-muted rounded-lg">
+                    <p className="text-2xl font-bold font-mono" data-testid="text-stat-records">{(hook.stats.totalStatRecords || 0).toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground">Estatísticas</p>
+                  </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <div className="text-center p-2 border rounded">

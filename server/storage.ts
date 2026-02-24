@@ -1320,10 +1320,11 @@ export class DatabaseStorage implements IStorage {
   private async _insertBatchWithSplit(tableName: string, table: any, records: any[]): Promise<number> {
     if (records.length === 0) return 0;
     try {
-      await db.insert(table)
+      const result = await db.insert(table)
         .values(records)
-        .onConflictDoNothing();
-      return records.length;
+        .onConflictDoNothing()
+        .returning({ id: table.id });
+      return result.length;
     } catch (err: any) {
       const isParamError = err.message?.includes("bind") || err.message?.includes("parameters") || err.message?.includes("stack") || err.message?.includes("65535");
       if (records.length <= 1) {
@@ -1586,21 +1587,41 @@ export class DatabaseStorage implements IStorage {
 
   async getTseStats(): Promise<{
     totalRecords: number;
+    totalPartyRecords: number;
+    totalStatRecords: number;
     years: number[];
     ufs: string[];
     cargos: { code: number; name: string }[];
   }> {
     const cacheKey = "tse_stats";
-    const cached = this.analyticsCache.get<{ totalRecords: number; years: number[]; ufs: string[]; cargos: { code: number; name: string }[] }>(cacheKey);
+    const cached = this.analyticsCache.get<{ totalRecords: number; totalPartyRecords: number; totalStatRecords: number; years: number[]; ufs: string[]; cargos: { code: number; name: string }[] }>(cacheKey);
     if (cached) return cached;
 
-    const countResult = await db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_candidate_votes'`);
+    const [countResult, partyCountResult, statsCountResult] = await Promise.all([
+      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_candidate_votes'`),
+      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_party_votes'`),
+      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_electoral_statistics'`),
+    ]);
+
     const countRows = countResult.rows ?? countResult;
     let estimatedCount = Number((countRows as any)[0]?.count || 0);
-
     if (estimatedCount <= 0) {
       const exactCount = await db.select({ count: sql<number>`count(*)` }).from(tseCandidateVotes);
       estimatedCount = Number(exactCount[0]?.count || 0);
+    }
+
+    const partyCountRows = partyCountResult.rows ?? partyCountResult;
+    let estimatedPartyCount = Number((partyCountRows as any)[0]?.count || 0);
+    if (estimatedPartyCount <= 0) {
+      const exactCount = await db.select({ count: sql<number>`count(*)` }).from(tsePartyVotes);
+      estimatedPartyCount = Number(exactCount[0]?.count || 0);
+    }
+
+    const statsCountRows = statsCountResult.rows ?? statsCountResult;
+    let estimatedStatsCount = Number((statsCountRows as any)[0]?.count || 0);
+    if (estimatedStatsCount <= 0) {
+      const exactCount = await db.select({ count: sql<number>`count(*)` }).from(tseElectoralStatistics);
+      estimatedStatsCount = Number(exactCount[0]?.count || 0);
     }
 
     let years: number[] = [];
@@ -1608,31 +1629,38 @@ export class DatabaseStorage implements IStorage {
     let cargos: { code: number; name: string }[] = [];
 
     try {
-      const [yearsResult, ufsResult, cargosResult] = await Promise.all([
-        db.selectDistinct({ year: summaryCandidateVotes.anoEleicao }).from(summaryCandidateVotes),
-        db.selectDistinct({ uf: summaryCandidateVotes.sgUf }).from(summaryCandidateVotes),
-        db.selectDistinct({ code: summaryCandidateVotes.cdCargo, name: summaryCandidateVotes.dsCargo }).from(summaryCandidateVotes),
-      ]);
-
-      years = yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a);
-      ufs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
-      cargos = cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! }));
-    } catch (e) {
-      // fallback
-    }
-
-    if (years.length === 0) {
-      const [yearsResult, ufsResult, cargosResult] = await Promise.all([
+      const [candYears, partyYears, statsYears, ufsResult, cargosResult] = await Promise.all([
         db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`),
+        db.selectDistinct({ year: tsePartyVotes.anoEleicao }).from(tsePartyVotes).where(sql`${tsePartyVotes.anoEleicao} is not null`),
+        db.selectDistinct({ year: tseElectoralStatistics.anoEleicao }).from(tseElectoralStatistics).where(sql`${tseElectoralStatistics.anoEleicao} is not null`),
         db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`),
         db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`),
       ]);
-      years = yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a);
+
+      const allYears = new Set<number>();
+      candYears.forEach(r => r.year && allYears.add(r.year));
+      partyYears.forEach(r => r.year && allYears.add(r.year));
+      statsYears.forEach(r => r.year && allYears.add(r.year));
+      years = Array.from(allYears).sort((a, b) => b - a);
       ufs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
       cargos = cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! }));
+    } catch (e) {
+      // fallback to candidate votes only
+      try {
+        const [yearsResult, ufsResult, cargosResult] = await Promise.all([
+          db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`),
+          db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`),
+          db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`),
+        ]);
+        years = yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a);
+        ufs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
+        cargos = cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! }));
+      } catch (e2) {
+        // empty
+      }
     }
 
-    const result = { totalRecords: estimatedCount, years, ufs, cargos };
+    const result = { totalRecords: estimatedCount, totalPartyRecords: estimatedPartyCount, totalStatRecords: estimatedStatsCount, years, ufs, cargos };
     this.analyticsCache.set(cacheKey, result, 30 * 60 * 1000);
     return result;
   }

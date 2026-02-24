@@ -3,7 +3,8 @@ import { unlink, mkdir, rm } from "fs/promises";
 import { parse } from "csv-parse";
 import iconv from "iconv-lite";
 import unzipper from "unzipper";
-import { pipeline } from "stream/promises";
+import { pipeline, finished } from "stream/promises";
+import { createInterface } from "readline";
 import path from "path";
 import { db } from "../db";
 import { storage } from "../storage";
@@ -18,6 +19,51 @@ import type { InsertTseCandidateVote, TseImportBatch } from "@shared/schema";
 import { tseCandidateVotes } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
+async function concatenateCsvFilesStreaming(
+  csvFiles: { path: string; stream: () => NodeJS.ReadableStream }[],
+  outputPath: string,
+  label: string
+): Promise<void> {
+  const outStream = createWriteStream(outputPath);
+  
+  for (let i = 0; i < csvFiles.length; i++) {
+    const file = csvFiles[i];
+    const fileStream = file.stream();
+    const decoder = iconv.decodeStream("latin1");
+    const decodedStream = (fileStream as NodeJS.ReadableStream).pipe(decoder);
+    
+    let isFirstLine = true;
+    const skipHeader = i > 0;
+    
+    await new Promise<void>((resolve, reject) => {
+      const rl = createInterface({ input: decodedStream, crlfDelay: Infinity });
+      
+      rl.on("line", (line: string) => {
+        if (skipHeader && isFirstLine) {
+          isFirstLine = false;
+          return;
+        }
+        isFirstLine = false;
+        const encoded = Buffer.from(line + "\n", "latin1");
+        const ok = outStream.write(encoded);
+        if (!ok) {
+          rl.pause();
+          outStream.once("drain", () => rl.resume());
+        }
+      });
+      
+      rl.on("close", resolve);
+      rl.on("error", reject);
+      decodedStream.on("error", reject);
+    });
+    
+    console.log(`[${label}] Processed file ${i + 1}/${csvFiles.length}: ${path.basename(file.path)}`);
+  }
+  
+  outStream.end();
+  await finished(outStream);
+  console.log(`[${label}] All ${csvFiles.length} CSV files concatenated successfully`);
+}
 
 export function postImportMaintenance(importType: string, jobId: number): void {
   setTimeout(async () => {
@@ -244,8 +290,8 @@ const processURLImportInternal = async (jobId: number, url: string, selectedFile
         console.log(`[CANDIDATO] Found 1 CSV file, using: ${csvFiles[0].path}`);
         await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
       } else {
-        console.log(`[CANDIDATO] No _BRASIL file found and no file selected. Using first file: ${csvFiles[0].path}`);
-        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+        console.log(`[CANDIDATO] No _BRASIL file found. Concatenating ${csvFiles.length} CSV files to disk...`);
+        await concatenateCsvFilesStreaming(csvFiles, csvPath, "CANDIDATO");
       }
     }
 
@@ -695,8 +741,8 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
         console.log(`[DETALHE] Found 1 CSV file, using: ${csvFiles[0].path}`);
         await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
       } else {
-        console.log(`[DETALHE] No _BRASIL file found and no file selected. Using first file: ${csvFiles[0].path}`);
-        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+        console.log(`[DETALHE] No _BRASIL file found. Concatenating ${csvFiles.length} CSV files to disk...`);
+        await concatenateCsvFilesStreaming(csvFiles, csvPath, "DETALHE");
       }
     }
 
@@ -995,8 +1041,8 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
         console.log(`[PARTIDO] Found 1 CSV file, using: ${csvFiles[0].path}`);
         await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
       } else {
-        console.log(`[PARTIDO] No _BRASIL file found and no file selected. Using first file: ${csvFiles[0].path}`);
-        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+        console.log(`[PARTIDO] No _BRASIL file found. Concatenating ${csvFiles.length} CSV files to disk...`);
+        await concatenateCsvFilesStreaming(csvFiles, csvPath, "PARTIDO");
       }
     }
 

@@ -262,6 +262,8 @@ export function useTseImport() {
 
   const { data: stats } = useQuery<{
     totalRecords: number;
+    totalPartyRecords: number;
+    totalStatRecords: number;
     years: number[];
     ufs: string[];
     cargos: { code: number; name: string }[];
@@ -700,6 +702,21 @@ export function useTseImport() {
     setPendingImportData(null);
   };
 
+  const handleImportAll = () => {
+    if (!pendingImportData) return;
+    const data = { ...pendingImportData };
+    if (pendingImportSource === "candidato") {
+      urlImportMutation.mutate(data);
+    } else if (pendingImportSource === "detalhe") {
+      detalheImportMutation.mutate(data);
+    } else {
+      partidoImportMutation.mutate(data);
+    }
+    setShowFileSelector(false);
+    setSelectedCsvFile("");
+    setPendingImportData(null);
+  };
+
   return {
     hasPermission,
     wsConnected,
@@ -766,5 +783,6 @@ export function useTseImport() {
     handleQuickImport,
     handleHistoricalImport,
     handleFileSelection,
+    handleImportAll,
   };
 }

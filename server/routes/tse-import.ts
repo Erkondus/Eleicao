@@ -311,14 +311,16 @@ router.post("/api/imports/tse/:id/validate-integrity", requireAuth, requireRole(
       dbRowCount = await storage.countTseCandidateVotesByJob(jobId);
     }
     
-    const totalFileRows = job.totalFileRows || job.processedRows || 0;
-    const skippedRows = job.skippedRows || 0;
-    const errorCount = job.errorCount || 0;
-    const expectedCount = job.processedRows || (totalFileRows - skippedRows - errorCount);
+    const totalFileRows = job.totalFileRows ?? job.processedRows ?? 0;
+    const skippedRows = job.skippedRows ?? 0;
+    const errorCount = job.errorCount ?? 0;
+    const expectedCount = job.processedRows ?? (totalFileRows - skippedRows - errorCount);
     
     const isValid = dbRowCount === expectedCount;
     const validationMessage = isValid 
-      ? `Validação OK: ${dbRowCount.toLocaleString("pt-BR")} registros verificados no banco`
+      ? expectedCount === 0
+        ? `Validação OK: nenhum registro novo inserido (dados já existentes no banco)`
+        : `Validação OK: ${dbRowCount.toLocaleString("pt-BR")} registros verificados no banco`
       : `Discrepância detectada: esperado ${expectedCount.toLocaleString("pt-BR")}, encontrado ${dbRowCount.toLocaleString("pt-BR")} no banco`;
 
     await storage.updateTseImportJob(jobId, {
@@ -851,6 +853,28 @@ router.post("/api/imports/tse/preview-files", requireAuth, requireRole("admin"),
 
     if (!url.startsWith("https://cdn.tse.jus.br/") && !url.startsWith("https://dadosabertos.tse.jus.br/")) {
       return res.status(400).json({ error: "URL must be from TSE domain" });
+    }
+
+    const tsePattern = /(votacao_candidato_munzona|detalhe_votacao_munzona|votacao_partido_munzona)_(\d{4})\.zip$/;
+    const tseMatch = url.match(tsePattern);
+    if (tseMatch) {
+      const baseName = tseMatch[1] + "_" + tseMatch[2];
+      const datasetType = tseMatch[1];
+      const baseUfs = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+      const ufs = datasetType === "detalhe_votacao_munzona" ? baseUfs : [...baseUfs, "ZZ"];
+      const files = ufs.map(uf => ({
+        path: `${baseName}_${uf}.csv`,
+        name: `${baseName}_${uf}.csv`,
+        size: 0,
+        isBrasil: false
+      }));
+      console.log(`[Preview] TSE URL pattern detected: ${baseName}, generated ${files.length} expected files`);
+      return res.json({
+        hasBrasilFile: false,
+        brasilFile: null,
+        files,
+        estimated: true
+      });
     }
 
     const tmpDir = `/tmp/tse-preview-${Date.now()}`;
