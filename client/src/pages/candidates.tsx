@@ -226,14 +226,19 @@ export default function Candidates() {
     if (!dsCargo) return "vereador";
     const cargo = dsCargo.toUpperCase().trim();
     if (cargo.includes("PRESIDENTE")) return "presidente";
+    if (cargo.includes("VICE-PRESIDENTE")) return "vice_presidente";
     if (cargo.includes("GOVERNADOR")) return "governador";
+    if (cargo.includes("VICE-GOVERNADOR")) return "vice_governador";
     if (cargo.includes("SENADOR")) return "senador";
+    if (cargo.includes("1º SUPLENTE") || cargo.includes("1O SUPLENTE")) return "primeiro_suplente";
+    if (cargo.includes("2º SUPLENTE") || cargo.includes("2O SUPLENTE")) return "segundo_suplente";
     if (cargo.includes("DEPUTADO FEDERAL")) return "deputado_federal";
     if (cargo.includes("DEPUTADO DISTRITAL")) return "deputado_distrital";
     if (cargo.includes("DEPUTADO ESTADUAL")) return "deputado_estadual";
     if (cargo.includes("PREFEITO")) return "prefeito";
+    if (cargo.includes("VICE-PREFEITO")) return "vice_prefeito";
     if (cargo.includes("VEREADOR")) return "vereador";
-    return "vereador";
+    return cargo.toLowerCase().replace(/\s+/g, "_");
   }
 
   function selectTseCandidate(tse: TseCandidate) {

@@ -240,6 +240,25 @@ export default function ScenarioCandidates() {
     return () => clearTimeout(debounce);
   }, [tseSearchQuery, selectedYear, searchTseCandidates]);
 
+  function mapTseCargoToPosition(dsCargo: string | null): string {
+    if (!dsCargo) return scenario?.position || "vereador";
+    const cargo = dsCargo.toUpperCase().trim();
+    if (cargo.includes("PRESIDENTE")) return "presidente";
+    if (cargo.includes("VICE-PRESIDENTE")) return "vice_presidente";
+    if (cargo.includes("GOVERNADOR")) return "governador";
+    if (cargo.includes("VICE-GOVERNADOR")) return "vice_governador";
+    if (cargo.includes("SENADOR")) return "senador";
+    if (cargo.includes("1º SUPLENTE") || cargo.includes("1O SUPLENTE")) return "primeiro_suplente";
+    if (cargo.includes("2º SUPLENTE") || cargo.includes("2O SUPLENTE")) return "segundo_suplente";
+    if (cargo.includes("DEPUTADO FEDERAL")) return "deputado_federal";
+    if (cargo.includes("DEPUTADO DISTRITAL")) return "deputado_distrital";
+    if (cargo.includes("DEPUTADO ESTADUAL")) return "deputado_estadual";
+    if (cargo.includes("PREFEITO")) return "prefeito";
+    if (cargo.includes("VICE-PREFEITO")) return "vice_prefeito";
+    if (cargo.includes("VEREADOR")) return "vereador";
+    return cargo.toLowerCase().replace(/\s+/g, "_");
+  }
+
   async function selectTseCandidate(tse: TseCandidate) {
     try {
       (document.activeElement as HTMLElement)?.blur();
@@ -259,7 +278,7 @@ export default function ScenarioCandidates() {
             nickname: tse.nmUrnaCandidato || null,
             number: tse.nrCandidato || 0,
             partyId: matchingParty.id,
-            position: scenario?.position || "vereador",
+            position: mapTseCargoToPosition(tse.dsCargo),
           });
           const newCandidate = await res.json();
           matchingCandidate = newCandidate;

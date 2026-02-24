@@ -239,6 +239,7 @@ export function useTseImport() {
   const [availableFiles, setAvailableFiles] = useState<Array<{ path: string; name: string; size: number; isBrasil: boolean }>>([]);
   const [selectedCsvFile, setSelectedCsvFile] = useState<string>("");
   const [pendingImportData, setPendingImportData] = useState<{ url: string; electionYear?: string; cargoFilter?: string } | null>(null);
+  const [pendingImportSource, setPendingImportSource] = useState<"candidato" | "detalhe" | "partido">("candidato");
 
   const { connected: wsConnected, lastEvent } = useImportWebSocket(true);
 
@@ -378,7 +379,7 @@ export function useTseImport() {
   });
 
   const urlImportMutation = useMutation({
-    mutationFn: async (data: { url: string; electionYear?: string; cargoFilter?: string }) => {
+    mutationFn: async (data: { url: string; electionYear?: string; cargoFilter?: string; selectedFile?: string }) => {
       const response = await fetch("/api/imports/tse/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -490,6 +491,7 @@ export function useTseImport() {
           electionYear: historicalYear || undefined,
           cargoFilter: historicalCargo && historicalCargo !== "all" ? historicalCargo : undefined,
         });
+        setPendingImportSource(historicalImportType === "detalhe" ? "detalhe" : "partido");
         setShowFileSelector(true);
       }
     },
@@ -624,16 +626,46 @@ export function useTseImport() {
     uploadMutation.mutate(formData);
   };
 
+  const previewCandidatoFilesMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const response = await fetch("/api/imports/tse/preview-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to preview files");
+      return response.json();
+    },
+    onSuccess: (result, url) => {
+      if (result.hasBrasilFile || result.files.length <= 1) {
+        urlImportMutation.mutate({
+          url,
+          electionYear: urlYear || undefined,
+          cargoFilter: urlCargo && urlCargo !== "all" ? urlCargo : undefined,
+        });
+      } else {
+        setAvailableFiles(result.files);
+        setPendingImportData({
+          url,
+          electionYear: urlYear || undefined,
+          cargoFilter: urlCargo && urlCargo !== "all" ? urlCargo : undefined,
+        });
+        setPendingImportSource("candidato");
+        setShowFileSelector(true);
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao verificar arquivos", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleUrlImport = () => {
     if (!urlInput) {
       toast({ title: "Digite uma URL", variant: "destructive" });
       return;
     }
-    urlImportMutation.mutate({
-      url: urlInput,
-      electionYear: urlYear || undefined,
-      cargoFilter: urlCargo && urlCargo !== "all" ? urlCargo : undefined
-    });
+    previewCandidatoFilesMutation.mutate(urlInput);
   };
 
   const handleQuickImport = (year: string) => {
@@ -656,7 +688,9 @@ export function useTseImport() {
       return;
     }
     const data = { ...pendingImportData, selectedFile: selectedCsvFile };
-    if (historicalImportType === "detalhe") {
+    if (pendingImportSource === "candidato") {
+      urlImportMutation.mutate(data);
+    } else if (pendingImportSource === "detalhe") {
       detalheImportMutation.mutate(data);
     } else {
       partidoImportMutation.mutate(data);
@@ -700,6 +734,7 @@ export function useTseImport() {
     availableFiles,
     selectedCsvFile, setSelectedCsvFile,
     pendingImportData, setPendingImportData,
+    pendingImportSource,
 
     jobs, jobsLoading, refetchJobs,
     stats,
@@ -717,6 +752,7 @@ export function useTseImport() {
     detalheImportMutation,
     partidoImportMutation,
     previewFilesMutation,
+    previewCandidatoFilesMutation,
     cancelJobMutation,
     restartJobMutation,
     deleteJobMutation,

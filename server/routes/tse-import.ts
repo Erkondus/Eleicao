@@ -772,7 +772,7 @@ router.post("/api/imports/tse", requireAuth, requireRole("admin"), upload.single
 
 router.post("/api/imports/tse/url", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const { url, electionYear, electionType, uf, cargoFilter } = req.body;
+    const { url, electionYear, electionType, uf, cargoFilter, selectedFile } = req.body;
     
     if (!url || typeof url !== "string") {
       return res.status(400).json({ error: "URL is required" });
@@ -830,9 +830,9 @@ router.post("/api/imports/tse/url", requireAuth, requireRole("admin"), async (re
       createdBy: req.user?.id || null,
     });
 
-    await logAudit(req, "create", "tse_import_url", String(job.id), { url, filename });
+    await logAudit(req, "create", "tse_import_url", String(job.id), { url, filename, selectedFile });
 
-    processURLImport(job.id, url);
+    processURLImport(job.id, url, selectedFile);
 
     res.json({ jobId: job.id, message: "URL import started" });
   } catch (error) {

@@ -18,6 +18,7 @@ import type { InsertTseCandidateVote, TseImportBatch } from "@shared/schema";
 import { tseCandidateVotes } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
+
 export function postImportMaintenance(importType: string, jobId: number): void {
   setTimeout(async () => {
     try {
@@ -127,16 +128,16 @@ export const processCSVImport = async (jobId: number, filePath: string) => {
   }
 };
 
-export const processURLImport = (jobId: number, url: string) => {
+export const processURLImport = (jobId: number, url: string, selectedFile?: string) => {
   addToTseQueue({ 
     jobId, 
     type: "url", 
     url,
-    processor: () => processURLImportInternal(jobId, url)
+    processor: () => processURLImportInternal(jobId, url, selectedFile)
   });
 };
 
-const processURLImportInternal = async (jobId: number, url: string) => {
+const processURLImportInternal = async (jobId: number, url: string, selectedFile?: string) => {
   const tmpDir = `/tmp/tse-import-${jobId}`;
   let csvPath: string | null = null;
 
@@ -227,17 +228,26 @@ const processURLImportInternal = async (jobId: number, url: string) => {
       throw new Error("No CSV/TXT file found in ZIP");
     }
     
-    const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
-    const csvFile = brasilFile || csvFiles[0];
-    
-    console.log(`Found ${csvFiles.length} CSV files, using: ${csvFile.path}${brasilFile ? " (prioritized _BRASIL file)" : ""}`);
-    
-    if (!csvFile) {
-      throw new Error("No CSV/TXT file found in ZIP");
-    }
-
     csvPath = path.join(tmpDir, "data.csv");
-    await pipeline(csvFile.stream(), createWriteStream(csvPath));
+
+    if (selectedFile) {
+      const csvFile = csvFiles.find(f => f.path === selectedFile || path.basename(f.path) === selectedFile);
+      if (!csvFile) throw new Error(`Selected file not found: ${selectedFile}`);
+      console.log(`[CANDIDATO] Using user-selected file: ${csvFile.path}`);
+      await pipeline(csvFile.stream(), createWriteStream(csvPath));
+    } else {
+      const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
+      if (brasilFile) {
+        console.log(`[CANDIDATO] Found ${csvFiles.length} CSV files, using: ${brasilFile.path} (arquivo BRASIL consolidado)`);
+        await pipeline(brasilFile.stream(), createWriteStream(csvPath));
+      } else if (csvFiles.length === 1) {
+        console.log(`[CANDIDATO] Found 1 CSV file, using: ${csvFiles[0].path}`);
+        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+      } else {
+        console.log(`[CANDIDATO] No _BRASIL file found and no file selected. Using first file: ${csvFiles[0].path}`);
+        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+      }
+    }
 
     if (isJobCancelled(jobId)) {
       throw new Error("Importação cancelada");
@@ -670,19 +680,25 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
     
     if (csvFiles.length === 0) throw new Error("No CSV/TXT file found in ZIP");
     
-    let csvFile;
+    const csvPath = path.join(tmpDir, "data.csv");
     if (selectedFile) {
-      csvFile = csvFiles.find(f => f.path === selectedFile || path.basename(f.path) === selectedFile);
+      const csvFile = csvFiles.find(f => f.path === selectedFile || path.basename(f.path) === selectedFile);
       if (!csvFile) throw new Error(`Selected file not found: ${selectedFile}`);
       console.log(`[DETALHE] Using user-selected file: ${csvFile.path}`);
+      await pipeline(csvFile.stream(), createWriteStream(csvPath));
     } else {
       const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
-      csvFile = brasilFile || csvFiles[0];
-      console.log(`[DETALHE] Found ${csvFiles.length} CSV files, using: ${csvFile.path}${brasilFile ? " (arquivo BRASIL consolidado)" : ""}`);
+      if (brasilFile) {
+        console.log(`[DETALHE] Found ${csvFiles.length} CSV files, using: ${brasilFile.path} (arquivo BRASIL consolidado)`);
+        await pipeline(brasilFile.stream(), createWriteStream(csvPath));
+      } else if (csvFiles.length === 1) {
+        console.log(`[DETALHE] Found 1 CSV file, using: ${csvFiles[0].path}`);
+        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+      } else {
+        console.log(`[DETALHE] No _BRASIL file found and no file selected. Using first file: ${csvFiles[0].path}`);
+        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+      }
     }
-    
-    const csvPath = path.join(tmpDir, "data.csv");
-    await pipeline(csvFile.stream(), createWriteStream(csvPath));
 
     await storage.updateTseImportJob(jobId, { status: "processing", stage: "processing", updatedAt: new Date() });
 
@@ -964,19 +980,25 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
     
     if (csvFiles.length === 0) throw new Error("No CSV/TXT file found in ZIP");
     
-    let csvFile;
+    const csvPath = path.join(tmpDir, "data.csv");
     if (selectedFile) {
-      csvFile = csvFiles.find(f => f.path === selectedFile || path.basename(f.path) === selectedFile);
+      const csvFile = csvFiles.find(f => f.path === selectedFile || path.basename(f.path) === selectedFile);
       if (!csvFile) throw new Error(`Selected file not found: ${selectedFile}`);
       console.log(`[PARTIDO] Using user-selected file: ${csvFile.path}`);
+      await pipeline(csvFile.stream(), createWriteStream(csvPath));
     } else {
       const brasilFile = csvFiles.find(f => f.path.toUpperCase().includes("_BRASIL.CSV") || f.path.toUpperCase().includes("_BRASIL.TXT"));
-      csvFile = brasilFile || csvFiles[0];
-      console.log(`[PARTIDO] Found ${csvFiles.length} CSV files, using: ${csvFile.path}${brasilFile ? " (arquivo BRASIL consolidado)" : ""}`);
+      if (brasilFile) {
+        console.log(`[PARTIDO] Found ${csvFiles.length} CSV files, using: ${brasilFile.path} (arquivo BRASIL consolidado)`);
+        await pipeline(brasilFile.stream(), createWriteStream(csvPath));
+      } else if (csvFiles.length === 1) {
+        console.log(`[PARTIDO] Found 1 CSV file, using: ${csvFiles[0].path}`);
+        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+      } else {
+        console.log(`[PARTIDO] No _BRASIL file found and no file selected. Using first file: ${csvFiles[0].path}`);
+        await pipeline(csvFiles[0].stream(), createWriteStream(csvPath));
+      }
     }
-    
-    const csvPath = path.join(tmpDir, "data.csv");
-    await pipeline(csvFile.stream(), createWriteStream(csvPath));
 
     await storage.updateTseImportJob(jobId, { status: "processing", stage: "processing", updatedAt: new Date() });
 

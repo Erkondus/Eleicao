@@ -188,8 +188,13 @@ export default function Scenarios() {
 
   const selectedElection = availableElections?.find(e => e.year === parseInt(historicalYear));
   const cargoCodeToPosition: Record<number, string> = {
+    1: "presidente",
+    3: "governador",
+    5: "senador",
+    6: "deputado_federal",
     7: "deputado_federal",
     8: "deputado_estadual",
+    11: "prefeito",
     13: "vereador",
   };
   const cargoCodeToLabel: Record<number, string> = {

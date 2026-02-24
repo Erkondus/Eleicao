@@ -190,11 +190,13 @@ export function ImportControls({ hook }: ImportControlsProps) {
 
           <Button
             onClick={hook.handleUrlImport}
-            disabled={!hook.urlInput || hook.urlImportMutation.isPending}
+            disabled={!hook.urlInput || hook.urlImportMutation.isPending || hook.previewCandidatoFilesMutation.isPending}
             className="w-full"
             data-testid="button-import-url"
           >
-            {hook.urlImportMutation.isPending ? (
+            {hook.previewCandidatoFilesMutation.isPending ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verificando arquivos...</>
+            ) : hook.urlImportMutation.isPending ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Iniciando...</>
             ) : (
               <><Download className="h-4 w-4 mr-2" />Baixar e Importar</>
