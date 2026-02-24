@@ -26,6 +26,7 @@ The application features a React + Vite + TailwindCSS + shadcn/ui frontend and a
 -   **AI Suggestions System:** Offers GPT-4o powered suggestions for charts, reports, and insights.
 -   **Real-time Collaborative Editing:** Supports multi-user scenario editing with optimistic locking, WebSocket broadcasts for updates, and automatic cache invalidation.
 -   **AI Performance Optimization:** Centralized AI call management (`cachedAiCall`) with DB-backed caching, configurable TTL, model tier selection (`gpt-4o-mini`, `gpt-4o`), reusable system prompts, prompt compression, and token limits. Supports multi-provider AI configuration.
+-   **Saved Predictions History:** Persistent storage for AI prediction results (`saved_predictions` table) with auto-save for quick predictions, manual save for other types, CRUD API endpoints, and organized by prediction type with search/filter capabilities.
 -   **Database Performance Optimization:** Employs reduced redundant indexes, pre-aggregated summary tables (`summary_party_votes`, `summary_candidate_votes`, `summary_state_votes`) for fast analytics, atomic summary refresh logic, and post-import asynchronous maintenance tasks.
 -   **Multi-Provider AI Configuration:** Allows administrators to manage AI providers (OpenAI, Anthropic, Google Gemini, OpenAI-compatible) and assign specific models per task, with API keys stored securely as environment variables.
 

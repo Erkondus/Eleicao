@@ -208,8 +208,12 @@ export function usePredictionMutations() {
   const { toast } = useToast();
 
   const predictionMutation = useMutation({
-    mutationFn: async (scenarioId: number) => {
-      const response = await apiRequest("POST", "/api/ai/predict", { scenarioId });
+    mutationFn: async (params: {
+      scenarioId: number;
+      partyLegendVotes?: Record<number, number>;
+      candidateVotes?: Record<number, Record<number, number>>;
+    }) => {
+      const response = await apiRequest("POST", "/api/ai/predict", params);
       const data = await response.json();
       return data as AIPrediction;
     },

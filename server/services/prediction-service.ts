@@ -2,14 +2,18 @@ import { z } from "zod";
 import { storage } from "../storage";
 import { cachedAiCall, SYSTEM_PROMPTS } from "../ai-cache";
 
-export async function predictScenario(scenarioId: number, partyVotes?: Record<number, number>, candidateVotes?: Record<number, number>) {
+export async function predictScenario(
+  scenarioId: number,
+  partyLegendVotes?: Record<number, number>,
+  candidateVotes?: Record<number, Record<number, number>>
+) {
   const scenario = await storage.getScenario(scenarioId);
   if (!scenario) {
     throw { status: 404, message: "Scenario not found" };
   }
 
   const parties = await storage.getParties();
-  const allCandidates = await storage.getCandidates();
+  const scenarioCandidatesList = await storage.getScenarioCandidates(scenarioId);
   const scenarioAlliances = await storage.getAlliances(scenarioId);
   const federations = scenarioAlliances.filter(a => a.type === "federation");
 
@@ -33,36 +37,61 @@ export async function predictScenario(scenarioId: number, partyVotes?: Record<nu
     federationInfo = `\nFederações partidárias (contam como entidade única para QE/QP/barreira):\n${fedDetails.join("\n")}`;
   }
 
+  const hasVoteData = (partyLegendVotes && Object.values(partyLegendVotes).some(v => v > 0)) ||
+    (candidateVotes && Object.values(candidateVotes).some(cv => Object.values(cv).some(v => v > 0)));
+
   let voteDataInfo = "";
-  if (partyVotes && Object.keys(partyVotes).length > 0) {
-    const voteLines = parties
-      .map(p => {
-        const v = partyVotes[p.id] || 0;
-        return v > 0 ? `  - ${p.abbreviation}: ${v.toLocaleString("pt-BR")} votos` : null;
-      })
-      .filter(Boolean);
+  const partyTotals: Record<number, { legend: number; nominal: number; total: number }> = {};
+
+  if (hasVoteData) {
+    const voteLines: string[] = [];
+    for (const p of parties) {
+      const legendVotes = partyLegendVotes?.[p.id] || 0;
+      const partyCandidateVotes = candidateVotes?.[p.id] || {};
+      const nominalTotal = Object.values(partyCandidateVotes).reduce((sum, v) => sum + (v || 0), 0);
+      const totalPartyVotes = legendVotes + nominalTotal;
+
+      partyTotals[p.id] = { legend: legendVotes, nominal: nominalTotal, total: totalPartyVotes };
+
+      if (totalPartyVotes > 0) {
+        let line = `  - ${p.abbreviation}: ${totalPartyVotes.toLocaleString("pt-BR")} votos total (legenda: ${legendVotes.toLocaleString("pt-BR")} | nominais: ${nominalTotal.toLocaleString("pt-BR")})`;
+        const partyCands = scenarioCandidatesList.filter(sc => sc.partyId === p.id);
+        const candDetails: string[] = [];
+        for (const sc of partyCands) {
+          const candVotes = partyCandidateVotes[sc.candidateId] || 0;
+          if (candVotes > 0) {
+            candDetails.push(`      ${sc.nickname || sc.candidate?.name || `#${sc.ballotNumber}`} (${sc.ballotNumber}): ${candVotes.toLocaleString("pt-BR")} votos`);
+          }
+        }
+        if (candDetails.length > 0) {
+          line += "\n" + candDetails.join("\n");
+        }
+        voteLines.push(line);
+      }
+    }
     if (voteLines.length > 0) {
-      voteDataInfo = `\nVotação por partido (dados reais do cenário):\n${voteLines.join("\n")}`;
+      voteDataInfo = `\nVotação detalhada por partido (legenda + nominais = total do partido para QP):\n${voteLines.join("\n")}`;
     }
   }
 
   const userPrompt = `Analise o cenário e forneça previsões baseadas nas regras do TSE.
 
 REGRAS TSE: QE=floor(${validVotes}/${availableSeats})=${QE} | QP=floor(votos_entidade/QE) | Barreira 80% QE=${barrier80} | Mín. individual 20% QE=${candidateMin20} | D'Hondt para sobras | Federações=entidade única | Sem coligações proporcionais | Sem QE atingido → D'Hondt geral
+Total de votos do partido = votos de legenda + soma dos votos nominais dos candidatos
 
 CENÁRIO: ${scenario.name} | ${scenario.position} | ${validVotes.toLocaleString("pt-BR")} votos válidos | ${availableSeats} vagas
 Partidos: ${parties.map((p) => `${p.abbreviation}(${p.number})`).join(", ")}
 ${federationInfo}${voteDataInfo}
 
-${voteDataInfo ? "Calcule distribuição exata de vagas pelo sistema proporcional." : "Projete com base no perfil dos partidos."}
+${hasVoteData ? "Calcule distribuição exata de vagas pelo sistema proporcional usando os dados fornecidos. Dentro de cada partido, ordene candidatos por votação nominal para determinar quem ocupa as vagas." : "Projete com base no perfil dos partidos."}
 
 IMPORTANTE: Inclua TODOS os ${parties.length} partidos no array predictions, sem exceção. Mesmo partidos com 0 vagas devem aparecer nos resultados.
 
-JSON: {"analysis":"análise 3-4 parágrafos com artigos CE","predictions":[{"partyId":id,"partyName":"sigla","predictedVotes":{"min":n,"max":n},"predictedSeats":{"min":n,"max":n},"meetsBarrier":bool,"confidence":0-1,"trend":"up|down|stable","reasoning":"texto"}],"seatDistribution":{"byQuotient":n,"byRemainder":n,"total":${availableSeats}},"recommendations":["r1","r2","r3"],"warnings":["w1"]}`;
+JSON: {"analysis":"análise 3-4 parágrafos com artigos CE","predictions":[{"partyId":id,"partyName":"sigla","legendVotes":n,"nominalVotes":n,"totalVotes":n,"predictedSeats":{"min":n,"max":n},"electedCandidates":["nome1","nome2"],"meetsBarrier":bool,"confidence":0-1,"trend":"up|down|stable","reasoning":"texto"}],"seatDistribution":{"byQuotient":n,"byRemainder":n,"total":${availableSeats}},"recommendations":["r1","r2","r3"],"warnings":["w1"]}`;
 
   const { data: prediction } = await cachedAiCall({
     cachePrefix: "scenario_predict",
-    cacheParams: { scenarioId, partyVotes: partyVotes || {}, validVotes, availableSeats },
+    cacheParams: { scenarioId, partyLegendVotes: partyLegendVotes || {}, candidateVotes: candidateVotes || {}, validVotes, availableSeats },
     cacheTtlHours: 1,
     model: "standard",
     systemPrompt: SYSTEM_PROMPTS.electoralLawExpert,

@@ -1,4 +1,5 @@
-import { Brain, Loader2, RefreshCw, Lightbulb } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Brain, Loader2, RefreshCw, Lightbulb, ChevronDown, ChevronUp, Users, Vote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -8,13 +9,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/empty-state";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { trendIcons, trendColors } from "./PredictionCharts";
-import type { Scenario, Party, AIPrediction } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import type { Scenario, Party, Candidate, ScenarioCandidate, AIPrediction } from "@shared/schema";
 import type { UseMutationResult } from "@tanstack/react-query";
+
+interface ScenarioCandidateWithDetails extends ScenarioCandidate {
+  candidate: Candidate;
+  party: Party;
+}
+
+interface PredictParams {
+  scenarioId: number;
+  partyLegendVotes?: Record<number, number>;
+  candidateVotes?: Record<number, Record<number, number>>;
+}
 
 interface QuickPredictionProps {
   scenarios: Scenario[] | undefined;
@@ -22,7 +41,7 @@ interface QuickPredictionProps {
   selectedScenarioId: string;
   setSelectedScenarioId: (id: string) => void;
   prediction: AIPrediction | null;
-  predictionMutation: UseMutationResult<AIPrediction, Error, number, unknown>;
+  predictionMutation: UseMutationResult<AIPrediction, Error, PredictParams, unknown>;
   onPredictionSuccess: (data: AIPrediction) => void;
 }
 
@@ -37,10 +56,126 @@ export function QuickPrediction({
 }: QuickPredictionProps) {
   const selectedScenario = scenarios?.find((s) => s.id === parseInt(selectedScenarioId));
 
+  const [partyLegendVotes, setPartyLegendVotes] = useState<Record<number, number>>({});
+  const [candidateVotes, setCandidateVotes] = useState<Record<number, Record<number, number>>>({});
+  const [expandedParties, setExpandedParties] = useState<Record<number, boolean>>({});
+  const [dataPreloaded, setDataPreloaded] = useState<string>("");
+
+  const { data: scenarioCandidates } = useQuery<ScenarioCandidateWithDetails[]>({
+    queryKey: ["/api/scenarios", parseInt(selectedScenarioId), "candidates"],
+    queryFn: async () => {
+      if (!selectedScenarioId) return [];
+      const res = await fetch(`/api/scenarios/${selectedScenarioId}/candidates`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedScenarioId,
+  });
+
+  const { data: scenarioVotesData } = useQuery<{ id: number; partyId: number; candidateId: number | null; votes: number }[]>({
+    queryKey: ["/api/scenarios", parseInt(selectedScenarioId), "votes"],
+    queryFn: async () => {
+      if (!selectedScenarioId) return [];
+      const res = await fetch(`/api/scenarios/${selectedScenarioId}/votes`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedScenarioId,
+  });
+
+  useEffect(() => {
+    if (!selectedScenarioId || !scenarioCandidates || !scenarioVotesData) return;
+    if (dataPreloaded === selectedScenarioId) return;
+
+    const prefilledCandVotes: Record<number, Record<number, number>> = {};
+    const expandParties: Record<number, boolean> = {};
+    for (const sc of scenarioCandidates) {
+      if (sc.votes > 0) {
+        if (!prefilledCandVotes[sc.partyId]) prefilledCandVotes[sc.partyId] = {};
+        prefilledCandVotes[sc.partyId][sc.candidateId] = sc.votes;
+        expandParties[sc.partyId] = true;
+      }
+    }
+
+    const prefilledLegend: Record<number, number> = {};
+    for (const sv of scenarioVotesData) {
+      if (sv.candidateId === null && sv.votes > 0) {
+        prefilledLegend[sv.partyId] = (prefilledLegend[sv.partyId] || 0) + sv.votes;
+        expandParties[sv.partyId] = true;
+      }
+    }
+
+    setCandidateVotes(prefilledCandVotes);
+    setPartyLegendVotes(prefilledLegend);
+    setExpandedParties(expandParties);
+    setDataPreloaded(selectedScenarioId);
+  }, [selectedScenarioId, scenarioCandidates, scenarioVotesData, dataPreloaded]);
+
+  const scenarioParties = useMemo(() => {
+    if (!scenarioCandidates || scenarioCandidates.length === 0) return parties || [];
+    const partyIdsWithCandidates = new Set(scenarioCandidates.map(sc => sc.partyId));
+    const scenParties = (parties || []).filter(p => partyIdsWithCandidates.has(p.id));
+    return scenParties.length > 0 ? scenParties : (parties || []);
+  }, [parties, scenarioCandidates]);
+
+  const candidatesByParty = useMemo(() => {
+    if (!scenarioCandidates) return {};
+    const grouped: Record<number, ScenarioCandidateWithDetails[]> = {};
+    for (const sc of scenarioCandidates) {
+      if (!grouped[sc.partyId]) grouped[sc.partyId] = [];
+      grouped[sc.partyId].push(sc);
+    }
+    return grouped;
+  }, [scenarioCandidates]);
+
+  const partyTotals = useMemo(() => {
+    const totals: Record<number, { legend: number; nominal: number; total: number }> = {};
+    for (const p of (scenarioParties || [])) {
+      const legend = partyLegendVotes[p.id] || 0;
+      const candVotes = candidateVotes[p.id] || {};
+      const nominal = Object.values(candVotes).reduce((sum, v) => sum + (v || 0), 0);
+      totals[p.id] = { legend, nominal, total: legend + nominal };
+    }
+    return totals;
+  }, [scenarioParties, partyLegendVotes, candidateVotes]);
+
+  const grandTotal = useMemo(() => {
+    return Object.values(partyTotals).reduce((sum, t) => sum + t.total, 0);
+  }, [partyTotals]);
+
+  const toggleParty = (partyId: number) => {
+    setExpandedParties(prev => ({ ...prev, [partyId]: !prev[partyId] }));
+  };
+
+  const handleLegendVoteChange = (partyId: number, value: string) => {
+    const numValue = parseInt(value) || 0;
+    setPartyLegendVotes(prev => ({ ...prev, [partyId]: numValue }));
+  };
+
+  const handleCandidateVoteChange = (partyId: number, candidateId: number, value: string) => {
+    const numValue = parseInt(value) || 0;
+    setCandidateVotes(prev => ({
+      ...prev,
+      [partyId]: { ...(prev[partyId] || {}), [candidateId]: numValue },
+    }));
+  };
+
   const handleGenerate = () => {
-    predictionMutation.mutate(parseInt(selectedScenarioId), {
+    const hasAnyVotes = grandTotal > 0;
+    predictionMutation.mutate({
+      scenarioId: parseInt(selectedScenarioId),
+      ...(hasAnyVotes ? { partyLegendVotes, candidateVotes } : {}),
+    }, {
       onSuccess: onPredictionSuccess,
     });
+  };
+
+  const handleScenarioChange = (id: string) => {
+    setSelectedScenarioId(id);
+    setPartyLegendVotes({});
+    setCandidateVotes({});
+    setExpandedParties({});
+    setDataPreloaded("");
   };
 
   return (
@@ -52,15 +187,15 @@ export function QuickPrediction({
             Gerar Previsão Eleitoral
           </CardTitle>
           <CardDescription>
-            A IA analisa dados históricos e tendências para gerar previsões de distribuição de vagas.
-            Esta funcionalidade utiliza Replit AI Integrations e os custos são debitados dos seus créditos.
+            Insira os votos de legenda e votos nominais dos candidatos de cada partido.
+            O sistema soma automaticamente para calcular a distribuição proporcional de vagas conforme as regras do TSE.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Cenário para Análise</Label>
-              <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+              <Select value={selectedScenarioId} onValueChange={handleScenarioChange}>
                 <SelectTrigger data-testid="select-prediction-scenario">
                   <SelectValue placeholder="Selecione um cenário" />
                 </SelectTrigger>
@@ -74,30 +209,202 @@ export function QuickPrediction({
               </Select>
             </div>
             {selectedScenario && (
-              <div className="flex items-end">
-                <Button
-                  onClick={handleGenerate}
-                  disabled={predictionMutation.isPending}
-                  className="w-full md:w-auto"
-                  data-testid="button-generate-prediction"
-                >
-                  {predictionMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Analisando...
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="h-4 w-4 mr-2" />
-                      Gerar Previsão
-                    </>
-                  )}
-                </Button>
+              <div className="flex items-end gap-2">
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <div><strong>Cargo:</strong> {selectedScenario.position}</div>
+                  <div><strong>Votos válidos:</strong> {selectedScenario.validVotes.toLocaleString("pt-BR")}</div>
+                  <div><strong>Vagas:</strong> {selectedScenario.availableSeats}</div>
+                </div>
               </div>
             )}
           </div>
         </CardContent>
       </Card>
+
+      {selectedScenario && scenarioParties.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Vote className="h-5 w-5 text-primary" />
+                  Votação por Partido e Candidato
+                </CardTitle>
+                <CardDescription>
+                  Informe os votos de legenda e a votação nominal de cada candidato. O total do partido será calculado automaticamente.
+                </CardDescription>
+              </div>
+              {grandTotal > 0 && (
+                <Badge variant="secondary" className="font-mono text-base px-3 py-1" data-testid="badge-grand-total">
+                  Total geral: {grandTotal.toLocaleString("pt-BR")} votos
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {scenarioParties.map((party) => {
+              const partyCands = candidatesByParty[party.id] || [];
+              const isExpanded = expandedParties[party.id] || false;
+              const totals = partyTotals[party.id] || { legend: 0, nominal: 0, total: 0 };
+
+              return (
+                <Collapsible
+                  key={party.id}
+                  open={isExpanded}
+                  onOpenChange={() => toggleParty(party.id)}
+                >
+                  <div className="border rounded-lg overflow-hidden" data-testid={`party-section-${party.id}`}>
+                    <CollapsibleTrigger asChild>
+                      <button className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-4 h-4 rounded-full shrink-0"
+                            style={{ backgroundColor: party.color || "#003366" }}
+                          />
+                          <span className="font-medium">{party.name}</span>
+                          <Badge variant="outline">{party.abbreviation} ({party.number})</Badge>
+                          <Badge variant="secondary" className="font-mono">
+                            <Users className="h-3 w-3 mr-1" />
+                            {partyCands.length} candidatos
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {totals.total > 0 && (
+                            <Badge className="font-mono" data-testid={`party-total-${party.id}`}>
+                              {totals.total.toLocaleString("pt-BR")} votos
+                            </Badge>
+                          )}
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </div>
+                      </button>
+                    </CollapsibleTrigger>
+
+                    <CollapsibleContent>
+                      <div className="border-t p-4 space-y-4 bg-muted/20">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Votos de Legenda</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={partyLegendVotes[party.id] || ""}
+                              onChange={(e) => handleLegendVoteChange(party.id, e.target.value)}
+                              data-testid={`input-legend-votes-${party.id}`}
+                            />
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <div>Legenda: <span className="font-mono">{totals.legend.toLocaleString("pt-BR")}</span></div>
+                            <div>Nominais: <span className="font-mono">{totals.nominal.toLocaleString("pt-BR")}</span></div>
+                          </div>
+                          <div className="text-sm font-medium text-right">
+                            Total: <span className="font-mono text-primary text-base">{totals.total.toLocaleString("pt-BR")}</span>
+                          </div>
+                        </div>
+
+                        {partyCands.length > 0 && (
+                          <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              Votos Nominais dos Candidatos
+                            </Label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {partyCands.map((sc) => (
+                                <div key={sc.id} className="flex items-center gap-2 bg-background rounded-md border p-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium truncate" title={sc.candidate?.name || sc.nickname || ""}>
+                                      {sc.nickname || sc.candidate?.name || `Candidato #${sc.ballotNumber}`}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground font-mono">{sc.ballotNumber}</div>
+                                  </div>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    placeholder="0"
+                                    className="w-28"
+                                    value={candidateVotes[party.id]?.[sc.candidateId] || ""}
+                                    onChange={(e) => handleCandidateVoteChange(party.id, sc.candidateId, e.target.value)}
+                                    data-testid={`input-candidate-votes-${sc.candidateId}`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              );
+            })}
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                {grandTotal > 0 ? (
+                  <>
+                    {grandTotal.toLocaleString("pt-BR")} votos inseridos de {selectedScenario.validVotes.toLocaleString("pt-BR")} votos válidos
+                    {grandTotal !== selectedScenario.validVotes && (
+                      <span className="ml-2 text-amber-500">
+                        (diferença: {Math.abs(selectedScenario.validVotes - grandTotal).toLocaleString("pt-BR")})
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  "Sem votos inseridos — a IA projetará com base no perfil dos partidos"
+                )}
+              </div>
+              <Button
+                onClick={handleGenerate}
+                disabled={predictionMutation.isPending}
+                data-testid="button-generate-prediction"
+              >
+                {predictionMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analisando...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4 mr-2" />
+                    Gerar Previsão
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {selectedScenario && scenarioParties.length === 0 && (
+        <Card>
+          <CardContent className="p-6">
+            <EmptyState
+              icon={Users}
+              title="Nenhum partido cadastrado"
+              description="Cadastre partidos para inserir votações. Você ainda pode gerar uma previsão baseada no perfil do cenário."
+            />
+            <div className="flex justify-center mt-4">
+              <Button
+                onClick={handleGenerate}
+                disabled={predictionMutation.isPending}
+                data-testid="button-generate-prediction-no-parties"
+              >
+                {predictionMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analisando...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4 mr-2" />
+                    Gerar Previsão sem Votação
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {prediction && (
         <>
@@ -159,14 +466,19 @@ export function QuickPrediction({
                           </div>
                         </div>
                         <div className="flex items-center gap-3 flex-wrap">
+                          {pred.totalVotes != null && (
+                            <span className="text-sm font-mono text-muted-foreground">
+                              {Number(pred.totalVotes).toLocaleString("pt-BR")} votos
+                            </span>
+                          )}
                           <div className={`flex items-center gap-1 ${trendColor}`}>
                             <TrendIcon className="h-4 w-4" />
                             <span className="text-sm">
-                              {pred.trend === "up" ? "Tendência de alta" : pred.trend === "down" ? "Tendência de baixa" : "Estável"}
+                              {pred.trend === "up" ? "Alta" : pred.trend === "down" ? "Baixa" : "Estável"}
                             </span>
                           </div>
                           <Badge variant="secondary" className="font-mono">
-                            {(pred.confidence * 100).toFixed(0)}% confiança
+                            {(pred.confidence * 100).toFixed(0)}%
                           </Badge>
                         </div>
                       </div>
@@ -178,6 +490,11 @@ export function QuickPrediction({
                           </span>
                         </div>
                         <Progress value={(avgSeats / maxPossible) * 100} className="h-2" />
+                        {pred.electedCandidates && pred.electedCandidates.length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Eleitos: {pred.electedCandidates.join(", ")}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -217,7 +534,7 @@ export function QuickPrediction({
             <EmptyState
               icon={Brain}
               title="Selecione um cenário"
-              description="Escolha um cenário eleitoral para gerar previsões baseadas em inteligência artificial."
+              description="Escolha um cenário eleitoral para inserir votações e gerar previsões baseadas em inteligência artificial."
             />
           </CardContent>
         </Card>

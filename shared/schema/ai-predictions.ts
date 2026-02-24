@@ -341,3 +341,32 @@ export type CustomDashboard = typeof customDashboards.$inferSelect;
 export const insertAiSuggestionSchema = createInsertSchema(aiSuggestions).omit({ id: true, createdAt: true });
 export type InsertAiSuggestion = z.infer<typeof insertAiSuggestionSchema>;
 export type AiSuggestion = typeof aiSuggestions.$inferSelect;
+
+export const savedPredictions = pgTable("saved_predictions", {
+  id: serial("id").primaryKey(),
+  predictionType: text("prediction_type").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  scenarioId: integer("scenario_id"),
+  scenarioName: text("scenario_name"),
+  sourceEntityId: integer("source_entity_id"),
+  filters: jsonb("filters"),
+  parameters: jsonb("parameters"),
+  fullResult: jsonb("full_result").notNull(),
+  confidence: decimal("confidence", { precision: 5, scale: 4 }),
+  status: text("status").notNull().default("completed"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("saved_predictions_type_idx").on(table.predictionType),
+  index("saved_predictions_created_at_idx").on(table.createdAt),
+  index("saved_predictions_created_by_idx").on(table.createdBy),
+]);
+
+export const savedPredictionsRelations = relations(savedPredictions, ({ one }) => ({
+  createdByUser: one(users, { fields: [savedPredictions.createdBy], references: [users.id] }),
+}));
+
+export const insertSavedPredictionSchema = createInsertSchema(savedPredictions).omit({ id: true, createdAt: true });
+export type InsertSavedPrediction = z.infer<typeof insertSavedPredictionSchema>;
+export type SavedPrediction = typeof savedPredictions.$inferSelect;

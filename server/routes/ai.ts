@@ -109,9 +109,50 @@ function handleServiceError(res: any, error: any, defaultMsg: string) {
 
 router.post("/api/ai/predict", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
   try {
-    const { scenarioId, partyVotes, candidateVotes } = req.body;
-    const prediction = await predictScenario(scenarioId, partyVotes, candidateVotes);
+    const { scenarioId, partyLegendVotes, candidateVotes } = req.body;
+    if (!scenarioId || typeof scenarioId !== "number") {
+      return res.status(400).json({ error: "scenarioId é obrigatório" });
+    }
+    const sanitizedLegend: Record<number, number> = {};
+    if (partyLegendVotes && typeof partyLegendVotes === "object") {
+      for (const [k, v] of Object.entries(partyLegendVotes)) {
+        const num = Math.max(0, Math.floor(Number(v) || 0));
+        if (num > 0) sanitizedLegend[Number(k)] = num;
+      }
+    }
+    const sanitizedCandidates: Record<number, Record<number, number>> = {};
+    if (candidateVotes && typeof candidateVotes === "object") {
+      for (const [partyId, cands] of Object.entries(candidateVotes)) {
+        if (cands && typeof cands === "object") {
+          sanitizedCandidates[Number(partyId)] = {};
+          for (const [candId, v] of Object.entries(cands as Record<string, unknown>)) {
+            const num = Math.max(0, Math.floor(Number(v) || 0));
+            if (num > 0) sanitizedCandidates[Number(partyId)][Number(candId)] = num;
+          }
+        }
+      }
+    }
+    const prediction = await predictScenario(scenarioId, sanitizedLegend, sanitizedCandidates);
     await logAudit(req, "prediction", "scenario", String(scenarioId));
+
+    const scenario = await storage.getScenario(scenarioId);
+    const userId = (req.user as any)?.id;
+    try {
+      await storage.createSavedPrediction({
+        predictionType: "quick_prediction",
+        title: `Previsão: ${scenario?.name || `Cenário #${scenarioId}`}`,
+        description: `Previsão rápida para ${scenario?.position || "cargo"} com ${scenario?.availableSeats || 0} vagas`,
+        scenarioId,
+        scenarioName: scenario?.name || null,
+        fullResult: prediction as any,
+        confidence: (prediction as any)?.predictions?.[0]?.confidence?.toString() || null,
+        status: "completed",
+        createdBy: userId || null,
+      });
+    } catch (saveErr) {
+      console.warn("[SavedPrediction] Auto-save failed (non-fatal):", (saveErr as Error).message);
+    }
+
     res.json(prediction);
   } catch (error: any) {
     handleServiceError(res, error, "AI Prediction error:");
@@ -1551,6 +1592,77 @@ router.post("/api/sentiment/detect-crisis", requireAuth, requireRole("admin", "a
   } catch (error) {
     console.error("Error detecting crisis:", error);
     res.status(500).json({ error: "Erro ao detectar crise" });
+  }
+});
+
+// Saved Predictions History
+router.get("/api/saved-predictions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+  try {
+    const type = req.query.type as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+    const predictions = await storage.listSavedPredictions({ type, limit });
+    res.json(predictions);
+  } catch (error) {
+    console.error("Failed to fetch saved predictions:", error);
+    res.status(500).json({ error: "Falha ao buscar histórico de previsões" });
+  }
+});
+
+router.get("/api/saved-predictions/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const prediction = await storage.getSavedPrediction(id);
+    if (!prediction) {
+      return res.status(404).json({ error: "Previsão não encontrada" });
+    }
+    res.json(prediction);
+  } catch (error) {
+    console.error("Failed to fetch saved prediction:", error);
+    res.status(500).json({ error: "Falha ao buscar previsão" });
+  }
+});
+
+router.post("/api/saved-predictions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+  try {
+    const { predictionType, title, description, scenarioId, scenarioName, sourceEntityId, filters, parameters, fullResult, confidence, status } = req.body;
+    if (!predictionType || !title || !fullResult) {
+      return res.status(400).json({ error: "predictionType, title e fullResult são obrigatórios" });
+    }
+    const userId = (req.user as any)?.id;
+    const prediction = await storage.createSavedPrediction({
+      predictionType,
+      title,
+      description: description || null,
+      scenarioId: scenarioId || null,
+      scenarioName: scenarioName || null,
+      sourceEntityId: sourceEntityId || null,
+      filters: filters || null,
+      parameters: parameters || null,
+      fullResult,
+      confidence: confidence?.toString() || null,
+      status: status || "completed",
+      createdBy: userId || null,
+    });
+    await logAudit(req, "create", "saved_prediction", String(prediction.id));
+    res.status(201).json(prediction);
+  } catch (error) {
+    console.error("Failed to save prediction:", error);
+    res.status(500).json({ error: "Falha ao salvar previsão" });
+  }
+});
+
+router.delete("/api/saved-predictions/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const deleted = await storage.deleteSavedPrediction(id);
+    if (!deleted) {
+      return res.status(404).json({ error: "Previsão não encontrada" });
+    }
+    await logAudit(req, "delete", "saved_prediction", String(id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete saved prediction:", error);
+    res.status(500).json({ error: "Falha ao excluir previsão" });
   }
 });
 

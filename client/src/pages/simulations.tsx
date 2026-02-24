@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import { Calculator, PlayCircle, Save, Download, Trophy, Users, AlertTriangle, Info, Shield, Scale } from "lucide-react";
@@ -34,7 +34,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Scenario, Party, Candidate, SimulationResult, PartyResult } from "@shared/schema";
+import type { Scenario, Party, Candidate, SimulationResult, PartyResult, ScenarioCandidate } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 type VoteInput = { partyId: number; votes: number; candidates: { candidateId: number; votes: number }[] };
@@ -50,6 +50,7 @@ export default function Simulations() {
   const [candidateVotes, setCandidateVotes] = useState<Record<number, number>>({});
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [dataPreloaded, setDataPreloaded] = useState<string>("");
 
   const { data: scenarios } = useQuery<Scenario[]>({
     queryKey: ["/api/scenarios"],
@@ -62,6 +63,52 @@ export default function Simulations() {
   const { data: candidates } = useQuery<Candidate[]>({
     queryKey: ["/api/candidates"],
   });
+
+  const { data: scenarioCandidatesData } = useQuery<(ScenarioCandidate & { candidate: Candidate; party: Party })[]>({
+    queryKey: ["/api/scenarios", parseInt(selectedScenarioId), "candidates"],
+    queryFn: async () => {
+      if (!selectedScenarioId) return [];
+      const res = await fetch(`/api/scenarios/${selectedScenarioId}/candidates`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedScenarioId,
+  });
+
+  const { data: scenarioVotesData } = useQuery<{ id: number; partyId: number; candidateId: number | null; votes: number }[]>({
+    queryKey: ["/api/scenarios", parseInt(selectedScenarioId), "votes"],
+    queryFn: async () => {
+      if (!selectedScenarioId) return [];
+      const res = await fetch(`/api/scenarios/${selectedScenarioId}/votes`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedScenarioId,
+  });
+
+  useEffect(() => {
+    if (!selectedScenarioId || !scenarioCandidatesData || !scenarioVotesData) return;
+    if (dataPreloaded === selectedScenarioId) return;
+
+    const prefilledCandVotes: Record<number, number> = {};
+    const prefilledPartyVotes: Record<number, number> = {};
+
+    for (const sc of scenarioCandidatesData) {
+      if (sc.votes > 0) {
+        prefilledCandVotes[sc.candidateId] = sc.votes;
+      }
+    }
+
+    for (const sv of scenarioVotesData) {
+      if (sv.candidateId === null && sv.votes > 0) {
+        prefilledPartyVotes[sv.partyId] = (prefilledPartyVotes[sv.partyId] || 0) + sv.votes;
+      }
+    }
+
+    setCandidateVotes(prefilledCandVotes);
+    setPartyVotes(prefilledPartyVotes);
+    setDataPreloaded(selectedScenarioId);
+  }, [selectedScenarioId, scenarioCandidatesData, scenarioVotesData, dataPreloaded]);
 
   const selectedScenario = scenarios?.find((s) => s.id === parseInt(selectedScenarioId));
 
@@ -154,7 +201,13 @@ export default function Simulations() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Cenário Eleitoral</Label>
-              <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+              <Select value={selectedScenarioId} onValueChange={(id) => {
+                  setSelectedScenarioId(id);
+                  setPartyVotes({});
+                  setCandidateVotes({});
+                  setDataPreloaded("");
+                  setSimulationResult(null);
+                }}>
                 <SelectTrigger data-testid="select-simulation-scenario">
                   <SelectValue placeholder="Selecione um cenário" />
                 </SelectTrigger>

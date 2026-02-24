@@ -53,6 +53,7 @@ import {
   summaryStateVotes,
   type AiProvider, type InsertAiProvider, aiProviders,
   type AiTaskConfig, type InsertAiTaskConfig, aiTaskConfigs,
+  type SavedPrediction, type InsertSavedPrediction, savedPredictions,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -196,6 +197,12 @@ export interface IStorage {
   getAiPrediction(cacheKey: string): Promise<AiPrediction | undefined>;
   saveAiPrediction(data: { cacheKey: string; predictionType: string; prediction: unknown; expiresAt: Date }): Promise<AiPrediction>;
   deleteExpiredAiPredictions(): Promise<number>;
+
+  // Saved Predictions history
+  listSavedPredictions(filters?: { type?: string; limit?: number }): Promise<SavedPrediction[]>;
+  getSavedPrediction(id: number): Promise<SavedPrediction | undefined>;
+  createSavedPrediction(data: InsertSavedPrediction): Promise<SavedPrediction>;
+  deleteSavedPrediction(id: number): Promise<boolean>;
 
   // AI Provider management
   getAiProviders(): Promise<AiProvider[]>;
@@ -2898,6 +2905,45 @@ export class DatabaseStorage implements IStorage {
       .delete(aiPredictions)
       .where(sql`${aiPredictions.validUntil} < NOW()`);
     return result.rowCount ?? 0;
+  }
+
+  async listSavedPredictions(filters?: { type?: string; limit?: number }): Promise<SavedPrediction[]> {
+    const conditions: SQL[] = [];
+    if (filters?.type) {
+      conditions.push(eq(savedPredictions.predictionType, filters.type));
+    }
+    const query = db
+      .select()
+      .from(savedPredictions)
+      .orderBy(desc(savedPredictions.createdAt))
+      .limit(filters?.limit || 100);
+    if (conditions.length > 0) {
+      return query.where(and(...conditions));
+    }
+    return query;
+  }
+
+  async getSavedPrediction(id: number): Promise<SavedPrediction | undefined> {
+    const [prediction] = await db
+      .select()
+      .from(savedPredictions)
+      .where(eq(savedPredictions.id, id));
+    return prediction;
+  }
+
+  async createSavedPrediction(data: InsertSavedPrediction): Promise<SavedPrediction> {
+    const [created] = await db
+      .insert(savedPredictions)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async deleteSavedPrediction(id: number): Promise<boolean> {
+    const result = await db
+      .delete(savedPredictions)
+      .where(eq(savedPredictions.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // AI Provider management

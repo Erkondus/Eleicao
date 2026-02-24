@@ -213,10 +213,26 @@ export type AIPrediction = {
   predictions: {
     partyId: number;
     partyName: string;
+    legendVotes?: number;
+    nominalVotes?: number;
+    totalVotes?: number;
     predictedSeats: { min: number; max: number };
+    electedCandidates?: string[];
+    meetsBarrier?: boolean;
     confidence: number;
     trend: "up" | "down" | "stable";
+    reasoning?: string;
   }[];
+  seatDistribution?: { byQuotient: number; byRemainder: number; total: number };
   recommendations: string[];
+  warnings?: string[];
   generatedAt: string;
+  tseContext?: {
+    electoralQuotient: number;
+    barrierThreshold: number;
+    candidateMinVotes: number;
+    validVotes: number;
+    availableSeats: number;
+    federationsCount: number;
+  };
 };
