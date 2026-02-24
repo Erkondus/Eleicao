@@ -1,7 +1,19 @@
 {
-  "version": "1.5.0",
+  "version": "1.6.0",
   "buildDate": "2026-02-23",
   "changelog": [
+    {
+      "version": "1.6.0",
+      "date": "2026-02-23",
+      "changes": [
+        "Refatoração arquitetural: schema modularizado em 11 arquivos por domínio",
+        "Backend: rotas ai.ts e tse-import.ts separadas em controller/service",
+        "Frontend: campanhas dividida em 7 componentes + hook customizado",
+        "Frontend: importação TSE dividida em 6 componentes + hook customizado",
+        "Frontend: predições dividida em 6 componentes + hook customizado",
+        "Criados 7 services no backend (prediction, comparison, report, dashboard, sentiment, tse-import, tse-queue)"
+      ]
+    },
     {
       "version": "1.5.0",
       "date": "2026-02-23",

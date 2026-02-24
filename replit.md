@@ -1,7 +1,7 @@
 # SimulaVoto - Sistema de Simulação Eleitoral Brasileiro
 
 ## Overview
-SimulaVoto is a comprehensive web system designed to simulate Brazilian proportional electoral results according to the TSE system. It calculates electoral quotients, distributes seats using the D'Hondt method, incorporates AI-powered predictions, provides role-based access control, and maintains a full audit trail. The project aims to offer advanced analytical capabilities for electoral data, including real-time import monitoring, automated report generation, AI-driven data validation, and predictive modeling for future elections. It targets market potential in political analysis, academic research, and electoral campaign strategizing by providing detailed insights, scenario analysis, and robust data management.
+SimulaVoto is a web system designed to simulate Brazilian proportional electoral results according to the TSE system. It calculates electoral quotients, distributes seats, incorporates AI-powered predictions, provides role-based access control, and maintains a full audit trail. The project aims to offer advanced analytical capabilities for electoral data, including real-time import monitoring, automated report generation, AI-driven data validation, and predictive modeling for future elections. It targets political analysis, academic research, and electoral campaign strategizing by providing detailed insights, scenario analysis, and robust data management.
 
 ## User Preferences
 - Usar TypeScript em todo o código
@@ -11,94 +11,34 @@ SimulaVoto is a comprehensive web system designed to simulate Brazilian proporti
 - Suporte a tema claro/escuro
 
 ## System Architecture
-The application is built with a React + Vite + TailwindCSS + shadcn/ui frontend, an Express.js + TypeScript backend, and PostgreSQL with Drizzle ORM for the database. Authentication is handled via `passport-local` and `express-session`, implementing granular Role-Based Access Control (RBAC) with `admin`, `analyst`, and `viewer` roles. Each role has default permissions, but individual users can have custom permission overrides stored in the `permissions` text array column. The system defines 17 granular permissions across 5 groups (Dados Eleitorais, IA, Importação/Relatórios, Campanhas/Dashboards, Administração). Permission constants and labels are centralized in `shared/schema.ts` (`ALL_PERMISSIONS`, `PERMISSION_LABELS`, `PERMISSION_GROUPS`, `ROLE_DEFAULT_PERMISSIONS`). Backend enforcement uses `requirePermission()` middleware in `server/routes/shared.ts`, with `getEffectivePermissions()` resolving custom overrides vs. role defaults.
+The application features a React + Vite + TailwindCSS + shadcn/ui frontend and an Express.js + TypeScript backend. Data persistence is handled by PostgreSQL with Drizzle ORM. Authentication is managed via `passport-local` and `express-session`, implementing granular Role-Based Access Control (RBAC) with `admin`, `analyst`, and `viewer` roles, supporting custom permission overrides.
 
-**Backend Route Structure (Modularized):**
-- `server/routes/index.ts` - Main entry: session/passport setup, router mounting
-- `server/routes/shared.ts` - Shared middleware: requireAuth, requireRole, requirePermission, getEffectivePermissions, logAudit, upload, calculateNextRun
-- `server/routes/auth.ts` - Authentication, users, health, stats, audit
-- `server/routes/electoral.ts` - Parties, candidates, scenarios, simulations, electoral calculation (D'Hondt)
-- `server/routes/tse-import.ts` - TSE CSV import with queue system, batch processing, historical elections
-- `server/routes/analytics.ts` - Analytics dashboard, data export, drill-down queries
-- `server/routes/ai.ts` - AI predictions, forecasts, semantic search, reports, dashboards, suggestions
-- `server/routes/sentiment.ts` - Sentiment analysis, monitoring sessions, crisis alerts, notifications
-- `server/routes/ibge.ts` - IBGE data import (municipios, populacao, indicadores)
-- `server/routes/campaigns.ts` - Campaign management, insights, team, KPI, calendar, budgets
-
-**Key Features and Implementations:**
-- **Electoral Calculation:** Implements the Brazilian proportional electoral system with full TSE compliance:
-  - Quociente Eleitoral (QE) = floor(votos_válidos / vagas) (Art. 106 CE)
-  - Quociente Partidário (QP) = floor(votos_entidade / QE) (Art. 107 CE)
-  - Cláusula de barreira: 80% do QE para participar das sobras (Art. 108 §1º, Lei 14.211/2021)
-  - Votação mínima individual: 20% do QE para eleição (Art. 108 §1º-A)
-  - Distribuição de sobras por D'Hondt (maiores médias) entre entidades que atingiram barreira
-  - Federações partidárias como entidade única (Lei 14.208/2021)
-  - Coligações abolidas para eleições proporcionais (Lei 14.211/2021)
-  - Edge case: sem QE atingido → D'Hondt entre todos os partidos com votos
-  - Desempate no D'Hondt por total de votos
-- **Data Import System:** Robust CSV import from TSE URLs with streaming, real-time progress updates via WebSockets, and re-processing of failed batches. Batch tracking with original file row indices for accurate audit trails. All three import types (PARTIDO, DETALHE, CANDIDATO) use consistent duplicate checking and row tracking. Includes an enhanced IBGE import system with detailed error reporting, real-time progress, and cancel/restart capabilities.
-  - **Dynamic CSV Format Detection:** The TSE changed CSV formats across election years. The system auto-detects column count and applies appropriate field mappings:
-    - **PARTIDO (votacao_partido_munzona):**
-      - Legacy (≤23 cols): 2010 and earlier - minimal structure
-      - Intermediate (24-30 cols): 2002-2014 - has coligação but NO federation (28 cols)
-      - Modern (>30 cols): 2018-2022+ - has federation fields (36-38 cols)
-    - **CANDIDATO (votacao_candidato_munzona):**
-      - Legacy (≤38 cols): 2002-2014 - NO julgamento/cassação fields, NO federation (38 cols)
-      - Modern (>38 cols): 2018-2022+ - has julgamento/cassação and federation fields (50 cols)
-    - **DETALHE (detalhe_votacao_munzona):** Consistent 47-column format across all years (2014-2022)
-- **AI-Powered Data Validation:** Integrates GPT-4o for quality scoring, risk assessment, and recommendations on imported data, alongside deterministic checks.
-- **Automated Reporting:** System for creating, scheduling, and generating reports (CSV/PDF) with various frequencies and types, supporting email delivery.
-- **Electoral Predictions & AI Insights:** Utilizes Monte Carlo simulations, historical trend analysis, and AI-generated narratives. Includes advanced predictive analytics for voter turnout, candidate success, and party performance, with new prediction types like Candidate Comparison, Event Impact, and What-If Scenarios.
-- **Semantic Search:** Implemented with `pgvector` for natural language queries on electoral data, using OpenAI `text-embedding-3-small` for embeddings.
-- **Dashboard & Analytics:** Interactive dashboard with a map of Brazil, consolidated metrics, and import status. Advanced analytics with customizable reports, historical comparisons, trend analysis, anomaly detection, and custom dashboards.
-- **System Administration:** Admin panel with database statistics, reset options, and detailed error reporting.
-- **Audit Trail:** Comprehensive logging of all user operations and system changes.
-- **UI/UX:** Adherence to shadcn/ui patterns, institutional design inspired by TSE colors, and support for light/dark themes.
-- **External Data Integration:** Real-time integration with external news sources (Google News RSS, NewsAPI) and social media (Twitter/X) for article enrichment and sentiment analysis.
-- **Advanced Sentiment Analysis:** Comprehensive system with multi-source data aggregation, GPT-4o powered analysis, entity-level tracking, interactive word clouds, temporal evolution charts, and multi-entity comparison. Includes a crisis alert system with severity levels and notifications.
-- **AI Suggestions System:** GPT-4o powered suggestions for charts, reports, and insights.
-- **Real-time Notification System:** In-app notifications with WebSocket delivery and email alerts for critical events.
-- **Campaign Insights AI Module:** AI-powered module for campaign strategy analysis including high-impact segment identification, message strategy generation, campaign impact prediction, and executive report generation.
-- **Campaign Management Module:** Comprehensive management with team roles, calendar visualization, AI-powered KPI goal tracking, and activity assignment.
-- **Real-time Collaborative Editing:** Multi-user scenario editing with optimistic locking (expectedUpdatedAt on PUT/DELETE for scenario candidates), WebSocket broadcast of scenario.candidate.added/updated/deleted events, and automatic React Query cache invalidation via `useScenarioWebSocket` hook. 409 conflict detection with user-friendly toast messages and automatic data refresh.
-- **AI Performance Optimization:** Centralized AI call management via `server/ai-cache.ts` with:
-  - `cachedAiCall` wrapper: DB-backed response caching with configurable TTL (1-24h), MD5-based cache keys, automatic JSON parsing
-  - Model tier selection: `gpt-4o-mini` ("fast") for simple tasks (article enrichment, narratives, semantic search answers, suggestions), `gpt-4o` ("standard") for complex analysis (predictions, forecasting, validation)
-  - Shared system prompts (`SYSTEM_PROMPTS`): 7 reusable prompts (electoralAnalyst, politicalForecaster, anomalyDetector, electoralLawExpert, sentimentAnalyst, campaignStrategist, dataAnalyst)
-  - Prompt compression: 60-70% reduction in prompt token usage via compact JSON schema notation and eliminated verbose instructions
-  - Token limits: `max_completion_tokens` set per endpoint (300-4000 based on complexity)
-  - All application AI calls route through `cachedAiCall` (files: ai.ts, ai-insights.ts, forecasting.ts, data-validation.ts, sentiment-analysis.ts, external-data-service.ts, semantic-search.ts)
-
-- **Database Performance Optimization:**
-  - Reduced redundant indexes: `tse_candidate_votes` from 14→4 indexes, `tse_party_votes` from 6→3 indexes (recovered 618 MB)
-  - Pre-aggregated summary tables (`summary_party_votes`, `summary_candidate_votes`, `summary_state_votes`) in `shared/schema.ts` for fast analytics queries
-  - Summary refresh logic in `server/summary-refresh.ts`: atomic transactions (DELETE+INSERT), mutex via `refreshInProgress` flag, proper GROUP BY including `ds_cargo`/`nm_tipo_eleicao`
-  - Analytics storage methods (`getVotesByParty`, `getTopCandidates`, `getVotesByState`, `getHistoricalVotesByParty`) try summary tables first, fall back to raw tables for municipality-level or empty data
-  - Import batch size reduced from 10K→2K rows for memory safety
-  - Post-import async maintenance: ANALYZE + summary refresh via `postImportMaintenance()` (2s delayed, non-blocking)
-  - Manual refresh endpoint: `POST /api/analytics/refresh-summaries` (admin-only)
-
-- **Multi-Provider AI Configuration:**
-  - Admin UI at `/admin-ai` for managing AI providers and per-task model assignment
-  - Database tables: `ai_providers` (provider configs), `ai_task_configs` (task→provider+model mapping)
-  - Supported providers: OpenAI, Anthropic (Claude), Google Gemini, OpenAI-compatible (local LLMs like Ollama, LM Studio)
-  - Multi-provider abstraction in `server/ai-client.ts` with adapters for each provider type
-  - `cachedAiCall` resolves provider/model per task: task config → fallback provider → default provider → direct OpenAI
-  - API keys stored as env var references (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), never exposed to frontend
-  - 18 configurable AI tasks (scenario_predict, sentiment_analysis, etc.) with per-task model, maxTokens, temperature
-  - Admin routes in `server/routes/admin-ai.ts`: CRUD for providers, model listing via API, connection testing, task config management
-  - Zero-config backward compatibility: system works with no providers configured (falls back to direct OpenAI)
+**Key Architectural Decisions:**
+-   **Modularized Schema:** The database schema is organized into distinct modules (`users`, `electoral`, `tse`, `summaries`, `ai-predictions`, `sentiment`, `reports`, `campaigns`, `ibge`, `ai-config`) for clarity and maintainability.
+-   **Modularized Backend Routes & Services:** Backend logic is separated into controllers (`routes`) and business logic (`services`) for better organization and reusability (e.g., `prediction-service`, `tse-import-service`).
+-   **Componentized Frontend:** Frontend pages are structured with thin wrappers and dedicated component directories for each major feature (e.g., `campaigns/`, `tse-import/`, `predictions/`). Custom React hooks encapsulate feature-specific logic.
+-   **Electoral Calculation:** Implements the Brazilian proportional electoral system fully compliant with TSE rules, including electoral quotients, party quotients, barrier clauses, and D'Hondt method for seat distribution, accounting for federations and abolished coalitions.
+-   **Dynamic CSV Format Detection:** The import system dynamically detects and adapts to varying TSE CSV formats across different election years for `PARTIDO`, `CANDIDATO`, and `DETALHE` data.
+-   **AI-Powered Data Validation:** Integrates GPT-4o for quality scoring, risk assessment, and recommendations on imported data.
+-   **Electoral Predictions & AI Insights:** Utilizes Monte Carlo simulations, historical trends, and AI (GPT-4o) for predictions, including voter turnout, candidate success, party performance, candidate comparisons, event impact, and what-if scenarios.
+-   **Semantic Search:** Uses `pgvector` and OpenAI embeddings (`text-embedding-3-small`) for natural language queries on electoral data.
+-   **Advanced Sentiment Analysis:** Aggregates data from multiple sources, uses GPT-4o for analysis, tracks entities, provides interactive visualizations, and includes a crisis alert system.
+-   **AI Suggestions System:** Offers GPT-4o powered suggestions for charts, reports, and insights.
+-   **Real-time Collaborative Editing:** Supports multi-user scenario editing with optimistic locking, WebSocket broadcasts for updates, and automatic cache invalidation.
+-   **AI Performance Optimization:** Centralized AI call management (`cachedAiCall`) with DB-backed caching, configurable TTL, model tier selection (`gpt-4o-mini`, `gpt-4o`), reusable system prompts, prompt compression, and token limits. Supports multi-provider AI configuration.
+-   **Database Performance Optimization:** Employs reduced redundant indexes, pre-aggregated summary tables (`summary_party_votes`, `summary_candidate_votes`, `summary_state_votes`) for fast analytics, atomic summary refresh logic, and post-import asynchronous maintenance tasks.
+-   **Multi-Provider AI Configuration:** Allows administrators to manage AI providers (OpenAI, Anthropic, Google Gemini, OpenAI-compatible) and assign specific models per task, with API keys stored securely as environment variables.
 
 ## External Dependencies
-- **OpenAI:** GPT-4o and GPT-4o-mini for AI integrations (validation, insights, sentiment, predictions, suggestions) via centralized `cachedAiCall`, and `text-embedding-3-small` for semantic search.
-- **Anthropic:** Claude models as alternative AI provider (optional, configurable via admin panel).
-- **Google Gemini:** Gemini models as alternative AI provider (optional, configurable via admin panel).
-- **Resend:** For sending automated reports and email alerts.
-- **PostgreSQL:** Primary database.
-- **Drizzle ORM:** Object-Relational Mapper.
-- **Passport.js (passport-local):** Authentication strategy.
-- **Bcrypt:** Password hashing.
-- **Express.js:** Web application framework.
-- **React, Vite, TailwindCSS, shadcn/ui:** Frontend development stack.
-- **csv-parse:** CSV parsing for data imports.
-- **pgvector:** PostgreSQL extension for vector similarity search.
+-   **OpenAI:** GPT-4o, GPT-4o-mini for AI features (validation, insights, sentiment, predictions, suggestions) and `text-embedding-3-small` for semantic search.
+-   **Anthropic:** Claude models (optional AI provider).
+-   **Google Gemini:** Gemini models (optional AI provider).
+-   **Resend:** For automated reports and email alerts.
+-   **PostgreSQL:** Primary relational database.
+-   **Drizzle ORM:** Object-Relational Mapper for database interactions.
+-   **Passport.js (passport-local):** Authentication.
+-   **Bcrypt:** Password hashing.
+-   **Express.js:** Backend web framework.
+-   **React, Vite, TailwindCSS, shadcn/ui:** Frontend development stack.
+-   **csv-parse:** CSV parsing library.
+-   **pgvector:** PostgreSQL extension for vector similarity search.
