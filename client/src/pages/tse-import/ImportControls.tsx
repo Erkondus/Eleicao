@@ -125,20 +125,25 @@ export function ImportControls({ hook }: ImportControlsProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Importação Rápida</Label>
-            <div className="flex flex-wrap gap-2">
-              {[2024, 2022, 2020, 2018].map((year) => (
-                <Button
-                  key={year}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => hook.handleQuickImport(String(year))}
-                  data-testid={`button-quick-import-${year}`}
-                >
-                  {year}
-                </Button>
-              ))}
+            <Label>Importação Rápida por Ano</Label>
+            <div className="flex gap-2">
+              <Select
+                value=""
+                onValueChange={(year) => hook.handleQuickImport(year)}
+              >
+                <SelectTrigger data-testid="select-quick-import-year" className="flex-1">
+                  <SelectValue placeholder="Selecione o ano para importar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ELECTION_YEARS.map((year) => (
+                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Selecione um ano para preencher automaticamente a URL do TSE (votação por candidato)
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -152,7 +157,7 @@ export function ImportControls({ hook }: ImportControlsProps) {
               data-testid="input-tse-url"
             />
             <p className="text-xs text-muted-foreground">
-              Cole a URL de um arquivo .zip do repositório de dados abertos do TSE
+              Cole a URL de um arquivo .zip ou selecione o ano acima
             </p>
           </div>
 

@@ -302,13 +302,14 @@ export default function ElectoralDashboard() {
 
   const importStats = useMemo(() => {
     if (!importJobs) return { total: 0, completed: 0, failed: 0, active: 0, totalRows: 0, totalSize: 0 };
+    const completedJobs = importJobs.filter(j => j.status === "completed");
     return {
       total: importJobs.length,
-      completed: importJobs.filter(j => j.status === "completed").length,
+      completed: completedJobs.length,
       failed: importJobs.filter(j => j.status === "failed").length,
       active: importJobs.filter(j => ["downloading", "processing", "running", "extracting", "pending"].includes(j.status)).length,
-      totalRows: importJobs.reduce((sum, j) => sum + (j.processedRows || 0), 0),
-      totalSize: importJobs.reduce((sum, j) => sum + j.fileSize, 0),
+      totalRows: completedJobs.reduce((sum, j) => sum + (j.processedRows || 0), 0),
+      totalSize: completedJobs.reduce((sum, j) => sum + j.fileSize, 0),
     };
   }, [importJobs]);
 

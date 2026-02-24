@@ -1597,44 +1597,30 @@ export class DatabaseStorage implements IStorage {
     const cached = this.analyticsCache.get<{ totalRecords: number; totalPartyRecords: number; totalStatRecords: number; years: number[]; ufs: string[]; cargos: { code: number; name: string }[] }>(cacheKey);
     if (cached) return cached;
 
-    const [countResult, partyCountResult, statsCountResult] = await Promise.all([
-      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_candidate_votes'`),
-      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_party_votes'`),
-      db.execute(sql`SELECT reltuples::bigint AS count FROM pg_class WHERE relname = 'tse_electoral_statistics'`),
+    const [candidateCount, partyCount, statsCount] = await Promise.all([
+      db.select({ count: sql<number>`count(*)` }).from(tseCandidateVotes),
+      db.select({ count: sql<number>`count(*)` }).from(tsePartyVotes),
+      db.select({ count: sql<number>`count(*)` }).from(tseElectoralStatistics),
     ]);
 
-    const countRows = countResult.rows ?? countResult;
-    let estimatedCount = Number((countRows as any)[0]?.count || 0);
-    if (estimatedCount <= 0) {
-      const exactCount = await db.select({ count: sql<number>`count(*)` }).from(tseCandidateVotes);
-      estimatedCount = Number(exactCount[0]?.count || 0);
-    }
-
-    const partyCountRows = partyCountResult.rows ?? partyCountResult;
-    let estimatedPartyCount = Number((partyCountRows as any)[0]?.count || 0);
-    if (estimatedPartyCount <= 0) {
-      const exactCount = await db.select({ count: sql<number>`count(*)` }).from(tsePartyVotes);
-      estimatedPartyCount = Number(exactCount[0]?.count || 0);
-    }
-
-    const statsCountRows = statsCountResult.rows ?? statsCountResult;
-    let estimatedStatsCount = Number((statsCountRows as any)[0]?.count || 0);
-    if (estimatedStatsCount <= 0) {
-      const exactCount = await db.select({ count: sql<number>`count(*)` }).from(tseElectoralStatistics);
-      estimatedStatsCount = Number(exactCount[0]?.count || 0);
-    }
+    const totalCandidateRecords = Number(candidateCount[0]?.count || 0);
+    const totalPartyRecords = Number(partyCount[0]?.count || 0);
+    const totalStatRecords = Number(statsCount[0]?.count || 0);
 
     let years: number[] = [];
     let ufs: string[] = [];
     let cargos: { code: number; name: string }[] = [];
 
     try {
-      const [candYears, partyYears, statsYears, ufsResult, cargosResult] = await Promise.all([
+      const [candYears, partyYears, statsYears, candUfs, partyUfs, statsUfs, candCargos, partyCargos] = await Promise.all([
         db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`),
         db.selectDistinct({ year: tsePartyVotes.anoEleicao }).from(tsePartyVotes).where(sql`${tsePartyVotes.anoEleicao} is not null`),
         db.selectDistinct({ year: tseElectoralStatistics.anoEleicao }).from(tseElectoralStatistics).where(sql`${tseElectoralStatistics.anoEleicao} is not null`),
         db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`),
+        db.selectDistinct({ uf: tsePartyVotes.sgUf }).from(tsePartyVotes).where(sql`${tsePartyVotes.sgUf} is not null`),
+        db.selectDistinct({ uf: tseElectoralStatistics.sgUf }).from(tseElectoralStatistics).where(sql`${tseElectoralStatistics.sgUf} is not null`),
         db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`),
+        db.selectDistinct({ code: tsePartyVotes.cdCargo, name: tsePartyVotes.dsCargo }).from(tsePartyVotes).where(sql`${tsePartyVotes.cdCargo} is not null`),
       ]);
 
       const allYears = new Set<number>();
@@ -1642,25 +1628,22 @@ export class DatabaseStorage implements IStorage {
       partyYears.forEach(r => r.year && allYears.add(r.year));
       statsYears.forEach(r => r.year && allYears.add(r.year));
       years = Array.from(allYears).sort((a, b) => b - a);
-      ufs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
-      cargos = cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! }));
+
+      const allUfs = new Set<string>();
+      candUfs.forEach(r => r.uf && r.uf !== 'ZZ' && allUfs.add(r.uf));
+      partyUfs.forEach(r => r.uf && r.uf !== 'ZZ' && allUfs.add(r.uf));
+      statsUfs.forEach(r => r.uf && r.uf !== 'ZZ' && allUfs.add(r.uf));
+      ufs = Array.from(allUfs).sort();
+
+      const cargoMap = new Map<number, string>();
+      candCargos.forEach(r => r.code && r.name && cargoMap.set(r.code, r.name));
+      partyCargos.forEach(r => r.code && r.name && cargoMap.set(r.code, r.name));
+      cargos = Array.from(cargoMap.entries()).map(([code, name]) => ({ code, name })).sort((a, b) => a.code - b.code);
     } catch (e) {
-      // fallback to candidate votes only
-      try {
-        const [yearsResult, ufsResult, cargosResult] = await Promise.all([
-          db.selectDistinct({ year: tseCandidateVotes.anoEleicao }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.anoEleicao} is not null`),
-          db.selectDistinct({ uf: tseCandidateVotes.sgUf }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.sgUf} is not null`),
-          db.selectDistinct({ code: tseCandidateVotes.cdCargo, name: tseCandidateVotes.dsCargo }).from(tseCandidateVotes).where(sql`${tseCandidateVotes.cdCargo} is not null`),
-        ]);
-        years = yearsResult.map(r => r.year!).filter(Boolean).sort((a, b) => b - a);
-        ufs = ufsResult.map(r => r.uf!).filter(uf => uf && uf !== 'ZZ').sort();
-        cargos = cargosResult.filter(r => r.code && r.name).map(r => ({ code: r.code!, name: r.name! }));
-      } catch (e2) {
-        // empty
-      }
+      console.error("Error fetching TSE metadata:", e);
     }
 
-    const result = { totalRecords: estimatedCount, totalPartyRecords: estimatedPartyCount, totalStatRecords: estimatedStatsCount, years, ufs, cargos };
+    const result = { totalRecords: totalCandidateRecords, totalPartyRecords, totalStatRecords, years, ufs, cargos };
     this.analyticsCache.set(cacheKey, result, 30 * 60 * 1000);
     return result;
   }

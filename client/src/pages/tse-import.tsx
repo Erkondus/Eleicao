@@ -91,15 +91,15 @@ export default function TseImport() {
                 <div className="grid gap-2 sm:grid-cols-3">
                   <div className="text-center p-4 bg-muted rounded-lg">
                     <p className="text-2xl font-bold font-mono" data-testid="text-candidate-records">{hook.stats.totalRecords.toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground">Candidatos</p>
+                    <p className="text-xs text-muted-foreground">Votos por Candidato</p>
                   </div>
                   <div className="text-center p-4 bg-muted rounded-lg">
                     <p className="text-2xl font-bold font-mono" data-testid="text-party-records">{(hook.stats.totalPartyRecords || 0).toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground">Votos Partido</p>
+                    <p className="text-xs text-muted-foreground">Votos por Partido</p>
                   </div>
                   <div className="text-center p-4 bg-muted rounded-lg">
                     <p className="text-2xl font-bold font-mono" data-testid="text-stat-records">{(hook.stats.totalStatRecords || 0).toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground">Estatísticas</p>
+                    <p className="text-xs text-muted-foreground">Estatísticas Eleitorais</p>
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">

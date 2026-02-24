@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { generateHistoricalUrl } from "@/hooks/use-tse-import";
+import { generateHistoricalUrl, ELECTION_YEARS } from "@/hooks/use-tse-import";
 import type { useTseImport } from "@/hooks/use-tse-import";
 
 type TseImportHook = ReturnType<typeof useTseImport>;
@@ -47,23 +47,23 @@ export function HistoricalImport({ hook }: HistoricalImportProps) {
           </div>
 
           <div className="space-y-2">
-            <Label>Importação Rápida</Label>
-            <div className="flex flex-wrap gap-2">
-              {[2024, 2022, 2020, 2018, 2016].map((year) => (
-                <Button
-                  key={year}
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    hook.setHistoricalUrl(generateHistoricalUrl(String(year), hook.historicalImportType));
-                    hook.setHistoricalYear(String(year));
-                  }}
-                  data-testid={`button-historical-quick-${year}`}
-                >
-                  {year}
-                </Button>
-              ))}
-            </div>
+            <Label>Importação Rápida por Ano</Label>
+            <Select
+              value=""
+              onValueChange={(year) => {
+                hook.setHistoricalUrl(generateHistoricalUrl(year, hook.historicalImportType));
+                hook.setHistoricalYear(year);
+              }}
+            >
+              <SelectTrigger data-testid="select-historical-quick-year">
+                <SelectValue placeholder="Selecione o ano para importar" />
+              </SelectTrigger>
+              <SelectContent>
+                {ELECTION_YEARS.map((year) => (
+                  <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
               {hook.historicalImportType === "detalhe"
                 ? "Dados de totais: eleitores aptos, comparecimento, votos válidos, brancos, nulos"
@@ -84,12 +84,16 @@ export function HistoricalImport({ hook }: HistoricalImportProps) {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Ano da Eleição</Label>
-              <Input
-                placeholder="Ex: 2022"
-                value={hook.historicalYear}
-                onChange={(e) => hook.setHistoricalYear(e.target.value)}
-                data-testid="input-historical-year"
-              />
+              <Select value={hook.historicalYear} onValueChange={hook.setHistoricalYear}>
+                <SelectTrigger data-testid="select-historical-year">
+                  <SelectValue placeholder="Selecione o ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ELECTION_YEARS.map((year) => (
+                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Filtrar por Cargo</Label>
