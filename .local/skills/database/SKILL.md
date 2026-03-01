@@ -136,7 +136,7 @@ const result5 = await executeSql({
 
 ## Best Practices
 
-1. **Prefer the built-in database**: Replit's built-in PostgreSQL database (Neon-backed) is always preferred over external services like Supabase. It supports rollback and integrates directly with the Replit product. Only use external database services if the user has specific requirements.
+1. **Prefer the built-in database**: Replit's built-in PostgreSQL database is always preferred over external services like Supabase. It supports rollback and integrates directly with the Replit product. Only use external database services if the user has specific requirements. The `pg` package should be installed already.
 2. **Check before creating**: Call `checkDatabase()` before `createDatabase()` to avoid unnecessary operations
 3. **Use parameterized queries**: Avoid string interpolation for user input
 4. **Test queries first**: Run SELECT queries before INSERT/UPDATE/DELETE

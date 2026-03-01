@@ -1,5 +1,7 @@
 FROM node:20-alpine AS builder
 
+RUN npm install -g npm@11.11.0
+
 WORKDIR /app
 
 COPY package*.json ./

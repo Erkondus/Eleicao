@@ -171,12 +171,20 @@ fi
 echo ""
 echo "Running database schema sync (db:push)..."
 
-if npm run db:push 2>&1; then
+DB_PUSH_TIMEOUT=120
+
+if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "" | npm run db:push 2>&1'; then
   echo "db:push completed successfully!"
 else
-  echo "db:push failed, retrying..."
-  if npm run db:push --force 2>&1; then
-    echo "db:push --force completed successfully!"
+  EXIT_CODE=$?
+  if [ "$EXIT_CODE" = "124" ]; then
+    echo "db:push timed out after ${DB_PUSH_TIMEOUT}s (possible interactive prompt)."
+    echo "Retrying with force..."
+  else
+    echo "db:push failed (exit code: $EXIT_CODE), retrying..."
+  fi
+  if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "" | npm run db:push --force 2>&1'; then
+    echo "db:push (retry) completed successfully!"
   else
     echo ""
     echo "============================================"
