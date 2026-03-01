@@ -146,11 +146,10 @@ export function CandidateComparison({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Estado</Label>
-                      <Select value={comparisonForm.state || "national"} onValueChange={(v) => setComparisonForm({ ...comparisonForm, state: v === "national" ? "" : v })}>
+                      <Select value={comparisonForm.state || "NACIONAL"} onValueChange={(v) => setComparisonForm({ ...comparisonForm, state: v })}>
                         <SelectTrigger data-testid="select-comparison-state"><SelectValue placeholder="Nacional" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="national">Nacional</SelectItem>
-                          {BRAZILIAN_STATES.filter(s => s.value).map((s) => (
+                          {BRAZILIAN_STATES.map((s) => (
                             <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                           ))}
                         </SelectContent>

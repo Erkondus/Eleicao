@@ -327,18 +327,18 @@ export default function Scenarios() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div className="text-center p-2 bg-muted rounded-md">
-                    <p className="text-xl font-mono font-bold">{scenario.totalVoters.toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground">Eleitores</p>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="text-center p-2 bg-muted rounded-md overflow-hidden">
+                    <p className="text-sm sm:text-base lg:text-sm xl:text-base font-mono font-bold leading-tight" title={scenario.totalVoters.toLocaleString("pt-BR")}>{scenario.totalVoters.toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Eleitores</p>
                   </div>
-                  <div className="text-center p-2 bg-muted rounded-md">
-                    <p className="text-xl font-mono font-bold">{scenario.validVotes.toLocaleString("pt-BR")}</p>
-                    <p className="text-xs text-muted-foreground">Votos Válidos</p>
+                  <div className="text-center p-2 bg-muted rounded-md overflow-hidden">
+                    <p className="text-sm sm:text-base lg:text-sm xl:text-base font-mono font-bold leading-tight" title={scenario.validVotes.toLocaleString("pt-BR")}>{scenario.validVotes.toLocaleString("pt-BR")}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Votos Válidos</p>
                   </div>
-                  <div className="text-center p-2 bg-muted rounded-md">
-                    <p className="text-xl font-mono font-bold">{scenario.availableSeats}</p>
-                    <p className="text-xs text-muted-foreground">Vagas</p>
+                  <div className="text-center p-2 bg-muted rounded-md overflow-hidden">
+                    <p className="text-sm sm:text-base lg:text-sm xl:text-base font-mono font-bold leading-tight">{scenario.availableSeats}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Vagas</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">

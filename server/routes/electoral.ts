@@ -500,6 +500,22 @@ router.get("/api/simulations", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/api/simulations/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid simulation ID" });
+    }
+    const simulation = await storage.getSimulation(id);
+    if (!simulation) {
+      return res.status(404).json({ error: "Simulation not found" });
+    }
+    res.json(simulation);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch simulation" });
+  }
+});
+
 router.post("/api/simulations", requireAuth, async (req, res) => {
   try {
     const simulation = await storage.createSimulation({

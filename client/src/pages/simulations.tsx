@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useSearch } from "wouter";
-import { Calculator, PlayCircle, Save, Download, Trophy, Users, AlertTriangle, Info, Shield, Scale } from "lucide-react";
+import { useSearch, Link } from "wouter";
+import { Calculator, PlayCircle, Save, Download, Trophy, Users, AlertTriangle, Info, Shield, Scale, History, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Scenario, Party, Candidate, SimulationResult, PartyResult, ScenarioCandidate } from "@shared/schema";
+import type { Scenario, Party, Candidate, Simulation, SimulationResult, PartyResult, ScenarioCandidate } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 type VoteInput = { partyId: number; votes: number; candidates: { candidateId: number; votes: number }[] };
@@ -43,6 +43,7 @@ export default function Simulations() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const scenarioParam = params.get("scenario");
+  const simulationIdParam = params.get("id");
 
   const { toast } = useToast();
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(scenarioParam || "");
@@ -51,6 +52,7 @@ export default function Simulations() {
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [dataPreloaded, setDataPreloaded] = useState<string>("");
+  const [viewingSimulationName, setViewingSimulationName] = useState<string | null>(null);
 
   const { data: scenarios } = useQuery<Scenario[]>({
     queryKey: ["/api/scenarios"],
@@ -85,6 +87,35 @@ export default function Simulations() {
     },
     enabled: !!selectedScenarioId,
   });
+
+  const { data: savedSimulation, isLoading: loadingSavedSimulation } = useQuery<Simulation>({
+    queryKey: ["/api/simulations", simulationIdParam],
+    queryFn: async () => {
+      const res = await fetch(`/api/simulations/${simulationIdParam}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch simulation");
+      return res.json();
+    },
+    enabled: !!simulationIdParam,
+  });
+
+  const { data: recentSimulations, isLoading: loadingRecentSimulations } = useQuery<Simulation[]>({
+    queryKey: ["/api/simulations/recent"],
+  });
+
+  useEffect(() => {
+    if (!savedSimulation) return;
+    if (savedSimulation.results) {
+      const results = savedSimulation.results as SimulationResult;
+      setSimulationResult({
+        ...results,
+        partyResults: results.partyResults ?? [],
+      });
+      setViewingSimulationName(savedSimulation.name);
+      if (savedSimulation.scenarioId && !selectedScenarioId) {
+        setSelectedScenarioId(String(savedSimulation.scenarioId));
+      }
+    }
+  }, [savedSimulation]);
 
   useEffect(() => {
     if (!selectedScenarioId || !scenarioCandidatesData || !scenarioVotesData) return;
@@ -186,6 +217,80 @@ export default function Simulations() {
           { label: "Simulações" },
         ]}
       />
+
+      {loadingSavedSimulation && simulationIdParam && (
+        <Card className="border-muted">
+          <CardContent className="p-6 flex items-center justify-center gap-3">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <span className="text-muted-foreground">Carregando simulação salva...</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {viewingSimulationName && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Eye className="h-5 w-5 text-primary" />
+              <div>
+                <p className="font-medium text-primary" data-testid="text-viewing-simulation-name">Visualizando: {viewingSimulationName}</p>
+                <p className="text-sm text-muted-foreground">
+                  {savedSimulation && new Date(savedSimulation.createdAt).toLocaleString("pt-BR")}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setViewingSimulationName(null);
+                setSimulationResult(null);
+                window.history.replaceState(null, "", "/simulations");
+              }}
+              data-testid="button-new-simulation"
+            >
+              <Calculator className="h-4 w-4 mr-2" />
+              Nova Simulação
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {recentSimulations && recentSimulations.length > 0 && !viewingSimulationName && (
+        <Card data-testid="card-saved-simulations">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <History className="h-5 w-5" />
+              Simulações Salvas
+            </CardTitle>
+            <CardDescription>Clique para visualizar os resultados de uma simulação anterior</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recentSimulations.map((sim) => (
+                <Link
+                  key={sim.id}
+                  href={`/simulations?id=${sim.id}`}
+                  className="block"
+                >
+                  <div
+                    className="p-3 rounded-md border hover:border-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                    data-testid={`card-saved-simulation-${sim.id}`}
+                  >
+                    <p className="font-medium truncate" data-testid={`text-saved-sim-name-${sim.id}`}>{sim.name}</p>
+                    <div className="flex items-center justify-between mt-1 text-sm text-muted-foreground">
+                      <span>{new Date(sim.createdAt).toLocaleDateString("pt-BR")}</span>
+                      {sim.electoralQuotient && (
+                        <span className="font-mono">QE: {Number(sim.electoralQuotient).toLocaleString("pt-BR")}</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -378,42 +483,42 @@ export default function Simulations() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-              <div className="p-4 bg-primary/10 rounded-lg text-center">
-                <p className="text-2xl font-mono font-bold text-primary" data-testid="text-qe-value">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+              <div className="p-3 bg-primary/10 rounded-lg text-center overflow-hidden">
+                <p className="text-lg lg:text-base xl:text-lg font-mono font-bold text-primary leading-tight" data-testid="text-qe-value">
                   {simulationResult.electoralQuotient.toLocaleString("pt-BR")}
                 </p>
-                <p className="text-xs text-muted-foreground">QE (Art. 106)</p>
+                <p className="text-xs text-muted-foreground mt-1">QE (Art. 106)</p>
               </div>
-              <div className="p-4 bg-muted rounded-lg text-center">
-                <p className="text-2xl font-mono font-bold" data-testid="text-valid-votes">
+              <div className="p-3 bg-muted rounded-lg text-center overflow-hidden">
+                <p className="text-lg lg:text-base xl:text-lg font-mono font-bold leading-tight" data-testid="text-valid-votes">
                   {simulationResult.totalValidVotes.toLocaleString("pt-BR")}
                 </p>
-                <p className="text-xs text-muted-foreground">Votos Válidos</p>
+                <p className="text-xs text-muted-foreground mt-1">Votos Válidos</p>
               </div>
-              <div className="p-4 bg-muted rounded-lg text-center">
-                <p className="text-2xl font-mono font-bold" data-testid="text-barrier">
+              <div className="p-3 bg-muted rounded-lg text-center overflow-hidden">
+                <p className="text-lg lg:text-base xl:text-lg font-mono font-bold leading-tight" data-testid="text-barrier">
                   {((simulationResult as any).barrierThreshold || 0).toLocaleString("pt-BR")}
                 </p>
-                <p className="text-xs text-muted-foreground">Barreira 80% QE</p>
+                <p className="text-xs text-muted-foreground mt-1">Barreira 80% QE</p>
               </div>
-              <div className="p-4 bg-muted rounded-lg text-center">
-                <p className="text-2xl font-mono font-bold" data-testid="text-candidate-min">
+              <div className="p-3 bg-muted rounded-lg text-center overflow-hidden">
+                <p className="text-lg lg:text-base xl:text-lg font-mono font-bold leading-tight" data-testid="text-candidate-min">
                   {((simulationResult as any).candidateMinVotes || 0).toLocaleString("pt-BR")}
                 </p>
-                <p className="text-xs text-muted-foreground">Mín. Individual 20% QE</p>
+                <p className="text-xs text-muted-foreground mt-1">Mín. Individual 20% QE</p>
               </div>
-              <div className="p-4 bg-success/10 rounded-lg text-center">
-                <p className="text-2xl font-mono font-bold text-success" data-testid="text-seats-quotient">
+              <div className="p-3 bg-success/10 rounded-lg text-center overflow-hidden">
+                <p className="text-lg lg:text-base xl:text-lg font-mono font-bold text-success leading-tight" data-testid="text-seats-quotient">
                   {simulationResult.seatsDistributedByQuotient}
                 </p>
-                <p className="text-xs text-muted-foreground">Vagas por QP</p>
+                <p className="text-xs text-muted-foreground mt-1">Vagas por QP</p>
               </div>
-              <div className="p-4 bg-accent/10 rounded-lg text-center">
-                <p className="text-2xl font-mono font-bold text-accent-foreground" data-testid="text-seats-remainder">
+              <div className="p-3 bg-accent/10 rounded-lg text-center overflow-hidden">
+                <p className="text-lg lg:text-base xl:text-lg font-mono font-bold text-accent-foreground leading-tight" data-testid="text-seats-remainder">
                   {simulationResult.seatsDistributedByRemainder}
                 </p>
-                <p className="text-xs text-muted-foreground">Vagas por Sobras</p>
+                <p className="text-xs text-muted-foreground mt-1">Vagas por Sobras</p>
               </div>
             </div>
 

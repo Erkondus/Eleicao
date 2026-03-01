@@ -454,7 +454,7 @@ export default function Dashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={partyChartData}>
                       <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => v.toLocaleString("pt-BR")} />
                       <RechartsTooltip
                         formatter={(value: number) => [value.toLocaleString("pt-BR"), "Votos"]}
                         contentStyle={{
@@ -662,20 +662,25 @@ export default function Dashboard() {
             ) : recentSimulations && recentSimulations.length > 0 ? (
               <div className="space-y-3">
                 {recentSimulations.slice(0, 5).map((simulation) => (
-                  <div
+                  <Link
                     key={simulation.id}
-                    className="flex items-center justify-between p-3 rounded-md border hover-elevate gap-2"
-                    data-testid={`row-simulation-${simulation.id}`}
+                    href={`/simulations?id=${simulation.id}`}
+                    className="block"
                   >
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <span className="font-medium truncate" data-testid={`text-simulation-name-${simulation.id}`}>{simulation.name}</span>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3 shrink-0" />
-                        <span>{new Date(simulation.createdAt).toLocaleDateString("pt-BR")}</span>
+                    <div
+                      className="flex items-center justify-between p-3 rounded-md border hover:border-primary hover:bg-primary/5 transition-colors cursor-pointer gap-2"
+                      data-testid={`row-simulation-${simulation.id}`}
+                    >
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="font-medium truncate" data-testid={`text-simulation-name-${simulation.id}`}>{simulation.name}</span>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          <span>{new Date(simulation.createdAt).toLocaleDateString("pt-BR")}</span>
+                        </div>
                       </div>
+                      <Badge className="shrink-0" data-testid={`badge-simulation-status-${simulation.id}`}>Completo</Badge>
                     </div>
-                    <Badge className="shrink-0" data-testid={`badge-simulation-status-${simulation.id}`}>Completo</Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             ) : (

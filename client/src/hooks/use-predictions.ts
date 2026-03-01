@@ -123,7 +123,7 @@ export const DEFAULT_NEW_SCENARIO: NewScenarioForm = {
   description: "",
   targetYear: 2026,
   baseYear: 2022,
-  state: "",
+  state: "NACIONAL",
   position: "DEPUTADO FEDERAL",
   pollingWeight: 30,
   historicalWeight: 50,
@@ -136,7 +136,7 @@ export const DEFAULT_COMPARISON_FORM: ComparisonForm = {
   name: "",
   candidateIds: [],
   candidateInput: "",
-  state: "",
+  state: "NACIONAL",
   position: "DEPUTADO FEDERAL",
   targetYear: 2026,
 };
@@ -147,8 +147,8 @@ export const DEFAULT_EVENT_FORM: EventForm = {
   eventType: "policy",
   affectedParties: [],
   affectedCandidates: [],
-  state: "",
-  position: "",
+  state: "NACIONAL",
+  position: "DEPUTADO FEDERAL",
   targetYear: 2026,
   impactMagnitude: 0.5,
   impactDuration: "medium-term",
@@ -161,7 +161,7 @@ export const DEFAULT_WHATIF_FORM: WhatIfForm = {
   candidateName: "",
   fromParty: "",
   toParty: "",
-  state: "",
+  state: "NACIONAL",
   targetYear: 2026,
 };
 
@@ -229,7 +229,7 @@ export function usePredictionMutations() {
         description: data.description,
         targetYear: data.targetYear,
         baseYear: data.baseYear,
-        state: data.state || null,
+        state: data.state === "NACIONAL" ? null : data.state || null,
         position: data.position,
         pollingData: data.pollingData,
         partyAdjustments: data.partyAdjustments,
@@ -283,7 +283,7 @@ export function usePredictionMutations() {
       return apiRequest("POST", "/api/candidate-comparisons", {
         name: data.name,
         candidateIds: data.candidateIds,
-        state: data.state || null,
+        state: data.state === "NACIONAL" ? null : data.state || null,
         position: data.position,
         targetYear: data.targetYear,
       });
@@ -330,7 +330,7 @@ export function usePredictionMutations() {
         eventDescription: data.eventDescription,
         eventType: data.eventType,
         affectedEntities: { parties: data.affectedParties, candidates: data.affectedCandidates },
-        state: data.state || null,
+        state: data.state === "NACIONAL" ? null : data.state || null,
         position: data.position || null,
         targetYear: data.targetYear,
         estimatedImpactMagnitude: data.impactMagnitude,
@@ -381,7 +381,7 @@ export function usePredictionMutations() {
         baseScenario: { candidate: data.candidateName, party: data.fromParty },
         modifiedScenario: { candidate: data.candidateName, party: data.toParty },
         parameters: { candidateName: data.candidateName, fromParty: data.fromParty, toParty: data.toParty },
-        scope: { state: data.state || null, year: data.targetYear },
+        scope: { state: data.state === "NACIONAL" ? null : data.state || null, year: data.targetYear },
       });
     },
     onSuccess: () => {
@@ -437,7 +437,7 @@ export function usePredictionMutations() {
 }
 
 export const BRAZILIAN_STATES = [
-  { value: "", label: "Nacional" },
+  { value: "NACIONAL", label: "Nacional" },
   { value: "AC", label: "Acre" }, { value: "AL", label: "Alagoas" },
   { value: "AP", label: "Amapá" }, { value: "AM", label: "Amazonas" },
   { value: "BA", label: "Bahia" }, { value: "CE", label: "Ceará" },
