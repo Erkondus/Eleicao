@@ -793,6 +793,16 @@ router.post("/api/electoral/calculate", requireAuth, async (req, res) => {
       candidatesByParty[p.id] = allCandidates.filter((c) => c.partyId === p.id);
     });
 
+    const totalPartyVotes: Record<number, number> = {};
+    for (const party of allParties) {
+      const legendVotes = partyVotes[party.id] || 0;
+      const nominalVotes = (candidatesByParty[party.id] || []).reduce(
+        (sum, c) => sum + (candidateVotes[c.id] || 0),
+        0
+      );
+      totalPartyVotes[party.id] = legendVotes + nominalVotes;
+    }
+
     type EntityResult = {
       entityId: string;
       entityType: "party" | "federation";
@@ -814,7 +824,7 @@ router.post("/api/electoral/calculate", requireAuth, async (req, res) => {
 
     for (const federation of federationAlliances) {
       const memberPartyIds = allianceMembers[federation.id] || [];
-      const totalVotes = memberPartyIds.reduce((sum, pid) => sum + (partyVotes[pid] || 0), 0);
+      const totalVotes = memberPartyIds.reduce((sum, pid) => sum + (totalPartyVotes[pid] || 0), 0);
       const quotient = totalVotes / electoralQuotient;
       const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
       const meetsBarrier = totalVotes >= barrierThreshold;
@@ -840,7 +850,7 @@ router.post("/api/electoral/calculate", requireAuth, async (req, res) => {
 
     for (const party of allParties) {
       if (partiesInFederations.has(party.id)) continue;
-      const totalVotes = partyVotes[party.id] || 0;
+      const totalVotes = totalPartyVotes[party.id] || 0;
       const quotient = totalVotes / electoralQuotient;
       const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
       const meetsBarrier = totalVotes >= barrierThreshold;
@@ -1097,7 +1107,7 @@ router.post("/api/electoral/calculate", requireAuth, async (req, res) => {
       calculationLog,
       tseRulesApplied: [
         "Art. 106 CE: Quociente Eleitoral (QE) = votos válidos / vagas",
-        "Art. 107 CE: Quociente Partidário (QP) = votos da legenda / QE",
+        "Art. 107 CE: Quociente Partidário (QP) = votos do partido (legenda + nominais) / QE",
         "Art. 108 CE: Distribuição de sobras pelo método D'Hondt (maiores médias)",
         "Art. 108 §1º: Cláusula de barreira de 80% do QE para participar das sobras (Lei 14.211/2021)",
         "Art. 108 §1º-A: Votação nominal mínima de 20% do QE para eleição individual",

@@ -209,6 +209,11 @@ const processURLImportInternal = async (jobId: number, url: string, selectedFile
 
     const contentLength = response.headers.get("content-length");
     const totalBytes = contentLength ? parseInt(contentLength) : 0;
+    const MAX_DOWNLOAD_SIZE = 300 * 1024 * 1024;
+    const hasSelectedFile = !!selectedFile;
+    if (!hasSelectedFile && totalBytes > MAX_DOWNLOAD_SIZE) {
+      throw new Error(`Arquivo muito grande (${(totalBytes / 1024 / 1024).toFixed(0)}MB). Limite máximo: ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB. Para arquivos grandes, selecione uma UF individual na lista de arquivos.`);
+    }
     if (totalBytes > 0) {
       await storage.updateTseImportJob(jobId, { fileSize: totalBytes });
     }
@@ -306,8 +311,7 @@ const processURLImportInternal = async (jobId: number, url: string, selectedFile
     });
     await processCSVImportInternal(jobId, csvPath);
 
-    await unlink(zipPath).catch(() => {});
-    await unlink(csvPath).catch(() => {});
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 
     activeImportJobs.delete(jobId);
   } catch (error: any) {
@@ -323,6 +327,7 @@ const processURLImportInternal = async (jobId: number, url: string, selectedFile
       });
     }
 
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     activeImportJobs.delete(jobId);
   }
 };
@@ -686,6 +691,11 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
 
     const contentLength = response.headers.get("content-length");
     const totalBytes = contentLength ? parseInt(contentLength) : 0;
+    const MAX_DOWNLOAD_SIZE = 300 * 1024 * 1024;
+    const hasSelectedFile = !!selectedFile;
+    if (!hasSelectedFile && totalBytes > MAX_DOWNLOAD_SIZE) {
+      throw new Error(`Arquivo muito grande (${(totalBytes / 1024 / 1024).toFixed(0)}MB). Limite máximo: ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB. Para arquivos grandes, selecione uma UF individual na lista de arquivos.`);
+    }
     if (totalBytes > 0) {
       await storage.updateTseImportJob(jobId, { fileSize: totalBytes });
     }
@@ -697,6 +707,8 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
 
     const reader = response.body.getReader();
     let downloadedBytes = 0;
+    let lastProgressUpdate = Date.now();
+    const PROGRESS_UPDATE_INTERVAL = 2000;
     
     while (true) {
       if (isJobCancelled(jobId)) {
@@ -708,6 +720,12 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
       if (done) break;
       fileStream.write(value);
       downloadedBytes += value.length;
+      
+      const now = Date.now();
+      if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
+        await storage.updateTseImportJob(jobId, { downloadedBytes, updatedAt: new Date() });
+        lastProgressUpdate = now;
+      }
     }
     
     await storage.updateTseImportJob(jobId, { downloadedBytes, updatedAt: new Date() });
@@ -948,8 +966,7 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
 
     postImportMaintenance("DETALHE", jobId);
 
-    await unlink(zipPath).catch(() => {});
-    await unlink(csvPath).catch(() => {});
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     activeImportJobs.delete(jobId);
   } catch (error: any) {
     console.error("Detalhe votacao import error:", error);
@@ -959,6 +976,7 @@ const processDetalheVotacaoImportInternal = async (jobId: number, url: string, s
         updatedAt: new Date(), errorMessage: error.message || "Unknown error",
       });
     }
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     activeImportJobs.delete(jobId);
   }
 };
@@ -988,6 +1006,11 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
 
     const contentLength = response.headers.get("content-length");
     const totalBytes = contentLength ? parseInt(contentLength) : 0;
+    const MAX_DOWNLOAD_SIZE = 300 * 1024 * 1024;
+    const hasSelectedFile = !!selectedFile;
+    if (!hasSelectedFile && totalBytes > MAX_DOWNLOAD_SIZE) {
+      throw new Error(`Arquivo muito grande (${(totalBytes / 1024 / 1024).toFixed(0)}MB). Limite máximo: ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB. Para arquivos grandes, selecione uma UF individual na lista de arquivos.`);
+    }
     if (totalBytes > 0) await storage.updateTseImportJob(jobId, { fileSize: totalBytes });
 
     const zipPath = path.join(tmpDir, "data.zip");
@@ -997,6 +1020,8 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
 
     const reader = response.body.getReader();
     let downloadedBytes = 0;
+    let lastProgressUpdate = Date.now();
+    const PROGRESS_UPDATE_INTERVAL = 2000;
     
     while (true) {
       if (isJobCancelled(jobId)) {
@@ -1008,6 +1033,12 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
       if (done) break;
       fileStream.write(value);
       downloadedBytes += value.length;
+      
+      const now = Date.now();
+      if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
+        await storage.updateTseImportJob(jobId, { downloadedBytes, updatedAt: new Date() });
+        lastProgressUpdate = now;
+      }
     }
     
     await storage.updateTseImportJob(jobId, { downloadedBytes, updatedAt: new Date() });
@@ -1316,8 +1347,7 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
 
     postImportMaintenance("PARTIDO", jobId);
 
-    await unlink(zipPath).catch(() => {});
-    await unlink(csvPath).catch(() => {});
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     activeImportJobs.delete(jobId);
   } catch (error: any) {
     console.error("Partido votacao import error:", error);
@@ -1327,6 +1357,7 @@ const processPartidoVotacaoImportInternal = async (jobId: number, url: string, s
         updatedAt: new Date(), errorMessage: error.message || "Unknown error",
       });
     }
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     activeImportJobs.delete(jobId);
   }
 };

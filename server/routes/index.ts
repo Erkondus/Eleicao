@@ -28,7 +28,7 @@ export async function registerRoutes(
   try {
     console.log("[Startup] Checking for stuck import jobs from previous crash...");
     const stuckJobs = await db.select().from(tseImportJobs)
-      .where(sql`${tseImportJobs.status} IN ('downloading', 'extracting', 'processing')`);
+      .where(sql`${tseImportJobs.status} IN ('pending', 'queued', 'downloading', 'extracting', 'processing')`);
 
     if (stuckJobs.length > 0) {
       console.log(`[Startup] Found ${stuckJobs.length} stuck jobs. Resetting to failed...`);
@@ -36,7 +36,9 @@ export async function registerRoutes(
         await db.update(tseImportJobs)
           .set({ 
             status: "failed", 
+            stage: "failed",
             errorMessage: "Job interrompido por reinicialização do servidor",
+            completedAt: new Date(),
             updatedAt: new Date() 
           })
           .where(eq(tseImportJobs.id, job.id));

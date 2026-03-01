@@ -1,0 +1,16 @@
+{
+  "arquivo": "[URL] votacao_candidato_munzona_2022.zip",
+  "ano": 2022,
+  "uf": null,
+  "dataValidacao": "2026-02-26T17:52:39.954Z",
+  "registrosVerificados": 178965,
+  "problemasEncontrados": 90,
+  "resumoPorSeveridade": {
+    "info": 40,
+    "warning": 50
+  },
+  "resumoPorTipo": {
+    "duplicate_entry": 50,
+    "statistical_outlier": 40
+  }
+}

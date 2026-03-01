@@ -1,0 +1,43 @@
+O Gemini disse
+
+It looks like you pasted a substantial log dump from a full-stack application (likely running on a cloud environment like Replit, GitHub Codespaces, or similar, given the /home/runner/workspace path).
+
+Here is a breakdown of exactly what is happening in your application, starting from the most critical error causing your current crash.
+1. The Immediate Crash: Vite & Esbuild Failure
+
+At the very end of your logs, your frontend development server (Vite) crashes with this error:
+
+    [vite] (client) Pre-transform error: The service is no longer running
+    Plugin: vite:esbuild
+
+What happened: Right before this, your system logged RECEIVED SIGHUP. This means the operating system or the hosting environment sent a "hang up" signal to your Node process, forcing it to terminate. Because the main process was killed, the underlying esbuild service (which Vite uses to compile your React/TypeScript code) died. When Vite tried to compile main.tsx, it couldn't find the esbuild service, resulting in the "service is no longer running" error.
+
+Why it happened: This usually occurs for one of two reasons:
+
+    Out of Memory (OOM): Your backend is processing massive election datasets (TSE 2022). Doing this in the same container as your frontend dev server likely consumed all available RAM, causing the system to kill processes to save itself.
+
+    Container Restart: The platform hosting your code went to sleep or restarted your container automatically.
+
+2. Backend Import Issues (The Likely Culprit)
+
+Looking at your /api/imports/tse JSON logs, your backend is struggling with some heavy data processing:
+
+    Large File Limit Exceeded: One of your jobs explicitly failed with: "Arquivo muito grande (531MB). Limite máximo: 300MB. Para arquivos grandes, considere importar por UF individual."
+
+    Server Restarts: Several download/processing jobs failed with the error: "Job interrompido por reinicialização do servidor" (Job interrupted by server restart). This confirms that your backend is repeatedly crashing or being killed mid-process.
+
+3. Data Validation Warnings
+
+The first part of your logs shows that your application's data validation logic is working well, but it caught a massive amount of anomalies in the parsed data:
+
+    Duplicates: You have hundreds of open warnings for duplicate candidate entries for "cargo 6" (State Deputy) in Ceará (CE).
+
+    Statistical Outliers: The system flagged extremely high vote counts (z-scores > 3) for several candidates like "ELMANO DE FREITAS DA COSTA" and "CAMILO SOBREIRA DE SANTANA".
+
+How to fix this
+
+To get your application running smoothly again, you need to separate the heavy data processing from your standard development server or optimize how you handle the data.
+
+    Restart your server: Since esbuild died, you must completely stop your current terminal process (Ctrl+C) and restart your dev environment (e.g., npm run dev).
+
+    Handle the Large File: Do not try to process the 531MB votacao_candidato_munzona_2022.zip file all at once if your container doesn't have the RAM for it. Follow your application's own advice and import it by individual UF (state), or ensure your backend is using Node Streams to process the CSV line-by-line instead of loading it all into memory.

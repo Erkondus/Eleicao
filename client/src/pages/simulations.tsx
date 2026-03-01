@@ -260,7 +260,7 @@ export default function Simulations() {
                       <Badge variant="outline">{party.abbreviation}</Badge>
                       <span className="flex-1 text-left">{party.name}</span>
                       <span className="font-mono text-muted-foreground mr-4">
-                        {(partyVotes[party.id] || 0).toLocaleString("pt-BR")} votos
+                        {((partyVotes[party.id] || 0) + (candidatesByParty[party.id] || []).reduce((sum, c) => sum + (candidateVotes[c.id] || 0), 0)).toLocaleString("pt-BR")} votos
                       </span>
                     </div>
                   </AccordionTrigger>

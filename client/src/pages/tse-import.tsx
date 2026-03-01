@@ -1,4 +1,4 @@
-import { Database, Wifi, WifiOff, XCircle, CheckCircle, Download, AlertTriangle } from "lucide-react";
+import { Database, Wifi, WifiOff, XCircle, CheckCircle, Download, AlertTriangle, FileText, Files } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -23,6 +24,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { PageHeader } from "@/components/page-header";
 import { useTseImport } from "@/hooks/use-tse-import";
 import { ImportControls } from "./tse-import/ImportControls";
@@ -310,6 +314,61 @@ export default function TseImport() {
 
       <ValidationDialog hook={hook} />
       <BatchDialog hook={hook} />
+
+      <Dialog open={hook.showFileSelector} onOpenChange={(open) => { if (!open) hook.setShowFileSelector(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Files className="h-5 w-5" />
+              Selecionar Arquivo por UF
+            </DialogTitle>
+            <DialogDescription>
+              O arquivo ZIP contém {hook.availableFiles.length} arquivos CSV (um por UF).
+              Selecione uma UF para importar ou importe todos de uma vez.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[400px]">
+            <RadioGroup
+              value={hook.selectedCsvFile}
+              onValueChange={hook.setSelectedCsvFile}
+              className="space-y-1 p-1"
+            >
+              {hook.availableFiles.map((file) => {
+                const ufMatch = file.name.match(/_([A-Z]{2})\.csv$/i);
+                const ufLabel = ufMatch ? ufMatch[1] : file.name;
+                return (
+                  <div key={file.path} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer" onClick={() => hook.setSelectedCsvFile(file.name)}>
+                    <RadioGroupItem value={file.name} id={`file-${file.name}`} data-testid={`radio-file-${ufLabel}`} />
+                    <Label htmlFor={`file-${file.name}`} className="flex items-center gap-2 cursor-pointer flex-1">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{ufLabel}</span>
+                      <span className="text-xs text-muted-foreground ml-auto">{file.name}</span>
+                    </Label>
+                  </div>
+                );
+              })}
+            </RadioGroup>
+          </ScrollArea>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={hook.handleImportAll}
+              data-testid="button-import-all-files"
+            >
+              <Files className="h-4 w-4 mr-2" />
+              Importar Todos
+            </Button>
+            <Button
+              onClick={hook.handleFileSelection}
+              disabled={!hook.selectedCsvFile}
+              data-testid="button-import-selected-file"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Importar Selecionado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

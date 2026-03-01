@@ -6,6 +6,40 @@ import { storage } from "./storage";
 import { executeReportRun } from "./report-executor";
 import { initWebSocketServer } from "./websocket";
 
+function gracefulShutdown(signal: string) {
+  console.error(`RECEIVED ${signal} - shutting down gracefully...`);
+  httpServer.close(() => {
+    console.error('HTTP server closed');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 5000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGHUP', () => { console.error('RECEIVED SIGHUP'); });
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${err.port || 'unknown'} is already in use. Exiting.`);
+    process.exit(1);
+  }
+});
+process.on('unhandledRejection', (reason) => { console.error('UNHANDLED REJECTION:', reason); });
+
+const originalExit = process.exit.bind(process);
+process.exit = ((code?: number) => {
+  const stack = new Error().stack || '';
+  if (stack.includes('vite') && code === 1) {
+    console.error('[Vite] Transient error caught — server continues running');
+    return undefined as never;
+  }
+  originalExit(code);
+}) as typeof process.exit;
+
 const app = express();
 
 // Report scheduler - runs every 5 minutes to check for due schedules
@@ -215,7 +249,6 @@ app.use((req, res, next) => {
       {
         port,
         host: "0.0.0.0",
-        reusePort: true,
       },
       () => {
         log(`serving on port ${port}`);

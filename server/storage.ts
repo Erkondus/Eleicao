@@ -3916,13 +3916,16 @@ export class DatabaseStorage implements IStorage {
       .groupBy(sentimentAnalysisResults.entityId)
       .as("latest");
 
-    return db.select()
+    const rows = await db.select({
+      sentiment_analysis_results: sentimentAnalysisResults,
+    })
       .from(sentimentAnalysisResults)
       .innerJoin(subquery, and(
         eq(sentimentAnalysisResults.entityId, subquery.entityId),
         eq(sentimentAnalysisResults.analysisDate, subquery.maxDate)
       ))
       .orderBy(desc(sentimentAnalysisResults.mentionCount));
+    return rows.map(r => r.sentiment_analysis_results);
   }
 
   async createSentimentResult(data: InsertSentimentAnalysisResult): Promise<SentimentAnalysisResult> {

@@ -14,6 +14,23 @@ import {
   predictPartyPerformanceService,
   generateElectoralInsightsService,
   analyzeSentimentService,
+  autoSavePrediction,
+  listForecasts,
+  getForecastDetail,
+  getForecastResultsService,
+  getSwingRegionsService,
+  createForecastService,
+  deleteForecastService,
+  listPredictionScenariosService,
+  getPredictionScenarioService,
+  createPredictionScenarioService,
+  updatePredictionScenarioService,
+  deletePredictionScenarioService,
+  runPredictionScenarioService,
+  listSavedPredictionsService,
+  getSavedPredictionService,
+  createSavedPredictionService,
+  deleteSavedPredictionService,
 } from "../services/prediction-service";
 import {
   listCandidateComparisons,
@@ -134,25 +151,7 @@ router.post("/api/ai/predict", requireAuth, requireRole("admin", "analyst"), asy
     }
     const prediction = await predictScenario(scenarioId, sanitizedLegend, sanitizedCandidates);
     await logAudit(req, "prediction", "scenario", String(scenarioId));
-
-    const scenario = await storage.getScenario(scenarioId);
-    const userId = (req.user as any)?.id;
-    try {
-      await storage.createSavedPrediction({
-        predictionType: "quick_prediction",
-        title: `Previsão: ${scenario?.name || `Cenário #${scenarioId}`}`,
-        description: `Previsão rápida para ${scenario?.position || "cargo"} com ${scenario?.availableSeats || 0} vagas`,
-        scenarioId,
-        scenarioName: scenario?.name || null,
-        fullResult: prediction as any,
-        confidence: (prediction as any)?.predictions?.[0]?.confidence?.toString() || null,
-        status: "completed",
-        createdBy: userId || null,
-      });
-    } catch (saveErr) {
-      console.warn("[SavedPrediction] Auto-save failed (non-fatal):", (saveErr as Error).message);
-    }
-
+    await autoSavePrediction(scenarioId, prediction, (req.user as any)?.id);
     res.json(prediction);
   } catch (error: any) {
     handleServiceError(res, error, "AI Prediction error:");
@@ -325,7 +324,7 @@ router.get("/api/forecasts", requireAuth, requireRole("admin", "analyst"), async
   try {
     const targetYear = req.query.targetYear ? parseInt(req.query.targetYear as string) : undefined;
     const status = req.query.status as string | undefined;
-    const forecasts = await storage.getForecastRuns({ targetYear, status });
+    const forecasts = await listForecasts({ targetYear, status });
     res.json(forecasts);
   } catch (error) {
     console.error("Failed to fetch forecasts:", error);
@@ -339,8 +338,7 @@ router.get("/api/forecasts/:id", requireAuth, requireRole("admin", "analyst"), a
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid forecast ID" });
     }
-    const { getForecastSummary } = await import("../forecasting");
-    const summary = await getForecastSummary(id);
+    const summary = await getForecastDetail(id);
     if (!summary) {
       return res.status(404).json({ error: "Forecast not found" });
     }
@@ -359,7 +357,7 @@ router.get("/api/forecasts/:id/results", requireAuth, requireRole("admin", "anal
     }
     const resultType = req.query.resultType as string | undefined;
     const region = req.query.region as string | undefined;
-    const results = await storage.getForecastResults(id, { resultType, region });
+    const results = await getForecastResultsService(id, { resultType, region });
     res.json(results);
   } catch (error) {
     console.error("Failed to fetch forecast results:", error);
@@ -373,7 +371,7 @@ router.get("/api/forecasts/:id/swing-regions", requireAuth, requireRole("admin",
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid forecast ID" });
     }
-    const swingRegions = await storage.getSwingRegions(id);
+    const swingRegions = await getSwingRegionsService(id);
     res.json(swingRegions);
   } catch (error) {
     console.error("Failed to fetch swing regions:", error);
@@ -388,8 +386,7 @@ router.post("/api/forecasts", requireAuth, requireRole("admin", "analyst"), asyn
     if (!name || !targetYear) {
       return res.status(400).json({ error: "Name and target year are required" });
     }
-    const { createAndRunForecast } = await import("../forecasting");
-    const forecastRun = await createAndRunForecast(user.id, {
+    const forecastRun = await createForecastService(user.id, {
       name, description, targetYear, targetPosition, targetState, targetElectionType, historicalYears, modelParameters,
     });
     await logAudit(req, "create", "forecast", String(forecastRun.id), { name, targetYear });
@@ -406,7 +403,7 @@ router.delete("/api/forecasts/:id", requireAuth, requireRole("admin"), async (re
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid forecast ID" });
     }
-    const deleted = await storage.deleteForecastRun(id);
+    const deleted = await deleteForecastService(id);
     if (!deleted) {
       return res.status(404).json({ error: "Forecast not found" });
     }
@@ -422,7 +419,7 @@ router.get("/api/prediction-scenarios", requireAuth, requireRole("admin", "analy
   try {
     const status = req.query.status as string | undefined;
     const targetYear = req.query.targetYear ? parseInt(req.query.targetYear as string) : undefined;
-    const scenarios = await storage.getPredictionScenarios({ status, targetYear });
+    const scenarios = await listPredictionScenariosService({ status, targetYear });
     res.json(scenarios);
   } catch (error) {
     console.error("Failed to fetch prediction scenarios:", error);
@@ -436,7 +433,7 @@ router.get("/api/prediction-scenarios/:id", requireAuth, requireRole("admin", "a
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid scenario ID" });
     }
-    const scenario = await storage.getPredictionScenario(id);
+    const scenario = await getPredictionScenarioService(id);
     if (!scenario) {
       return res.status(404).json({ error: "Prediction scenario not found" });
     }
@@ -453,13 +450,8 @@ router.post("/api/prediction-scenarios", requireAuth, requireRole("admin", "anal
     if (!name || !targetYear || !baseYear) {
       return res.status(400).json({ error: "Name, target year, and base year are required" });
     }
-    const scenario = await storage.createPredictionScenario({
-      name, description, targetYear, baseYear,
-      pollingData: pollingData || null,
-      partyAdjustments: partyAdjustments || null,
-      externalFactors: externalFactors || null,
-      parameters: parameters || { pollingWeight: 0.30, historicalWeight: 0.50, adjustmentWeight: 0.20, monteCarloIterations: 10000, confidenceLevel: 0.95 },
-      status: "draft",
+    const scenario = await createPredictionScenarioService({
+      name, description, targetYear, baseYear, pollingData, partyAdjustments, externalFactors, parameters,
       createdBy: (req.user as any)?.id || null,
     });
     await logAudit(req, "create", "prediction_scenario", String(scenario.id));
@@ -476,16 +468,11 @@ router.patch("/api/prediction-scenarios/:id", requireAuth, requireRole("admin", 
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid scenario ID" });
     }
-    const existing = await storage.getPredictionScenario(id);
-    if (!existing) {
-      return res.status(404).json({ error: "Prediction scenario not found" });
-    }
-    const updated = await storage.updatePredictionScenario(id, req.body);
+    const updated = await updatePredictionScenarioService(id, req.body);
     await logAudit(req, "update", "prediction_scenario", String(id));
     res.json(updated);
-  } catch (error) {
-    console.error("Failed to update prediction scenario:", error);
-    res.status(500).json({ error: "Failed to update prediction scenario" });
+  } catch (error: any) {
+    handleServiceError(res, error, "Failed to update prediction scenario:");
   }
 });
 
@@ -495,7 +482,7 @@ router.delete("/api/prediction-scenarios/:id", requireAuth, requireRole("admin")
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid scenario ID" });
     }
-    const deleted = await storage.deletePredictionScenario(id);
+    const deleted = await deletePredictionScenarioService(id);
     if (!deleted) {
       return res.status(404).json({ error: "Prediction scenario not found" });
     }
@@ -513,40 +500,11 @@ router.post("/api/prediction-scenarios/:id/run", requireAuth, requireRole("admin
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid scenario ID" });
     }
-    const scenario = await storage.getPredictionScenario(id);
-    if (!scenario) {
-      return res.status(404).json({ error: "Prediction scenario not found" });
-    }
-    await storage.updatePredictionScenario(id, { status: "running" });
-    const forecast = await storage.createForecastRun({
-      name: `Previsão: ${scenario.name}`,
-      targetYear: scenario.targetYear,
-      status: "running",
-      createdBy: (req.user as any)?.id || null,
-    });
-    import("../forecasting").then(async ({ runForecast }) => {
-      try {
-        await runForecast(forecast.id, { targetYear: scenario.targetYear });
-        await storage.updatePredictionScenario(id, { 
-          status: "completed", 
-          lastRunAt: new Date(),
-          forecastRunId: forecast.id 
-        });
-        await storage.updateForecastRun(forecast.id, {
-          status: "completed",
-          completedAt: new Date(),
-        });
-      } catch (error) {
-        console.error("Forecast with scenario failed:", error);
-        await storage.updatePredictionScenario(id, { status: "failed" });
-        await storage.updateForecastRun(forecast.id, { status: "failed" });
-      }
-    });
+    const result = await runPredictionScenarioService(id, (req.user as any)?.id);
     await logAudit(req, "run", "prediction_scenario", String(id));
-    res.json({ success: true, forecastId: forecast.id, message: "Prediction scenario execution started" });
-  } catch (error) {
-    console.error("Failed to run prediction scenario:", error);
-    res.status(500).json({ error: "Failed to run prediction scenario" });
+    res.json({ success: true, forecastId: result.forecastId, message: "Prediction scenario execution started" });
+  } catch (error: any) {
+    handleServiceError(res, error, "Failed to run prediction scenario:");
   }
 });
 
@@ -1595,12 +1553,11 @@ router.post("/api/sentiment/detect-crisis", requireAuth, requireRole("admin", "a
   }
 });
 
-// Saved Predictions History
 router.get("/api/saved-predictions", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
   try {
     const type = req.query.type as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-    const predictions = await storage.listSavedPredictions({ type, limit });
+    const predictions = await listSavedPredictionsService({ type, limit });
     res.json(predictions);
   } catch (error) {
     console.error("Failed to fetch saved predictions:", error);
@@ -1611,7 +1568,7 @@ router.get("/api/saved-predictions", requireAuth, requireRole("admin", "analyst"
 router.get("/api/saved-predictions/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const prediction = await storage.getSavedPrediction(id);
+    const prediction = await getSavedPredictionService(id);
     if (!prediction) {
       return res.status(404).json({ error: "Previsão não encontrada" });
     }
@@ -1628,20 +1585,10 @@ router.post("/api/saved-predictions", requireAuth, requireRole("admin", "analyst
     if (!predictionType || !title || !fullResult) {
       return res.status(400).json({ error: "predictionType, title e fullResult são obrigatórios" });
     }
-    const userId = (req.user as any)?.id;
-    const prediction = await storage.createSavedPrediction({
-      predictionType,
-      title,
-      description: description || null,
-      scenarioId: scenarioId || null,
-      scenarioName: scenarioName || null,
-      sourceEntityId: sourceEntityId || null,
-      filters: filters || null,
-      parameters: parameters || null,
-      fullResult,
-      confidence: confidence?.toString() || null,
-      status: status || "completed",
-      createdBy: userId || null,
+    const prediction = await createSavedPredictionService({
+      predictionType, title, description, scenarioId, scenarioName, sourceEntityId,
+      filters, parameters, fullResult, confidence, status,
+      createdBy: (req.user as any)?.id || null,
     });
     await logAudit(req, "create", "saved_prediction", String(prediction.id));
     res.status(201).json(prediction);
@@ -1654,7 +1601,7 @@ router.post("/api/saved-predictions", requireAuth, requireRole("admin", "analyst
 router.delete("/api/saved-predictions/:id", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const deleted = await storage.deleteSavedPrediction(id);
+    const deleted = await deleteSavedPredictionService(id);
     if (!deleted) {
       return res.status(404).json({ error: "Previsão não encontrada" });
     }

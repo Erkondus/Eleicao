@@ -2,6 +2,165 @@ import { z } from "zod";
 import { storage } from "../storage";
 import { cachedAiCall, SYSTEM_PROMPTS } from "../ai-cache";
 
+export async function listForecasts(filters: { targetYear?: number; status?: string }) {
+  return storage.getForecastRuns(filters);
+}
+
+export async function getForecastDetail(id: number) {
+  const { getForecastSummary } = await import("../forecasting");
+  return getForecastSummary(id);
+}
+
+export async function getForecastResultsService(id: number, filters: { resultType?: string; region?: string }) {
+  return storage.getForecastResults(id, filters);
+}
+
+export async function getSwingRegionsService(id: number) {
+  return storage.getSwingRegions(id);
+}
+
+export async function createForecastService(userId: string, data: {
+  name: string; description?: string; targetYear: number;
+  targetPosition?: string; targetState?: string; targetElectionType?: string;
+  historicalYears?: number[]; modelParameters?: any;
+}) {
+  const { createAndRunForecast } = await import("../forecasting");
+  return createAndRunForecast(userId, data);
+}
+
+export async function deleteForecastService(id: number) {
+  return storage.deleteForecastRun(id);
+}
+
+export async function listPredictionScenariosService(filters: { status?: string; targetYear?: number }) {
+  return storage.getPredictionScenarios(filters);
+}
+
+export async function getPredictionScenarioService(id: number) {
+  return storage.getPredictionScenario(id);
+}
+
+export async function createPredictionScenarioService(data: {
+  name: string; description?: string; targetYear: number; baseYear: number;
+  pollingData?: any; partyAdjustments?: any; externalFactors?: any; parameters?: any;
+  createdBy?: string | null;
+}) {
+  return storage.createPredictionScenario({
+    name: data.name,
+    description: data.description,
+    targetYear: data.targetYear,
+    baseYear: data.baseYear,
+    pollingData: data.pollingData || null,
+    partyAdjustments: data.partyAdjustments || null,
+    externalFactors: data.externalFactors || null,
+    parameters: data.parameters || {
+      pollingWeight: 0.30, historicalWeight: 0.50, adjustmentWeight: 0.20,
+      monteCarloIterations: 10000, confidenceLevel: 0.95,
+    },
+    status: "draft",
+    createdBy: data.createdBy || null,
+  });
+}
+
+export async function updatePredictionScenarioService(id: number, data: any) {
+  const existing = await storage.getPredictionScenario(id);
+  if (!existing) {
+    throw { status: 404, message: "Prediction scenario not found" };
+  }
+  return storage.updatePredictionScenario(id, data);
+}
+
+export async function deletePredictionScenarioService(id: number) {
+  return storage.deletePredictionScenario(id);
+}
+
+export async function runPredictionScenarioService(id: number, userId?: string) {
+  const scenario = await storage.getPredictionScenario(id);
+  if (!scenario) {
+    throw { status: 404, message: "Prediction scenario not found" };
+  }
+  await storage.updatePredictionScenario(id, { status: "running" });
+  const forecast = await storage.createForecastRun({
+    name: `Previsão: ${scenario.name}`,
+    targetYear: scenario.targetYear,
+    status: "running",
+    createdBy: userId || null,
+  });
+  import("../forecasting").then(async ({ runForecast }) => {
+    try {
+      await runForecast(forecast.id, { targetYear: scenario.targetYear });
+      await storage.updatePredictionScenario(id, {
+        status: "completed",
+        lastRunAt: new Date(),
+        forecastRunId: forecast.id,
+      });
+      await storage.updateForecastRun(forecast.id, {
+        status: "completed",
+        completedAt: new Date(),
+      });
+    } catch (error) {
+      console.error("Forecast with scenario failed:", error);
+      await storage.updatePredictionScenario(id, { status: "failed" });
+      await storage.updateForecastRun(forecast.id, { status: "failed" });
+    }
+  });
+  return { forecastId: forecast.id };
+}
+
+export async function listSavedPredictionsService(filters: { type?: string; limit?: number }) {
+  return storage.listSavedPredictions(filters);
+}
+
+export async function getSavedPredictionService(id: number) {
+  return storage.getSavedPrediction(id);
+}
+
+export async function createSavedPredictionService(data: {
+  predictionType: string; title: string; description?: string | null;
+  scenarioId?: number | null; scenarioName?: string | null;
+  sourceEntityId?: number | null; filters?: any; parameters?: any;
+  fullResult: any; confidence?: string | null; status?: string;
+  createdBy?: string | null;
+}) {
+  return storage.createSavedPrediction({
+    predictionType: data.predictionType,
+    title: data.title,
+    description: data.description || null,
+    scenarioId: data.scenarioId || null,
+    scenarioName: data.scenarioName || null,
+    sourceEntityId: data.sourceEntityId || null,
+    filters: data.filters || null,
+    parameters: data.parameters || null,
+    fullResult: data.fullResult,
+    confidence: data.confidence?.toString() || null,
+    status: data.status || "completed",
+    createdBy: data.createdBy || null,
+  });
+}
+
+export async function deleteSavedPredictionService(id: number) {
+  return storage.deleteSavedPrediction(id);
+}
+
+export async function autoSavePrediction(scenarioId: number, prediction: any, userId?: string) {
+  const scenario = await storage.getScenario(scenarioId);
+  try {
+    await storage.createSavedPrediction({
+      predictionType: "quick_prediction",
+      title: `Previsão: ${scenario?.name || `Cenário #${scenarioId}`}`,
+      description: `Previsão rápida para ${scenario?.position || "cargo"} com ${scenario?.availableSeats || 0} vagas`,
+      scenarioId,
+      scenarioName: scenario?.name || null,
+      fullResult: prediction as any,
+      confidence: (prediction as any)?.predictions?.[0]?.confidence?.toString() || null,
+      status: "completed",
+      createdBy: userId || null,
+    });
+  } catch (saveErr) {
+    console.warn("[SavedPrediction] Auto-save failed (non-fatal):", (saveErr as Error).message);
+  }
+}
+
 export async function predictScenario(
   scenarioId: number,
   partyLegendVotes?: Record<number, number>,
