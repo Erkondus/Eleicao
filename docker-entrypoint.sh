@@ -169,6 +169,38 @@ else
 fi
 
 echo ""
+echo "Running pre-migration column fixes..."
+
+node -e "
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'disable' ? false : (process.env.DATABASE_SSL === 'require' ? { rejectUnauthorized: false } : false) });
+(async () => {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      \"SELECT column_name FROM information_schema.columns WHERE table_name = 'forecast_results' AND column_name = 'elected_probability'\"
+    );
+    if (rows.length > 0) {
+      console.log('Found old column elected_probability, applying migration...');
+      await client.query('ALTER TABLE forecast_results DROP COLUMN IF EXISTS elected_probability');
+      await client.query('ALTER TABLE forecast_results DROP COLUMN IF EXISTS historical_trend');
+      await client.query('ALTER TABLE forecast_results ADD COLUMN IF NOT EXISTS historical_vote_share numeric(7,4)');
+      await client.query('ALTER TABLE forecast_results ADD COLUMN IF NOT EXISTS historical_votes integer');
+      await client.query('ALTER TABLE forecast_results ADD COLUMN IF NOT EXISTS change_from_historical numeric(7,4)');
+      await client.query('ALTER TABLE forecast_results ADD COLUMN IF NOT EXISTS sentiment_score numeric(5,4)');
+      await client.query('ALTER TABLE forecast_results ADD COLUMN IF NOT EXISTS sentiment_trend text');
+      console.log('Pre-migration completed successfully!');
+    } else {
+      console.log('No pre-migration needed (columns already up to date).');
+    }
+  } finally {
+    client.release();
+    await pool.end();
+  }
+})().catch(e => { console.error('Pre-migration warning:', e.message); process.exit(0); });
+" 2>&1 || echo "Pre-migration skipped (non-fatal)"
+
+echo ""
 echo "Running database schema sync (db:push)..."
 
 DB_PUSH_TIMEOUT=120
