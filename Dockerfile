@@ -12,6 +12,8 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 
+RUN npm install -g npm@11.11.0
+
 WORKDIR /app
 
 RUN apk add --no-cache dumb-init wget
