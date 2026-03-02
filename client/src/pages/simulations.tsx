@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch, Link } from "wouter";
-import { Calculator, PlayCircle, Save, Download, Trophy, Users, AlertTriangle, Info, Shield, Scale, History, Eye } from "lucide-react";
+import { Calculator, PlayCircle, Save, Download, Trophy, Users, AlertTriangle, Info, Shield, Scale, History, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -200,6 +200,20 @@ export default function Simulations() {
     },
   });
 
+  const deleteSimulationMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/simulations/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/simulations/recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({ title: "Sucesso", description: "Simulação excluída com sucesso" });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao excluir simulação", variant: "destructive" });
+    },
+  });
+
   const chartData = (simulationResult?.partyResults ?? []).map((pr) => ({
     name: (pr as any).abbreviation || pr.partyName.substring(0, 5),
     vagas: pr.totalSeats,
@@ -268,24 +282,39 @@ export default function Simulations() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {recentSimulations.map((sim) => (
-                <Link
+                <div
                   key={sim.id}
-                  href={`/simulations?id=${sim.id}`}
-                  className="block"
+                  className="p-3 rounded-md border hover:border-primary hover:bg-primary/5 transition-colors group relative"
+                  data-testid={`card-saved-simulation-${sim.id}`}
                 >
-                  <div
-                    className="p-3 rounded-md border hover:border-primary hover:bg-primary/5 transition-colors cursor-pointer"
-                    data-testid={`card-saved-simulation-${sim.id}`}
+                  <Link
+                    href={`/simulations?id=${sim.id}`}
+                    className="block cursor-pointer"
                   >
-                    <p className="font-medium truncate" data-testid={`text-saved-sim-name-${sim.id}`}>{sim.name}</p>
+                    <p className="font-medium truncate pr-8" data-testid={`text-saved-sim-name-${sim.id}`}>{sim.name}</p>
                     <div className="flex items-center justify-between mt-1 text-sm text-muted-foreground">
                       <span>{new Date(sim.createdAt).toLocaleDateString("pt-BR")}</span>
                       {sim.electoralQuotient && (
                         <span className="font-mono">QE: {Number(sim.electoralQuotient).toLocaleString("pt-BR")}</span>
                       )}
                     </div>
-                  </div>
-                </Link>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                    data-testid={`button-delete-simulation-${sim.id}`}
+                    disabled={deleteSimulationMutation.isPending}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm("Tem certeza que deseja excluir esta simulação?")) {
+                        deleteSimulationMutation.mutate(sim.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               ))}
             </div>
           </CardContent>

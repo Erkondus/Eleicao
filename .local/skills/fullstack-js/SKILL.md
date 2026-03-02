@@ -97,13 +97,14 @@ Always follow these guidelines when building a full-stack JavaScript application
 
 ## Forbidden Changes
 
-- NEVER modify the existing Vite setup (`server/vite.ts` and `vite.config.ts`)
-  - It is already configured to serve the frontend and backend on the same port and handles all the necessary setup for you. Don't add a proxy to the Vite server.
-  - All the aliases are already set up for you to import, don't modify them.
 - NEVER edit `package.json`:
   - If you find yourself stuck and need to modify the scripts, ask the user before doing so.
   - If you need to install packages, use the packager_install_tool.
-- NEVER edit 'drizzle.config.ts'
+
+## Config File Guidance
+
+- Do NOT modify the Vite setup (`server/vite.ts` and `vite.config.ts`) unless absolutely necessary. It is already configured to serve the frontend and backend on the same port and handles all the necessary setup for you. Don't add a proxy to the Vite server. All the aliases are already set up for you to import.
+- Do NOT modify `drizzle.config.ts` unless absolutely necessary. It is pre-configured correctly.
 
 ## References
 

@@ -98,6 +98,20 @@ export async function runPredictionScenarioService(id: number, userId?: string) 
         status: "completed",
         completedAt: new Date(),
       });
+      try {
+        const forecastResults = await storage.getForecastResults(forecast.id);
+        await storage.createSavedPrediction({
+          predictionType: "scenario_analysis",
+          title: `Cenário: ${scenario.name}`,
+          description: `Análise de cenário para ${scenario.targetYear} - ${scenario.name}`,
+          scenarioName: scenario.name,
+          fullResult: { forecastId: forecast.id, scenarioId: id, results: forecastResults } as any,
+          status: "completed",
+          createdBy: userId || null,
+        });
+      } catch (e) {
+        console.warn("[SavedPrediction] Auto-save scenario failed (non-fatal):", (e as Error).message);
+      }
     } catch (error) {
       console.error("Forecast with scenario failed:", error);
       await storage.updatePredictionScenario(id, { status: "failed" });
@@ -233,18 +247,159 @@ export async function predictScenario(
     }
   }
 
-  const userPrompt = `Analise o cenário e forneça previsões baseadas nas regras do TSE.
+  let deterministicResults: any = null;
+  let seatDistribution = { byQuotient: 0, byRemainder: 0, total: availableSeats };
 
-REGRAS TSE: QE=floor(${validVotes}/${availableSeats})=${QE} | QP=floor(votos_entidade/QE) | Barreira 80% QE=${barrier80} | Mín. individual 20% QE=${candidateMin20} | D'Hondt para sobras | Federações=entidade única | Sem coligações proporcionais | Sem QE atingido → D'Hondt geral
-Total de votos do partido = votos de legenda + soma dos votos nominais dos candidatos
+  if (hasVoteData) {
+    const federationMembers: Record<number, number[]> = {};
+    const partyToFederation: Record<number, number> = {};
+
+    for (const fed of federations) {
+      const members = await storage.getAllianceParties(fed.id);
+      federationMembers[fed.id] = members.map(m => m.partyId);
+      members.forEach(m => { partyToFederation[m.partyId] = fed.id; });
+    }
+
+    type Entity = { id: string; type: "party" | "federation"; name: string; totalVotes: number; seatsQP: number; seatsRemainder: number; meetsBarrier: boolean; memberPartyIds?: number[] };
+    const entities: Entity[] = [];
+    const partiesInFed = new Set(Object.keys(partyToFederation).map(Number));
+
+    for (const fed of federations) {
+      const memberIds = federationMembers[fed.id] || [];
+      const totalVotes = memberIds.reduce((sum, pid) => sum + (partyTotals[pid]?.total || 0), 0);
+      entities.push({
+        id: `fed-${fed.id}`, type: "federation", name: fed.name,
+        totalVotes, seatsQP: Math.floor(totalVotes / QE), seatsRemainder: 0,
+        meetsBarrier: totalVotes >= barrier80, memberPartyIds: memberIds,
+      });
+    }
+
+    for (const p of parties) {
+      if (partiesInFed.has(p.id)) continue;
+      const tv = partyTotals[p.id]?.total || 0;
+      entities.push({
+        id: `party-${p.id}`, type: "party", name: p.abbreviation,
+        totalVotes: tv, seatsQP: Math.floor(tv / QE), seatsRemainder: 0,
+        meetsBarrier: tv >= barrier80,
+      });
+    }
+
+    const entitiesReachingQE = entities.filter(e => e.seatsQP > 0);
+    let seatsByQuotient = entities.reduce((s, e) => s + e.seatsQP, 0);
+    let remainingSeats = availableSeats - seatsByQuotient;
+    let noPartyReachedQE = entitiesReachingQE.length === 0;
+
+    let remainderPool: Entity[];
+    if (noPartyReachedQE) {
+      remainderPool = entities.filter(e => e.totalVotes > 0);
+      remainingSeats = availableSeats;
+      seatsByQuotient = 0;
+      entities.forEach(e => { e.seatsQP = 0; });
+    } else {
+      remainderPool = entities.filter(e => e.meetsBarrier);
+    }
+
+    for (let round = 0; round < remainingSeats; round++) {
+      let maxQ = 0, winnerIdx = -1;
+      remainderPool.forEach((e, idx) => {
+        const q = e.totalVotes / (e.seatsQP + e.seatsRemainder + 1);
+        if (q > maxQ || (q === maxQ && winnerIdx >= 0 && e.totalVotes > remainderPool[winnerIdx].totalVotes)) {
+          maxQ = q;
+          winnerIdx = idx;
+        }
+      });
+      if (winnerIdx >= 0) remainderPool[winnerIdx].seatsRemainder += 1;
+    }
+
+    seatDistribution.byQuotient = seatsByQuotient;
+    seatDistribution.byRemainder = remainingSeats;
+
+    deterministicResults = [];
+    for (const p of parties) {
+      const pt = partyTotals[p.id] || { legend: 0, nominal: 0, total: 0 };
+      let totalSeats = 0;
+      let meetsBarrier = false;
+
+      if (partiesInFed.has(p.id)) {
+        const fedId = partyToFederation[p.id];
+        const fedEntity = entities.find(e => e.id === `fed-${fedId}`);
+        meetsBarrier = fedEntity?.meetsBarrier || false;
+      } else {
+        const entity = entities.find(e => e.id === `party-${p.id}`);
+        totalSeats = entity ? entity.seatsQP + entity.seatsRemainder : 0;
+        meetsBarrier = entity?.meetsBarrier || false;
+      }
+
+      const partyCands = scenarioCandidatesList.filter(sc => sc.partyId === p.id);
+      const candWithVotes = partyCands.map(sc => {
+        const cv = candidateVotes?.[p.id]?.[sc.candidateId] || 0;
+        return { name: sc.nickname || sc.candidate?.name || `#${sc.ballotNumber}`, votes: cv };
+      }).sort((a, b) => b.votes - a.votes);
+
+      if (partiesInFed.has(p.id)) {
+        const fedId = partyToFederation[p.id];
+        const fedEntity = entities.find(e => e.id === `fed-${fedId}`)!;
+        const fedSeats = fedEntity.seatsQP + fedEntity.seatsRemainder;
+        const allFedCands: { name: string; votes: number; partyId: number }[] = [];
+        for (const mid of fedEntity.memberPartyIds || []) {
+          const mCands = scenarioCandidatesList.filter(sc => sc.partyId === mid);
+          for (const sc of mCands) {
+            allFedCands.push({
+              name: sc.nickname || sc.candidate?.name || `#${sc.ballotNumber}`,
+              votes: candidateVotes?.[mid]?.[sc.candidateId] || 0,
+              partyId: mid,
+            });
+          }
+        }
+        allFedCands.sort((a, b) => b.votes - a.votes);
+        let elected = 0;
+        for (const fc of allFedCands) {
+          if (elected >= fedSeats) break;
+          if (fc.votes >= candidateMin20) {
+            if (fc.partyId === p.id) totalSeats++;
+            elected++;
+          }
+        }
+      }
+
+      const electedCandidates = candWithVotes
+        .filter(c => c.votes >= candidateMin20)
+        .slice(0, totalSeats)
+        .map(c => c.name);
+
+      deterministicResults.push({
+        partyId: p.id,
+        partyName: p.abbreviation,
+        legendVotes: pt.legend,
+        nominalVotes: pt.nominal,
+        totalVotes: pt.total,
+        predictedSeats: { min: totalSeats, max: totalSeats },
+        electedCandidates,
+        meetsBarrier,
+        confidence: 1.0,
+        trend: "stable",
+        reasoning: "",
+      });
+    }
+  }
+
+  let computedResultsInfo = "";
+  if (deterministicResults) {
+    const resultLines = deterministicResults
+      .filter((r: any) => r.totalVotes > 0)
+      .map((r: any) => `  - ${r.partyName}: ${r.predictedSeats.min} vaga(s), ${r.totalVotes.toLocaleString("pt-BR")} votos, barreira: ${r.meetsBarrier ? "sim" : "não"}`);
+    computedResultsInfo = `\nRESULTADOS CALCULADOS DETERMINISTICAMENTE (NÃO ALTERE as vagas/barreira):\nQE=${QE} | Barreira 80%=${barrier80} | Mín. individual 20%=${candidateMin20}\nVagas por QP: ${seatDistribution.byQuotient} | Vagas por sobras D'Hondt: ${seatDistribution.byRemainder}\n${resultLines.join("\n")}`;
+  }
+
+  const userPrompt = `${hasVoteData ? "Os resultados de distribuição de vagas já foram calculados deterministicamente pelo servidor conforme regras TSE. NÃO recalcule ou altere as vagas distribuídas. Forneça apenas análise qualitativa e recomendações." : "Projete com base no perfil dos partidos, aplicando QE, QP, barreira 80%, mín. individual 20%, D'Hondt para sobras."}
+
+REGRAS TSE: QE=floor(${validVotes}/${availableSeats})=${QE} | Barreira 80% QE=${barrier80} | Mín. individual 20% QE=${candidateMin20}
 
 CENÁRIO: ${scenario.name} | ${scenario.position} | ${validVotes.toLocaleString("pt-BR")} votos válidos | ${availableSeats} vagas
 Partidos: ${parties.map((p) => `${p.abbreviation}(${p.number})`).join(", ")}
-${federationInfo}${voteDataInfo}
+${federationInfo}${voteDataInfo}${computedResultsInfo}
 
-${hasVoteData ? "Calcule distribuição exata de vagas pelo sistema proporcional usando os dados fornecidos. Dentro de cada partido, ordene candidatos por votação nominal para determinar quem ocupa as vagas." : "Projete com base no perfil dos partidos."}
-
-IMPORTANTE: Inclua TODOS os ${parties.length} partidos no array predictions, sem exceção. Mesmo partidos com 0 vagas devem aparecer nos resultados.
+IMPORTANTE: Inclua TODOS os ${parties.length} partidos no array predictions, sem exceção. Mesmo partidos com 0 vagas devem aparecer nos resultados.${hasVoteData ? " USE EXATAMENTE os valores de vagas calculados acima." : ""}
 
 JSON: {"analysis":"análise 3-4 parágrafos com artigos CE","predictions":[{"partyId":id,"partyName":"sigla","legendVotes":n,"nominalVotes":n,"totalVotes":n,"predictedSeats":{"min":n,"max":n},"electedCandidates":["nome1","nome2"],"meetsBarrier":bool,"confidence":0-1,"trend":"up|down|stable","reasoning":"texto"}],"seatDistribution":{"byQuotient":n,"byRemainder":n,"total":${availableSeats}},"recommendations":["r1","r2","r3"],"warnings":["w1"]}`;
 
@@ -257,6 +412,12 @@ JSON: {"analysis":"análise 3-4 parágrafos com artigos CE","predictions":[{"par
     userPrompt,
     maxTokens: 4000,
   });
+
+  if (deterministicResults) {
+    (prediction as any).predictions = deterministicResults;
+    (prediction as any).seatDistribution = seatDistribution;
+    (prediction as any).calculationMethod = "deterministic_server";
+  }
 
   (prediction as any).generatedAt = new Date().toISOString();
   (prediction as any).tseContext = {

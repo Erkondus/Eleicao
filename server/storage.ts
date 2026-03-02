@@ -126,6 +126,7 @@ export interface IStorage {
   getRecentSimulations(limit?: number): Promise<Simulation[]>;
   getSimulation(id: number): Promise<Simulation | undefined>;
   createSimulation(simulation: InsertSimulation): Promise<Simulation>;
+  deleteSimulation(id: number): Promise<void>;
 
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(): Promise<AuditLog[]>;
@@ -1024,6 +1025,10 @@ export class DatabaseStorage implements IStorage {
   async createSimulation(simulation: InsertSimulation): Promise<Simulation> {
     const [created] = await db.insert(simulations).values(simulation).returning();
     return created;
+  }
+
+  async deleteSimulation(id: number): Promise<void> {
+    await db.delete(simulations).where(eq(simulations.id, id));
   }
 
   async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {

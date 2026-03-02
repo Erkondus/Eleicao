@@ -88,6 +88,22 @@ JSON: {"candidates":[{"name":"","party":"","projectedVoteShare":n,"electionProba
   }).where(eq(candidateComparisons.id, id));
 
   const [updated] = await db.select().from(candidateComparisons).where(eq(candidateComparisons.id, id));
+
+  try {
+    await storage.createSavedPrediction({
+      predictionType: "candidate_comparison",
+      title: `Comparação: ${comparison.name}`,
+      description: comparison.description || `Comparação de candidatos - ${(comparison.candidateIds as string[]).join(', ')}`,
+      scenarioName: comparison.state || "Nacional",
+      fullResult: results as any,
+      confidence: results.confidence?.toString() || null,
+      status: "completed",
+      createdBy: comparison.createdBy || null,
+    });
+  } catch (e) {
+    console.warn("[SavedPrediction] Auto-save comparison failed (non-fatal):", (e as Error).message);
+  }
+
   return updated;
 }
 
@@ -177,6 +193,22 @@ JSON: {"beforeProjection":{"parties":[{"party":"","voteShare":n,"seats":n,"trend
   }).where(eq(eventImpactPredictions.id, id));
 
   const [updated] = await db.select().from(eventImpactPredictions).where(eq(eventImpactPredictions.id, id));
+
+  try {
+    await storage.createSavedPrediction({
+      predictionType: "event_impact",
+      title: `Evento: ${prediction.name}`,
+      description: prediction.eventDescription,
+      scenarioName: prediction.state || "Nacional",
+      fullResult: results as any,
+      confidence: results.confidenceIntervals?.overall?.toString() || null,
+      status: "completed",
+      createdBy: prediction.createdBy || null,
+    });
+  } catch (e) {
+    console.warn("[SavedPrediction] Auto-save event impact failed (non-fatal):", (e as Error).message);
+  }
+
   return updated;
 }
 
@@ -258,6 +290,22 @@ JSON: {"baselineResults":{"parties":[{"party":"","seats":n,"voteShare":n}],"domi
   }).where(eq(scenarioSimulations.id, id));
 
   const [updated] = await db.select().from(scenarioSimulations).where(eq(scenarioSimulations.id, id));
+
+  try {
+    await storage.createSavedPrediction({
+      predictionType: "what_if",
+      title: `E se...?: ${simulation.name}`,
+      description: simulation.description || `Simulação ${simulation.simulationType}`,
+      scenarioName: (simulation.scope as any)?.state || "Nacional",
+      fullResult: results as any,
+      confidence: results.impactAnalysis?.confidence?.toString() || null,
+      status: "completed",
+      createdBy: simulation.createdBy || null,
+    });
+  } catch (e) {
+    console.warn("[SavedPrediction] Auto-save what-if failed (non-fatal):", (e as Error).message);
+  }
+
   return updated;
 }
 

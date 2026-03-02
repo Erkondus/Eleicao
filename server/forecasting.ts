@@ -113,8 +113,8 @@ function runMonteCarloSimulation(
   
   const mean = samples.reduce((sum, v) => sum + v, 0) / samples.length;
   const median = samples[Math.floor(samples.length / 2)];
-  const lowerIdx = Math.floor(samples.length * ((1 - confidenceLevel) / 2));
-  const upperIdx = Math.floor(samples.length * (1 - (1 - confidenceLevel) / 2));
+  const lowerIdx = Math.max(0, Math.floor(samples.length * ((1 - confidenceLevel) / 2)));
+  const upperIdx = Math.min(samples.length - 1, Math.floor(samples.length * (1 - (1 - confidenceLevel) / 2)));
   
   return {
     samples,
