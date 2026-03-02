@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, sql, and, or, ilike, asc } from "drizzle-orm";
+import { eq, desc, sql, and, or, ilike, asc, inArray } from "drizzle-orm";
 import { SQL } from "drizzle-orm";
 import {
   type User, type InsertUser, users,
@@ -3286,7 +3286,7 @@ export class DatabaseStorage implements IStorage {
   }[]> {
     const summaryConditions: SQL[] = [];
     if (filters.years.length > 0) {
-      summaryConditions.push(sql`${summaryPartyVotes.anoEleicao} = ANY(${filters.years})`);
+      summaryConditions.push(inArray(summaryPartyVotes.anoEleicao, filters.years));
     }
     if (filters.position) {
       summaryConditions.push(eq(summaryPartyVotes.dsCargo, filters.position));
@@ -3327,7 +3327,7 @@ export class DatabaseStorage implements IStorage {
 
     const conditions: SQL[] = [];
     if (filters.years.length > 0) {
-      conditions.push(sql`${tseCandidateVotes.anoEleicao} = ANY(${filters.years})`);
+      conditions.push(inArray(tseCandidateVotes.anoEleicao, filters.years));
     }
     if (filters.position) {
       conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
