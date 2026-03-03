@@ -382,42 +382,44 @@ export async function runForecast(
   } as any);
   
   let historicalYears = options.historicalYears;
+  let effectivePosition = options.targetPosition;
+  let effectiveState = options.targetState;
+
   if (!historicalYears || historicalYears.length === 0) {
-    const candidateYears = [options.targetYear - 4, options.targetYear - 8, options.targetYear - 12].filter(y => y >= 2002);
-    const allCandidateYears = [...new Set([...candidateYears, options.targetYear - 2, options.targetYear - 6])].filter(y => y >= 2002).sort((a, b) => b - a);
-    
-    const probeData = await storage.getHistoricalVotesByParty({
-      years: allCandidateYears,
-      position: options.targetPosition,
-      state: options.targetState,
-    });
-    
-    if (probeData.length === 0) {
-      const broadProbe = await storage.getHistoricalVotesByParty({
-        years: [],
-        position: options.targetPosition,
-        state: options.targetState,
-      });
-      const availableYears = [...new Set(broadProbe.map(d => d.year))].sort((a, b) => b - a);
-      if (availableYears.length === 0) {
-        const errorMsg = "Dados históricos insuficientes para previsão. Importe dados do TSE antes de criar previsões.";
-        await storage.updateForecastRun(runId, {
-          status: "failed",
-          completedAt: new Date(),
-          description: errorMsg,
-        } as any);
-        throw new Error(errorMsg);
+    const probeFilters: { years: number[]; position?: string; state?: string }[] = [
+      { years: [], position: options.targetPosition, state: options.targetState },
+      { years: [], position: options.targetPosition },
+      { years: [] },
+    ];
+
+    let probeData: { year: number }[] = [];
+    for (const filter of probeFilters) {
+      if (!filter.position && !filter.state && probeData.length > 0) break;
+      const result = await storage.getHistoricalVotesByParty(filter);
+      if (result.length > 0) {
+        probeData = result;
+        effectivePosition = filter.position;
+        effectiveState = filter.state;
+        break;
       }
-      historicalYears = availableYears;
-    } else {
-      historicalYears = [...new Set(probeData.map(d => d.year))].sort((a, b) => b - a);
     }
+
+    if (probeData.length === 0) {
+      const errorMsg = "Dados históricos insuficientes para previsão. Importe dados do TSE (votação por partido ou candidato) antes de criar previsões.";
+      await storage.updateForecastRun(runId, {
+        status: "failed",
+        completedAt: new Date(),
+        description: errorMsg,
+      } as any);
+      throw new Error(errorMsg);
+    }
+    historicalYears = [...new Set(probeData.map(d => d.year))].sort((a, b) => b - a);
   }
   
   const historicalData = await storage.getHistoricalVotesByParty({
     years: historicalYears,
-    position: options.targetPosition,
-    state: options.targetState,
+    position: effectivePosition,
+    state: effectiveState,
   });
   
   if (historicalData.length === 0) {
