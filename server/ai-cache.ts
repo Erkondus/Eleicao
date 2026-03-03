@@ -7,6 +7,61 @@ import { AI_TASK_KEYS, AI_TASK_DEFAULTS } from "@shared/schema";
 
 const PT_BR_INSTRUCTION = "Responda SEMPRE em português brasileiro. Nunca use inglês.";
 
+function repairAndParseJSON<T>(raw: string): T {
+  let text = raw.trim();
+
+  const jsonStart = text.indexOf("{");
+  if (jsonStart > 0) text = text.slice(jsonStart);
+
+  if (text.endsWith("```")) text = text.slice(0, -3).trim();
+
+  let lastValidPos = text.length;
+  const truncatedSuffixes = [
+    /,\s*"[^"]*$/,
+    /,\s*$/,
+    /"\s*:\s*"[^"]*$/,
+    /"\s*:\s*\[?\s*$/,
+    /"\s*:\s*$/,
+    /"\s*$/,
+  ];
+  for (const re of truncatedSuffixes) {
+    const m = text.match(re);
+    if (m && m.index !== undefined && m.index > text.length * 0.5) {
+      lastValidPos = Math.min(lastValidPos, m.index);
+    }
+  }
+  if (lastValidPos < text.length) {
+    text = text.slice(0, lastValidPos);
+  }
+
+  let openBraces = 0, openBrackets = 0;
+  let inString = false, escaped = false;
+  for (const ch of text) {
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\") { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") openBraces++;
+    else if (ch === "}") openBraces--;
+    else if (ch === "[") openBrackets++;
+    else if (ch === "]") openBrackets--;
+  }
+
+  if (inString) text += '"';
+
+  for (let i = 0; i < openBrackets; i++) text += "]";
+  for (let i = 0; i < openBraces; i++) text += "}";
+
+  text = text.replace(/,\s*([}\]])/g, "$1");
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    console.error("[AI Cache] JSON repair failed, returning partial object. First 200 chars:", raw.slice(0, 200));
+    return {} as T;
+  }
+}
+
 export const SYSTEM_PROMPTS = {
   electoralAnalyst: `Você é um especialista em análise de dados eleitorais brasileiros do TSE. ${PT_BR_INSTRUCTION} Seja preciso, cite números específicos quando disponíveis. Não invente dados.`,
   politicalForecaster: `Você é um analista político especializado em tendências eleitorais brasileiras. ${PT_BR_INSTRUCTION}`,
@@ -218,7 +273,16 @@ export async function cachedAiCall<T = unknown>(options: AiCallOptions): Promise
     throw new Error("Sem resposta da IA");
   }
 
-  const data = jsonMode ? (JSON.parse(result.content) as T) : (result.content as unknown as T);
+  let data: T;
+  if (jsonMode) {
+    try {
+      data = JSON.parse(result.content) as T;
+    } catch (parseError) {
+      data = repairAndParseJSON<T>(result.content);
+    }
+  } else {
+    data = result.content as unknown as T;
+  }
 
   if (cachePrefix && cacheParams) {
     const cacheKey = generateCacheKey(cachePrefix, cacheParams);

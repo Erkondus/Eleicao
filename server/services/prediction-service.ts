@@ -410,7 +410,7 @@ JSON: {"analysis":"análise 3-4 parágrafos com artigos CE","predictions":[{"par
     model: "standard",
     systemPrompt: SYSTEM_PROMPTS.electoralLawExpert,
     userPrompt,
-    maxTokens: 4000,
+    maxTokens: deterministicResults ? 4000 : Math.min(16000, 2000 + parties.length * 300),
   });
 
   if (deterministicResults) {
