@@ -92,6 +92,7 @@ interface ForecastRun {
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  errorMessage?: string;
 }
 
 interface ForecastResult {
@@ -156,6 +157,10 @@ export default function ForecastsPage() {
   const { data: forecasts, isLoading: forecastsLoading, refetch: refetchForecasts } = useQuery<ForecastRun[]>({
     queryKey: ["/api/forecasts"],
     refetchInterval: 5000,
+  });
+
+  const { data: availableYearsData } = useQuery<{ years: number[]; hasData: boolean }>({
+    queryKey: ["/api/forecasts/available-years"],
   });
 
   const { data: forecastSummary, isLoading: summaryLoading } = useQuery<ForecastSummary>({
@@ -333,6 +338,12 @@ export default function ForecastsPage() {
                   </div>
                 )}
               </div>
+              {forecast.status === "failed" && forecast.description && (
+                <div className="mt-3 flex items-start gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md p-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{forecast.description}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -658,6 +669,16 @@ export default function ForecastsPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {availableYearsData && (
+                  <div className={`flex items-start gap-2 text-sm rounded-md p-3 ${availableYearsData.hasData ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" : "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400"}`}>
+                    <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>
+                      {availableYearsData.hasData
+                        ? `Dados históricos disponíveis: ${availableYearsData.years.join(", ")}. A previsão utilizará esses dados como base.`
+                        : "Nenhum dado histórico importado. Importe dados do TSE antes de criar previsões."}
+                    </span>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome da Previsão</Label>
                   <Input
@@ -731,7 +752,7 @@ export default function ForecastsPage() {
                 </Button>
                 <Button 
                   onClick={() => createForecastMutation.mutate()}
-                  disabled={!newForecast.name || createForecastMutation.isPending}
+                  disabled={!newForecast.name || createForecastMutation.isPending || (availableYearsData && !availableYearsData.hasData)}
                   data-testid="button-submit-forecast"
                 >
                   {createForecastMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}

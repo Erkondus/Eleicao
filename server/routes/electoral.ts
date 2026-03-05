@@ -529,6 +529,24 @@ router.post("/api/simulations", requireAuth, async (req, res) => {
   }
 });
 
+router.delete("/api/simulations/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid simulation ID" });
+    }
+    const simulation = await storage.getSimulation(id);
+    if (!simulation) {
+      return res.status(404).json({ error: "Simulation not found" });
+    }
+    await storage.deleteSimulation(id);
+    await logAudit(req, "delete", "simulation", String(id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete simulation" });
+  }
+});
+
 router.get("/api/scenarios/:id/votes", requireAuth, async (req, res) => {
   try {
     const votes = await storage.getScenarioVotes(parseInt(req.params.id));
@@ -842,7 +860,7 @@ router.post("/api/electoral/calculate", requireAuth, async (req, res) => {
       const memberPartyIds = allianceMembers[federation.id] || [];
       const totalVotes = memberPartyIds.reduce((sum, pid) => sum + (totalPartyVotes[pid] || 0), 0);
       const quotient = totalVotes / electoralQuotient;
-      const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
+      const seatsFromQuotient = Math.floor(quotient);
       const meetsBarrier = totalVotes >= barrierThreshold;
 
       entityResults.push({
@@ -868,7 +886,7 @@ router.post("/api/electoral/calculate", requireAuth, async (req, res) => {
       if (partiesInFederations.has(party.id)) continue;
       const totalVotes = totalPartyVotes[party.id] || 0;
       const quotient = totalVotes / electoralQuotient;
-      const seatsFromQuotient = totalVotes >= electoralQuotient ? Math.floor(quotient) : 0;
+      const seatsFromQuotient = Math.floor(quotient);
       const meetsBarrier = totalVotes >= barrierThreshold;
 
       entityResults.push({
@@ -1045,7 +1063,7 @@ router.post("/api/electoral/calculate", requireAuth, async (req, res) => {
 
         for (const pid of memberPartyIds) {
           const party = allParties.find(p => p.id === pid)!;
-          const partyVotesTotal = partyVotes[pid] || 0;
+          const partyVotesTotal = totalPartyVotes[pid] || 0;
           const partyCandidates = allFederationCandidates.filter(c => c.partyId === pid);
           const partySeats = partySeatsInFederation[pid] || 0;
 

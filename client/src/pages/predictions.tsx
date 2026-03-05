@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Brain, Settings2, Users, Calendar, Shuffle } from "lucide-react";
+import { Brain, Settings2, Users, Calendar, Shuffle, History } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import { ScenarioAnalysis } from "./predictions/ScenarioAnalysis";
 import { CandidateComparison } from "./predictions/CandidateComparison";
 import { EventImpact } from "./predictions/EventImpact";
 import { WhatIfSimulation } from "./predictions/WhatIfSimulation";
+import { PredictionHistory } from "./predictions/PredictionHistory";
 import type { AIPrediction } from "@shared/schema";
 
 export default function Predictions() {
@@ -79,6 +80,10 @@ export default function Predictions() {
             <Shuffle className="h-4 w-4" />
             E se...?
           </TabsTrigger>
+          <TabsTrigger value="history" className="gap-2" data-testid="tab-history">
+            <History className="h-4 w-4" />
+            Histórico
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="quick" className="space-y-6">
@@ -139,6 +144,10 @@ export default function Predictions() {
             deleteWhatIfMutation={deleteWhatIfMutation}
             onCreateSuccess={() => {}}
           />
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-6">
+          <PredictionHistory />
         </TabsContent>
       </Tabs>
     </div>

@@ -1,6 +1,6 @@
 ---
 name: database
-description: Create and manage Replit's built-in PostgreSQL databases, check status, and execute SQL queries with safety checks.
+description: Create and manage Replit's built-in PostgreSQL databases, check status, execute SQL queries with safety checks, and run read-only queries against the production database.
 ---
 
 # Database Skill

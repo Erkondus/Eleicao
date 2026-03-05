@@ -320,6 +320,17 @@ router.get("/api/projection-reports/:id/export/csv", requireAuth, requireRole("a
   }
 });
 
+router.get("/api/forecasts/available-years", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
+  try {
+    const allData = await storage.getHistoricalVotesByParty({ years: [] });
+    const years = [...new Set(allData.map(d => d.year))].sort((a, b) => b - a);
+    res.json({ years, hasData: years.length > 0 });
+  } catch (error) {
+    console.error("Failed to fetch available years:", error);
+    res.status(500).json({ error: "Failed to fetch available years" });
+  }
+});
+
 router.get("/api/forecasts", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
   try {
     const targetYear = req.query.targetYear ? parseInt(req.query.targetYear as string) : undefined;

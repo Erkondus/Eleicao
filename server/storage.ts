@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, sql, and, or, ilike, asc } from "drizzle-orm";
+import { eq, desc, sql, and, or, ilike, asc, inArray } from "drizzle-orm";
 import { SQL } from "drizzle-orm";
 import {
   type User, type InsertUser, users,
@@ -126,6 +126,7 @@ export interface IStorage {
   getRecentSimulations(limit?: number): Promise<Simulation[]>;
   getSimulation(id: number): Promise<Simulation | undefined>;
   createSimulation(simulation: InsertSimulation): Promise<Simulation>;
+  deleteSimulation(id: number): Promise<void>;
 
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(): Promise<AuditLog[]>;
@@ -1024,6 +1025,10 @@ export class DatabaseStorage implements IStorage {
   async createSimulation(simulation: InsertSimulation): Promise<Simulation> {
     const [created] = await db.insert(simulations).values(simulation).returning();
     return created;
+  }
+
+  async deleteSimulation(id: number): Promise<void> {
+    await db.delete(simulations).where(eq(simulations.id, id));
   }
 
   async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
@@ -3281,10 +3286,10 @@ export class DatabaseStorage implements IStorage {
   }[]> {
     const summaryConditions: SQL[] = [];
     if (filters.years.length > 0) {
-      summaryConditions.push(sql`${summaryPartyVotes.anoEleicao} = ANY(${filters.years})`);
+      summaryConditions.push(inArray(summaryPartyVotes.anoEleicao, filters.years));
     }
     if (filters.position) {
-      summaryConditions.push(eq(summaryPartyVotes.dsCargo, filters.position));
+      summaryConditions.push(ilike(summaryPartyVotes.dsCargo, filters.position));
     }
     if (filters.state) {
       summaryConditions.push(eq(summaryPartyVotes.sgUf, filters.state));
@@ -3322,10 +3327,10 @@ export class DatabaseStorage implements IStorage {
 
     const conditions: SQL[] = [];
     if (filters.years.length > 0) {
-      conditions.push(sql`${tseCandidateVotes.anoEleicao} = ANY(${filters.years})`);
+      conditions.push(inArray(tseCandidateVotes.anoEleicao, filters.years));
     }
     if (filters.position) {
-      conditions.push(eq(tseCandidateVotes.dsCargo, filters.position));
+      conditions.push(ilike(tseCandidateVotes.dsCargo, filters.position));
     }
     if (filters.state) {
       conditions.push(eq(tseCandidateVotes.sgUf, filters.state));
@@ -3350,7 +3355,48 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(tseCandidateVotes.anoEleicao, desc(sql`SUM(${tseCandidateVotes.qtVotosNominais})`));
     
-    return result.map(r => ({
+    if (result.length > 0) {
+      return result.map(r => ({
+        year: r.year || 0,
+        party: r.party || "",
+        state: r.state,
+        position: r.position,
+        totalVotes: r.totalVotes,
+        candidateCount: r.candidateCount,
+      }));
+    }
+
+    const partyConditions: SQL[] = [];
+    if (filters.years.length > 0) {
+      partyConditions.push(inArray(tsePartyVotes.anoEleicao, filters.years));
+    }
+    if (filters.position) {
+      partyConditions.push(ilike(tsePartyVotes.dsCargo, filters.position));
+    }
+    if (filters.state) {
+      partyConditions.push(eq(tsePartyVotes.sgUf, filters.state));
+    }
+
+    const partyResult = await db
+      .select({
+        year: tsePartyVotes.anoEleicao,
+        party: tsePartyVotes.sgPartido,
+        state: tsePartyVotes.sgUf,
+        position: tsePartyVotes.dsCargo,
+        totalVotes: sql<number>`SUM(COALESCE(${tsePartyVotes.qtVotosNominaisValidos}, 0) + COALESCE(${tsePartyVotes.qtVotosLegendaValidos}, 0))::int`,
+        candidateCount: sql<number>`1`,
+      })
+      .from(tsePartyVotes)
+      .where(partyConditions.length > 0 ? and(...partyConditions) : undefined)
+      .groupBy(
+        tsePartyVotes.anoEleicao,
+        tsePartyVotes.sgPartido,
+        tsePartyVotes.sgUf,
+        tsePartyVotes.dsCargo
+      )
+      .orderBy(tsePartyVotes.anoEleicao, desc(sql`SUM(COALESCE(${tsePartyVotes.qtVotosNominaisValidos}, 0) + COALESCE(${tsePartyVotes.qtVotosLegendaValidos}, 0))`));
+
+    return partyResult.map(r => ({
       year: r.year || 0,
       party: r.party || "",
       state: r.state,
