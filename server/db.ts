@@ -36,7 +36,7 @@ function isLocalDatabase(connectionString: string): boolean {
     const host = url.hostname;
     return host === 'localhost' ||
            host === '127.0.0.1' ||
-           host.startsWith('172.') ||
+           (host.startsWith('172.') && parseInt(host.split('.')[1], 10) >= 16 && parseInt(host.split('.')[1], 10) <= 31) ||
            host.startsWith('192.168.') ||
            host.startsWith('10.') ||
            host.includes('.local') ||

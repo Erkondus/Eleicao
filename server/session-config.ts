@@ -54,7 +54,7 @@ export function getSessionConfig(sessionSecret: string | undefined): session.Ses
 
   return {
     store: getSessionStore(),
-    secret: sessionSecret || (!isProduction ? "dev-secret-inseguro" : undefined!),
+    secret: sessionSecret || (!isProduction ? "dev-secret-inseguro" : ""),
     resave: false,
     saveUninitialized: false,
     proxy: true,

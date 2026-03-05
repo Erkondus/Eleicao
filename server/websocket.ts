@@ -35,7 +35,7 @@ function unsignCookie(signedCookie: string, secret: string): string | null {
 }
 
 export function initWebSocketServer(server: Server): WebSocketServer {
-  const sessionSecret = process.env.SESSION_SECRET || "dev-only-secret-do-not-use-in-production";
+  const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV !== "production" ? "dev-only-secret-do-not-use-in-production" : (() => { throw new Error("SESSION_SECRET is required in production"); })());
   
   wss = new WebSocketServer({ 
     server,

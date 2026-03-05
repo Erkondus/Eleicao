@@ -196,6 +196,7 @@ async function executeAiCall(
     };
   }
 
+  console.warn("[AI] No configured provider found — falling back to default OpenAI client (OPENAI_API_KEY env)");
   const openai = new OpenAI();
   const openaiMessages: OpenAI.ChatCompletionMessageParam[] = messages.map(m => ({
     role: m.role,

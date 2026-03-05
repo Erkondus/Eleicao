@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { storage } from "./storage";
 import { executeReportRun } from "./report-executor";
 import { initWebSocketServer } from "./websocket";
+import { calculateNextRun } from "./routes/shared";
 
 function gracefulShutdown(signal: string) {
   console.error(`RECEIVED ${signal} - shutting down gracefully...`);
@@ -29,16 +30,6 @@ process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
   }
 });
 process.on('unhandledRejection', (reason) => { console.error('UNHANDLED REJECTION:', reason); });
-
-const originalExit = process.exit.bind(process);
-process.exit = ((code?: number) => {
-  const stack = new Error().stack || '';
-  if (stack.includes('vite') && code === 1) {
-    console.error('[Vite] Transient error caught — server continues running');
-    return undefined as never;
-  }
-  originalExit(code);
-}) as typeof process.exit;
 
 const app = express();
 
@@ -85,7 +76,7 @@ function startReportScheduler() {
             .catch(err => console.error(`Report scheduler: Run ${run.id} failed:`, err));
           
           // Update the next run time based on frequency
-          const nextRunAt = calculateNextScheduleRun(
+          const nextRunAt = calculateNextRun(
             schedule.frequency, 
             schedule.dayOfWeek, 
             schedule.dayOfMonth, 
@@ -107,58 +98,9 @@ function startReportScheduler() {
     }
   }
 
-  // Calculate next run time with proper day alignment
-  function calculateNextScheduleRun(
-    frequency: string, 
-    dayOfWeek?: number | null, 
-    dayOfMonth?: number | null, 
-    timeOfDay: string = "08:00"
-  ): Date {
-    const now = new Date();
-    const [hours, minutes] = timeOfDay.split(":").map(Number);
-    
-    let nextRun = new Date(now);
-    nextRun.setHours(hours, minutes, 0, 0);
-    
-    switch (frequency) {
-      case "daily":
-        // Next day at the specified time
-        nextRun.setDate(nextRun.getDate() + 1);
-        break;
-        
-      case "weekly": {
-        // Find the next occurrence of the target day
-        const targetDay = dayOfWeek ?? 1; // Default to Monday
-        nextRun.setDate(nextRun.getDate() + 1); // Start from tomorrow
-        while (nextRun.getDay() !== targetDay) {
-          nextRun.setDate(nextRun.getDate() + 1);
-        }
-        break;
-      }
-        
-      case "monthly": {
-        // Next month on the specified day
-        const targetDate = dayOfMonth ?? 1;
-        nextRun.setMonth(nextRun.getMonth() + 1);
-        nextRun.setDate(Math.min(targetDate, getDaysInMonth(nextRun.getMonth(), nextRun.getFullYear())));
-        break;
-      }
-        
-      case "once":
-        // For one-time schedules, disable by setting far in the future
-        nextRun.setFullYear(nextRun.getFullYear() + 100);
-        break;
-    }
-    
-    return nextRun;
-  }
-  
-  function getDaysInMonth(month: number, year: number): number {
-    return new Date(year, month + 1, 0).getDate();
-  }
 
-  // Run every interval
   console.log("Report scheduler started (checking every 5 minutes)");
+  setTimeout(checkSchedules, 5000);
   setInterval(checkSchedules, SCHEDULER_INTERVAL);
 }
 const httpServer = createServer(app);

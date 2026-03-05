@@ -79,11 +79,14 @@ router.post("/api/auth/reset-admin", async (req, res) => {
     if (!resetSecret || secret !== resetSecret) {
       return res.status(403).json({ error: "Forbidden" });
     }
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+      return res.status(400).json({ error: "newPassword é obrigatório e deve ter pelo menos 6 caracteres" });
+    }
     const admin = await storage.getUserByUsername("admin");
     if (!admin) {
       await storage.createUser({
         username: "admin",
-        password: newPassword || "admin123",
+        password: newPassword,
         name: "Administrador",
         email: "admin@simulavoto.gov.br",
         role: "admin",
@@ -92,7 +95,7 @@ router.post("/api/auth/reset-admin", async (req, res) => {
       console.log("[Auth] Admin user re-created with new password");
       return res.json({ success: true, action: "created" });
     }
-    await storage.updateUser(admin.id, { password: newPassword || "admin123" });
+    await storage.updateUser(admin.id, { password: newPassword });
     console.log("[Auth] Admin password reset successfully");
     return res.json({ success: true, action: "reset" });
   } catch (error: any) {
@@ -112,7 +115,9 @@ router.post("/api/auth/login", (req, res, next) => {
     req.login(user, async (loginErr) => {
       if (loginErr) {
         console.error(`[Auth] req.login() failed for user '${user.username}':`, loginErr);
-        console.log(`[Auth] Debug: protocol=${req.protocol}, secure=${req.secure}, x-forwarded-proto=${req.headers['x-forwarded-proto']}, trust-proxy=${req.app.get('trust proxy')}`);
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`[Auth] Debug: protocol=${req.protocol}, secure=${req.secure}, x-forwarded-proto=${req.headers['x-forwarded-proto']}, trust-proxy=${req.app.get('trust proxy')}`);
+        }
         if (!res.headersSent) {
           return res.status(500).json({ error: "Login failed" });
         }
@@ -183,16 +188,22 @@ router.post("/api/auth/change-password", requireAuth, async (req, res) => {
 
 router.get("/api/admin/database-stats", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const [usersCount] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
-    const [partiesCount] = await db.select({ count: sql<number>`count(*)::int` }).from(parties);
-    const [candidatesCount] = await db.select({ count: sql<number>`count(*)::int` }).from(candidates);
-    const [scenariosCount] = await db.select({ count: sql<number>`count(*)::int` }).from(scenarios);
-    const [simulationsCount] = await db.select({ count: sql<number>`count(*)::int` }).from(simulations);
-    const [importJobsCount] = await db.select({ count: sql<number>`count(*)::int` }).from(tseImportJobs);
-    const [partyVotesCount] = await db.select({ count: sql<number>`count(*)::int` }).from(tsePartyVotes);
-    const [candidateVotesCount] = await db.select({ count: sql<number>`count(*)::int` }).from(tseCandidateVotes);
-    const [forecastsCount] = await db.select({ count: sql<number>`count(*)::int` }).from(forecastRuns);
-    const [auditLogsCount] = await db.select({ count: sql<number>`count(*)::int` }).from(auditLogs);
+    const [
+      [usersCount], [partiesCount], [candidatesCount], [scenariosCount],
+      [simulationsCount], [importJobsCount], [partyVotesCount],
+      [candidateVotesCount], [forecastsCount], [auditLogsCount],
+    ] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` }).from(users),
+      db.select({ count: sql<number>`count(*)::int` }).from(parties),
+      db.select({ count: sql<number>`count(*)::int` }).from(candidates),
+      db.select({ count: sql<number>`count(*)::int` }).from(scenarios),
+      db.select({ count: sql<number>`count(*)::int` }).from(simulations),
+      db.select({ count: sql<number>`count(*)::int` }).from(tseImportJobs),
+      db.select({ count: sql<number>`count(*)::int` }).from(tsePartyVotes),
+      db.select({ count: sql<number>`count(*)::int` }).from(tseCandidateVotes),
+      db.select({ count: sql<number>`count(*)::int` }).from(forecastRuns),
+      db.select({ count: sql<number>`count(*)::int` }).from(auditLogs),
+    ]);
 
     res.json({
       users: usersCount?.count || 0,
@@ -221,62 +232,64 @@ router.post("/api/admin/reset-database", requireAuth, requireRole("admin"), asyn
 
     const currentUserId = req.user!.id;
 
-    await db.delete(activityAssignees);
-    await db.delete(campaignActivities);
-    await db.delete(campaignNotifications);
-    await db.delete(aiKpiGoals);
-    await db.delete(campaignTeamMembers);
-    await db.delete(campaignMetrics);
-    await db.delete(campaignResources);
-    await db.delete(campaignBudgets);
-    await db.delete(campaignInsightSessions);
-    await db.delete(campaigns);
-    await db.delete(sentimentKeywords);
-    await db.delete(sentimentAnalysisResults);
-    await db.delete(sentimentArticles);
-    await db.delete(sentimentDataSources);
-    await db.delete(aiSuggestions);
-    await db.delete(customDashboards);
-    await db.delete(predictionScenarios);
-    await db.delete(reportRecipients);
-    await db.delete(reportRuns);
-    await db.delete(reportSchedules);
-    await db.delete(reportTemplates);
-    await db.delete(forecastSwingRegions);
-    await db.delete(forecastResults);
-    await db.delete(forecastRuns);
-    await db.delete(importValidationIssues);
-    await db.delete(importValidationRuns);
-    await db.delete(projectionReports);
-    await db.delete(aiPredictions);
-    await db.delete(savedReports);
-    await db.delete(summaryPartyVotes);
-    await db.delete(summaryCandidateVotes);
-    await db.delete(summaryStateVotes);
-    await db.delete(scenarioCandidates);
-    await db.delete(scenarioVotes);
-    await db.delete(simulations);
-    await db.delete(scenarios);
-    await db.delete(tseImportBatchRows);
-    await db.delete(tseImportBatches);
-    await db.delete(tseImportErrors);
-    await db.delete(tseCandidateVotes);
-    await db.delete(tsePartyVotes);
-    await db.delete(tseElectoralStatistics);
-    await db.delete(tseImportJobs);
-    await db.delete(allianceParties);
-    await db.delete(alliances);
-    await db.delete(candidates);
-    await db.delete(parties);
-    await db.delete(aiTaskConfigs);
-    await db.delete(aiProviders);
-    await db.delete(auditLogs);
+    await db.transaction(async (tx) => {
+      await tx.delete(activityAssignees);
+      await tx.delete(campaignActivities);
+      await tx.delete(campaignNotifications);
+      await tx.delete(aiKpiGoals);
+      await tx.delete(campaignTeamMembers);
+      await tx.delete(campaignMetrics);
+      await tx.delete(campaignResources);
+      await tx.delete(campaignBudgets);
+      await tx.delete(campaignInsightSessions);
+      await tx.delete(campaigns);
+      await tx.delete(sentimentKeywords);
+      await tx.delete(sentimentAnalysisResults);
+      await tx.delete(sentimentArticles);
+      await tx.delete(sentimentDataSources);
+      await tx.delete(aiSuggestions);
+      await tx.delete(customDashboards);
+      await tx.delete(predictionScenarios);
+      await tx.delete(reportRecipients);
+      await tx.delete(reportRuns);
+      await tx.delete(reportSchedules);
+      await tx.delete(reportTemplates);
+      await tx.delete(forecastSwingRegions);
+      await tx.delete(forecastResults);
+      await tx.delete(forecastRuns);
+      await tx.delete(importValidationIssues);
+      await tx.delete(importValidationRuns);
+      await tx.delete(projectionReports);
+      await tx.delete(aiPredictions);
+      await tx.delete(savedReports);
+      await tx.delete(summaryPartyVotes);
+      await tx.delete(summaryCandidateVotes);
+      await tx.delete(summaryStateVotes);
+      await tx.delete(scenarioCandidates);
+      await tx.delete(scenarioVotes);
+      await tx.delete(simulations);
+      await tx.delete(scenarios);
+      await tx.delete(tseImportBatchRows);
+      await tx.delete(tseImportBatches);
+      await tx.delete(tseImportErrors);
+      await tx.delete(tseCandidateVotes);
+      await tx.delete(tsePartyVotes);
+      await tx.delete(tseElectoralStatistics);
+      await tx.delete(tseImportJobs);
+      await tx.delete(allianceParties);
+      await tx.delete(alliances);
+      await tx.delete(candidates);
+      await tx.delete(parties);
+      await tx.delete(aiTaskConfigs);
+      await tx.delete(aiProviders);
+      await tx.delete(auditLogs);
 
-    if (preserveAdmin) {
-      await db.delete(users).where(sql`${users.id} != ${currentUserId}`);
-    } else {
-      await db.delete(users);
-    }
+      if (preserveAdmin) {
+        await tx.delete(users).where(sql`${users.id} != ${currentUserId}`);
+      } else {
+        await tx.delete(users);
+      }
+    });
 
     await logAudit(req, "delete", "database", "all", { action: "full_reset", preserveAdmin });
 

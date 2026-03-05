@@ -113,14 +113,17 @@ export function calculateNextRun(
         nextRun.setDate(nextRun.getDate() + 1);
       }
       break;
-    case "monthly":
+    case "monthly": {
       const targetDate = dayOfMonth ?? 1;
-      nextRun.setDate(targetDate);
+      const daysInCurrentMonth = new Date(nextRun.getFullYear(), nextRun.getMonth() + 1, 0).getDate();
+      nextRun.setDate(Math.min(targetDate, daysInCurrentMonth));
       if (nextRun <= now) {
         nextRun.setMonth(nextRun.getMonth() + 1);
-        nextRun.setDate(targetDate);
+        const daysInNextMonth = new Date(nextRun.getFullYear(), nextRun.getMonth() + 1, 0).getDate();
+        nextRun.setDate(Math.min(targetDate, daysInNextMonth));
       }
       break;
+    }
   }
   
   return nextRun;

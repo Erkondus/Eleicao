@@ -1,0 +1,202 @@
+ Searched for 7 patterns, read 18 files (ctrl+o to expand)                                                             
+                                                                                                                        
+⏺ Agora tenho uma visão completa do projeto. Vou compilar a análise.                                                    
+                                                                                                                        
+  ---                                                                                                                   
+  Análise Completa do Projeto SimulaVoto                                                                                
+                                                                                                                        
+  Visão Geral da Arquitetura                                                                                            
+                                                                                                                        
+  O projeto é uma aplicação full-stack bem estruturada:
+  - Frontend: React + TypeScript + Vite, Tailwind/shadcn, React Query, Wouter (roteamento)
+  - Backend: Node.js + Express + TypeScript, Passport.js (auth), Drizzle ORM, PostgreSQL
+  - IA: Suporte multi-provider (OpenAI, Anthropic, Gemini, OpenAI-compatible) com cache
+  - Funcionalidades: Importação de dados do TSE, simulação eleitoral proporcional, análise de sentimento, relatórios
+  automatizados
+
+  A arquitetura está bem separada (shared schema, services, routes), com boas práticas gerais. Os problemas encontrados
+  são pontuais. Seguem organizados por severidade:
+
+  ---
+  🔴 Problemas de Segurança
+
+  1. Senha padrão fraca no reset de admin
+
+  Arquivo: server/routes/auth.ts:95
+  await storage.updateUser(admin.id, { password: newPassword || "admin123" });
+  Se o endpoint /api/auth/reset-admin for chamado com o secret correto mas sem newPassword, a senha do admin é
+  redefinida para "admin123". Endpoint não autenticado — qualquer um com o secret pode fazer isso.
+
+  Sugestão: Exigir newPassword como obrigatório, ou retornar erro se não for fornecido.
+
+  ---
+  2. Duplication da lógica calculateNextScheduleRun
+
+  Arquivos: server/index.ts:111-154 e server/routes/shared.ts:88-127
+
+  A mesma lógica de cálculo de próxima execução está duplicada em dois lugares com pequenas diferenças de implementação.
+   Inconsistências podem causar comportamentos diferentes no agendamento.
+
+  Sugestão: server/index.ts deve importar e usar calculateNextRun de server/routes/shared.ts.
+
+  ---
+  3. Hash prefix do password em logs de erro
+
+  Arquivo: server/routes/index.ts:83
+  console.log(`[Auth] Login failed: wrong password for user '${username}' (hash prefix: ${user.password.substring(0,
+  7)})`);
+  Exibe os primeiros 7 caracteres do hash bcrypt em logs. Desnecessário e pode vazar informação.
+
+  Sugestão: Remover a parte (hash prefix: ...) do log.
+
+  ---
+  4. WebSocket tem fallback de secret independente
+
+  Arquivo: server/websocket.ts:38
+  const sessionSecret = process.env.SESSION_SECRET || "dev-only-secret-do-not-use-in-production";
+  O routes/index.ts lança erro se SESSION_SECRET não estiver definido em produção, mas o WebSocket tem seu próprio
+  fallback hardcoded. Isso cria uma inconsistência — mesmo em produção, se o código chegar aqui sem a variável, usará o
+  secret padrão inseguro.
+
+  Sugestão: Centralizar o acesso ao secret ou usar process.env.SESSION_SECRET! com validação explícita.
+
+  ---
+  5. Debug log expõe configuração interna
+
+  Arquivo: server/routes/auth.ts:115
+  console.log(`[Auth] Debug: protocol=${req.protocol}, secure=${req.secure},
+  x-forwarded-proto=${req.headers['x-forwarded-proto']}, trust-proxy=${req.app.get('trust proxy')}`);
+  Log de debug exposto em produção, revelando configuração interna do servidor. Está dentro do fluxo de login com erro.
+
+  Sugestão: Envolver em if (process.env.NODE_ENV !== 'production') ou remover.
+
+  ---
+  🟡 Problemas de Qualidade de Código
+
+  6. deleteUser sempre retorna true
+
+  Arquivo: server/storage.ts:491
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return true; // Nunca usa `result`
+  }
+  Não verifica se o registro existia. O chamador não consegue saber se o delete foi de fato realizado.
+
+  ---
+  7. Reset de banco não usa transação
+
+  Arquivo: server/routes/auth.ts:224-279
+
+  O endpoint POST /api/admin/reset-database faz ~30 deletes sequenciais sem transação. Se falhar no meio, o banco fica
+  em estado inconsistente.
+
+  Sugestão: Envolver tudo em db.transaction(async (tx) => { ... }).
+
+  ---
+  8. 10 queries de COUNT sequenciais
+
+  Arquivo: server/routes/auth.ts:186-207
+
+  O endpoint GET /api/admin/database-stats faz 10 queries de COUNT separadas e sequenciais.
+
+  Sugestão: Usar Promise.all([...]) para paralelizar as queries.
+
+  ---
+  9. Detecção incorreta de IP privado
+
+  Arquivo: server/db.ts:39
+  host.startsWith('172.')
+  Marca qualquer IP 172.x.x.x como "local", mas o range privado correto é 172.16.0.0/12 (172.16 a 172.31). Endereços
+  como 172.1.x.x são públicos.
+
+  ---
+  10. Override de process.exit frágil
+
+  Arquivo: server/index.ts:34-41
+  process.exit = ((code?: number) => {
+    const stack = new Error().stack || '';
+    if (stack.includes('vite') && code === 1) { ... }
+    originalExit(code);
+  }) as typeof process.exit;
+  Detectar o Vite pelo stack trace é frágil e pode suprimir erros legítimos de shutdown que coincidam com código Vite no
+   stack.
+
+  ---
+  11. Fallback direto ao OpenAI bypassa o sistema de providers
+
+  Arquivo: server/ai-cache.ts:199
+  const openai = new OpenAI(); // bypassa o sistema de providers
+  Se nenhum provider estiver configurado no banco, cai diretamente no OpenAI via variável de ambiente, ignorando o
+  sistema de configuração da UI. Comportamento inconsistente para o operador.
+
+  ---
+  12. calculateNextRun - caso monthly com dias inválidos
+
+  Arquivo: server/routes/shared.ts:117-121
+  nextRun.setDate(targetDate);
+  if (nextRun <= now) {
+    nextRun.setMonth(nextRun.getMonth() + 1);
+    nextRun.setDate(targetDate);
+  }
+  Se targetDate = 31 e o próximo mês tem 28/30 dias, o JS auto-avança para o mês seguinte silenciosamente. O mesmo bug
+  existe em server/index.ts:143.
+
+  ---
+  13. Cast undefined! perigoso em session config
+
+  Arquivo: server/session-config.ts:57
+  secret: sessionSecret || (!isProduction ? "dev-secret-inseguro" : undefined!),
+  O undefined! é um non-null assertion que engana o TypeScript. Em produção, se a validação na linha 48 for removida ou
+  contornada, o express-session receberia undefined como secret e crasharia de forma obscura.
+
+  ---
+  🟢 Observações / Melhorias Menores
+
+  ┌─────┬───────────────────────────┬────────────────────────────────────────────────────────────────────────────────┐
+  │  #  │          Arquivo          │                                   Observação                                   │
+  ├─────┼───────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ 14  │ server/storage.ts         │ A interface IStorage tem mais de 100 métodos — considerar dividir em           │
+  │     │                           │ sub-interfaces por domínio (electoral, campaign, etc.)                         │
+  ├─────┼───────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ 15  │ server/routes/index.ts:54 │ (storage as any).seedDefaultAdmin?.() usa as any para chamar método opcional — │
+  │     │                           │  poderia estar tipado na interface                                             │
+  ├─────┼───────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ 16  │ shared/schema/index.ts    │ Re-exportar tudo de múltiplos arquivos funciona, mas dificulta tree-shaking no │
+  │     │                           │  cliente                                                                       │
+  ├─────┼───────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │     │                           │ O startReportScheduler() roda checkSchedules apenas por intervalo, sem         │
+  │ 17  │ server/index.ts:162       │ executar imediatamente no startup (primeira verificação só acontece após 5     │
+  │     │                           │ min)                                                                           │
+  ├─────┼───────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+  │ 18  │ client/src/main.tsx       │ document.getElementById("root")! usa non-null assertion — se o elemento não    │
+  │     │                           │ existir, erro obscuro                                                          │
+  └─────┴───────────────────────────┴────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  Resumo Prioritário
+
+  ┌────────────┬───────────────────────────────────────────┬────────────────────────────────────────────┐
+  │ Prioridade │                 Problema                  │                  Arquivo                   │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🔴 Alta    │ Senha padrão "admin123" no reset          │ server/routes/auth.ts:95                   │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🔴 Alta    │ Lógica de agendamento duplicada           │ server/index.ts vs server/routes/shared.ts │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🔴 Alta    │ Secret WebSocket com fallback inseguro    │ server/websocket.ts:38                     │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🟡 Média   │ Reset de banco sem transação              │ server/routes/auth.ts:215                  │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🟡 Média   │ deleteUser retorna sempre true            │ server/storage.ts:491                      │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🟡 Média   │ 10 queries de COUNT sequenciais           │ server/routes/auth.ts:186                  │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🟡 Média   │ Log de debug em produção                  │ server/routes/auth.ts:115                  │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🟡 Média   │ IP privado 172.x detectado incorretamente │ server/db.ts:39                            │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🟢 Baixa   │ Fallback direto ao OpenAI                 │ server/ai-cache.ts:199                     │
+  ├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ 🟢 Baixa   │ Hash prefix em log de falha de login      │ server/routes/index.ts:83                  │
+  └────────────┴───────────────────────────────────────────┴────────────────────────────────────────────┘
+
+  Me avise quais problemas você quer resolver e posso implementar as correções.

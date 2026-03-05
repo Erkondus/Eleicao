@@ -51,7 +51,9 @@ export async function registerRoutes(
     console.error("[Startup] Failed to cleanup stuck jobs:", cleanupError);
   }
 
-  await (storage as any).seedDefaultAdmin?.();
+  if ('seedDefaultAdmin' in storage && typeof (storage as any).seedDefaultAdmin === 'function') {
+    await (storage as any).seedDefaultAdmin();
+  }
 
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret && process.env.NODE_ENV === "production") {
@@ -80,7 +82,7 @@ export async function registerRoutes(
         }
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
-          console.log(`[Auth] Login failed: wrong password for user '${username}' (hash prefix: ${user.password.substring(0, 7)})`);
+          console.log(`[Auth] Login failed: wrong password for user '${username}'`);
           return done(null, false, { message: "Invalid credentials" });
         }
         console.log(`[Auth] Login successful: user '${username}' (role: ${user.role})`);
