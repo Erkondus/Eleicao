@@ -107,12 +107,13 @@ export function calculateNextRun(
       break;
     case "daily":
       break;
-    case "weekly":
+    case "weekly": {
       const targetDay = dayOfWeek ?? 1;
       while (nextRun.getDay() !== targetDay) {
         nextRun.setDate(nextRun.getDate() + 1);
       }
       break;
+    }
     case "monthly": {
       const targetDate = dayOfMonth ?? 1;
       const daysInCurrentMonth = new Date(nextRun.getFullYear(), nextRun.getMonth() + 1, 0).getDate();

@@ -1,5 +1,6 @@
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import crypto from "crypto";
 import { getPool } from "./db";
 
 const PgStore = connectPgSimple(session);
@@ -54,7 +55,7 @@ export function getSessionConfig(sessionSecret: string | undefined): session.Ses
 
   return {
     store: getSessionStore(),
-    secret: sessionSecret || (!isProduction ? "dev-secret-inseguro" : ""),
+    secret: sessionSecret || (!isProduction ? crypto.randomBytes(32).toString("hex") : ""),
     resave: false,
     saveUninitialized: false,
     proxy: true,

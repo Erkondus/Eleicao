@@ -196,6 +196,9 @@ async function executeAiCall(
     };
   }
 
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("Nenhum provider de IA configurado e OPENAI_API_KEY não definida. Configure um provider na tela de Configurações de IA.");
+  }
   console.warn("[AI] No configured provider found — falling back to default OpenAI client (OPENAI_API_KEY env)");
   const openai = new OpenAI();
   const openaiMessages: OpenAI.ChatCompletionMessageParam[] = messages.map(m => ({

@@ -1,0 +1,87 @@
+ Reavaliação — O que foi corrigido ✅                                                                                  
+                                                                                                                        
+  ┌─────┬──────────────────────────────────────────┬────────────────────────────────────────────────────────────────┐   
+  │  #  │            Problema anterior             │                             Status                             │   
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 1   │ Senha padrão "admin123" no reset         │ ✅ Corrigido — newPassword agora é obrigatório com mínimo de 6 │
+  │     │                                          │  chars                                                         │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 2   │ Lógica calculateNextScheduleRun          │ ✅ Corrigido — server/index.ts agora importa e usa             │
+  │     │ duplicada                                │ calculateNextRun de shared.ts                                  │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 3   │ Hash prefix do password em logs          │ ✅ Corrigido — log agora só diz wrong password for user '...'  │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 4   │ WebSocket com fallback de secret         │ ✅ Corrigido — lança erro em produção se SESSION_SECRET não    │
+  │     │ inseguro                                 │ estiver definido                                               │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 5   │ Debug log exposto em produção            │ ✅ Corrigido — agora envolto em if (process.env.NODE_ENV !==   │
+  │     │                                          │ "production")                                                  │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 6   │ Reset de banco sem transação             │ ✅ Corrigido — usa db.transaction(async (tx) => { ... })       │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 7   │ 10 queries de COUNT sequenciais          │ ✅ Corrigido — usa Promise.all([...])                          │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 8   │ deleteUser sempre retornava true         │ ✅ Corrigido — usa .returning() e verifica result.length > 0   │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 9   │ IP privado 172.x detectado               │ ✅ Corrigido — verifica o segundo octeto entre 16 e 31         │
+  │     │ incorretamente                           │                                                                │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 10  │ (storage as any).seedDefaultAdmin?.()    │ ✅ Corrigido — usa 'seedDefaultAdmin' in storage && typeof ... │
+  │     │ frágil                                   │                                                                │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 11  │ calculateNextRun caso monthly com dias   │ ✅ Corrigido — usa Math.min(targetDate, daysInMonth)           │
+  │     │ inválidos                                │                                                                │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 12  │ Cast undefined! no session config        │ ✅ Corrigido — substituído por ""                              │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 13  │ Override de process.exit frágil          │ ✅ Removido                                                    │
+  ├─────┼──────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 14  │ Scheduler iniciava só após 5 min         │ ✅ Corrigido — setTimeout(checkSchedules, 5000) no startup     │
+  └─────┴──────────────────────────────────────────┴────────────────────────────────────────────────────────────────┘
+
+  ---
+  Problemas Remanescentes
+
+  🟡 1. Fallback direto ao OpenAI continua bypassando o sistema de providers
+
+  Arquivo: server/ai-cache.ts:199-223
+
+  O console.warn foi adicionado (bom!), mas o comportamento continua: se nenhum provider estiver configurado no banco, o
+   sistema usa OPENAI_API_KEY diretamente, ignorando a configuração da UI. Para o operador que configurou apenas
+  Anthropic ou Gemini, o sistema silenciosamente tentaria usar OpenAI. O warn ajuda na depuração, mas a lógica ainda
+  pode surpreender.
+
+  ---
+  🟡 2. secret: "" no session config em produção
+
+  Arquivo: server/session-config.ts:57
+  secret: sessionSecret || (!isProduction ? "dev-secret-inseguro" : ""),
+  A string vazia "" como secret do express-session é tecnicamente inválida — a biblioteca aceita, mas assina os cookies
+  com uma chave vazia, que é trivialmente forjável. O risco é baixo porque a linha 48-50 já lança erro antes de chegar
+  aqui em produção, mas é um detalhe que pode causar comportamento inesperado se a validação for contornada algum dia.
+
+  Sugestão: Substituir "" por uma string aleatória gerada em runtime (ex: crypto.randomBytes(32).toString('hex')) como
+  último fallback de desenvolvimento, deixando claro que não é para produção.
+
+  ---
+  🟢 3. calculateNextRun — const no case weekly sem bloco
+
+  Arquivo: server/routes/shared.ts:110-114
+  case "weekly":
+    const targetDay = dayOfWeek ?? 1;  // sem { }
+    ...
+    break;
+  O caso monthly foi corretamente envolto em {} (linha 116), mas o weekly ainda declara const dentro do case sem bloco.
+  Funciona em TypeScript/JS moderno, mas é inconsistente com o padrão adotado no caso monthly.
+
+  ---
+  Resumo Final
+
+  O código está significativamente melhorado em relação à análise anterior. 13 dos 14 problemas originais foram
+  resolvidos, todos os críticos de segurança foram endereçados. Restam apenas:
+
+  - 1 problema médio (fallback OpenAI no ai-cache.ts)
+  - 1 problema baixo (string vazia como secret em session-config.ts)
+  - 1 inconsistência menor de estilo (switch case sem bloco em shared.ts)
+
+  Ótimo trabalho nas correções.
