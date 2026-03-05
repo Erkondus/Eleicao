@@ -48,14 +48,14 @@ export async function refreshPartyVotesSummary(): Promise<void> {
         cv.ano_eleicao,
         cv.sg_uf,
         cv.cd_cargo,
-        cv.ds_cargo,
-        cv.nm_tipo_eleicao,
+        MAX(cv.ds_cargo),
+        MAX(cv.nm_tipo_eleicao),
         cv.sg_partido,
         MAX(cv.nr_partido),
         MAX(cv.nm_partido),
         COALESCE(SUM(cv.qt_votos_nominais), 0),
-        COALESCE(pv.total_legenda, 0),
-        COALESCE(SUM(cv.qt_votos_nominais_validos), 0) + COALESCE(pv.total_legenda, 0),
+        COALESCE(MAX(pv.total_legenda), 0),
+        COALESCE(SUM(cv.qt_votos_nominais_validos), 0) + COALESCE(MAX(pv.total_legenda), 0),
         COUNT(DISTINCT cv.sq_candidato),
         COUNT(DISTINCT cv.cd_municipio)
       FROM tse_candidate_votes cv
@@ -66,7 +66,7 @@ export async function refreshPartyVotesSummary(): Promise<void> {
         GROUP BY ano_eleicao, sg_uf, cd_cargo, sg_partido
       ) pv ON pv.ano_eleicao = cv.ano_eleicao AND pv.sg_uf = cv.sg_uf AND pv.cd_cargo = cv.cd_cargo AND pv.sg_partido = cv.sg_partido
       WHERE cv.ano_eleicao IS NOT NULL AND cv.sg_partido IS NOT NULL
-      GROUP BY cv.ano_eleicao, cv.sg_uf, cv.cd_cargo, cv.ds_cargo, cv.nm_tipo_eleicao, cv.sg_partido, pv.total_legenda
+      GROUP BY cv.ano_eleicao, cv.sg_uf, cv.cd_cargo, cv.sg_partido
     `);
   });
   console.log("[Summary] summary_party_votes refreshed");

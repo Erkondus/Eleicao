@@ -91,7 +91,7 @@ if (status.openPorts) {
 }
 ```
 
-### configureWorkflow(name, command, waitForPort, outputType, autoStart)
+### configureWorkflow({ name, command, waitForPort, outputType, autoStart, isCanvasWorkflow })
 
 Configure or create a workflow. This is the primary way to set up background processes.
 
@@ -102,6 +102,7 @@ Configure or create a workflow. This is the primary way to set up background pro
 - `waitForPort` (int, optional): Port the process listens on
 - `outputType` (str, default "webview"): "webview", "console", or "vnc"
 - `autoStart` (bool, default True): Auto-start after configuration
+- `isCanvasWorkflow` (bool, default false): Whether this workflow serves canvas iframe content
 
 **Output Type Rules:**
 
@@ -137,6 +138,7 @@ await configureWorkflow({
     outputType: "vnc"
 });
 ```
+
 
 ### removeWorkflow(name)
 
@@ -185,7 +187,9 @@ const result2 = await restartWorkflow({
 2. **Use appropriate timeouts**: Increase timeout for applications with slow startup
 3. **Check logs on failure**: If restart fails, check workflow logs for error details
 4. **One restart at a time**: Avoid parallel restarts of the same workflow
+
 5. **Port 5000 for web apps**: Always use port 5000 with webview output type
+
 
 ## Common Workflow Names
 
@@ -201,7 +205,9 @@ The workflow functions may raise errors in these cases:
 - **Port not opened**: The application didn't start listening on expected port
 - **Preview not available**: The application endpoint isn't responding with HTTP 200
 - **Workflow limit exceeded**: Maximum of 10 workflows reached
+
 - **Port/output type mismatch**: Port 5000 requires webview, webview requires port 5000
+
 
 When errors occur, check:
 
@@ -216,7 +222,9 @@ When errors occur, check:
 await configureWorkflow({
     name: "Start application",
     command: "npm run dev",
+
     waitForPort: 5000,
+
     outputType: "webview"
 });
 
