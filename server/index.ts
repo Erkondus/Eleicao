@@ -128,12 +128,21 @@ app.use("/api/auth/reset-admin", rateLimit({
   legacyHeaders: false,
 }));
 
+function getAiRateLimitKey(req: express.Request): string {
+  const userId = (req as any).user?.id;
+  if (userId) return `user:${userId}`;
+  const addr = req.headers["x-forwarded-for"];
+  if (typeof addr === "string") return addr.split(",")[0].trim();
+  return req.socket.remoteAddress || "unknown";
+}
 const aiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 30,
   message: { error: "Limite de requisições de IA atingido. Aguarde 1 minuto." },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getAiRateLimitKey,
+  validate: false,
 });
 app.use("/api/ai", aiLimiter);
 
@@ -166,10 +175,10 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        const sensitiveRoutes = ["/api/auth", "/api/users", "/api/ai"];
-        const isSensitive = sensitiveRoutes.some(r => path.startsWith(r));
-        if (!isSensitive) {
+      if (capturedJsonResponse && process.env.NODE_ENV !== "production") {
+        const safeLogRoutes = ["/api/health", "/api/version", "/api/stats"];
+        const isSafe = safeLogRoutes.some(r => path.startsWith(r));
+        if (isSafe) {
           const jsonStr = JSON.stringify(capturedJsonResponse);
           logLine += ` :: ${jsonStr.length > 200 ? jsonStr.substring(0, 200) + "..." : jsonStr}`;
         }

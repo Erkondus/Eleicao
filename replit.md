@@ -33,13 +33,15 @@ The application features a React + Vite + TailwindCSS + shadcn/ui frontend and a
 ## Security & Reliability
 -   **Helmet:** HTTP security headers (CSP, X-Frame-Options, HSTS, etc.) via `helmet` middleware. CSP disabled in development for Vite compatibility.
 -   **Rate Limiting:** `express-rate-limit` applied to `/api/auth/login` (20/15min), `/api/auth/reset-admin` (5/1h), and `/api/ai/*` (30/1min).
--   **Log Sanitization:** API response bodies are not logged for sensitive routes (`/api/auth`, `/api/users`, `/api/ai`). Non-sensitive routes truncate at 200 chars.
+-   **Log Sanitization:** API response bodies only logged for safe diagnostic routes (`/api/health`, `/api/version`, `/api/stats`) in development. No bodies logged in production. Truncated to 200 chars.
 -   **SQL Injection Prevention:** Index names validated via regex and double-quoted in `DROP INDEX` statements.
 -   **Timezone-Aware Scheduling:** `calculateNextRun()` uses `Intl` APIs to convert between timezone-local time and UTC, respecting the configured timezone parameter.
 -   **React Query Caching:** `staleTime` set to 5 minutes (previously `Infinity`), `refetchOnWindowFocus` enabled for data freshness.
 -   **Audit Log Pagination:** `/api/audit` supports `limit` and `offset` query params; frontend includes pagination controls.
 -   **Gemini Multi-Turn:** `GeminiAdapter.chatCompletion` uses `startChat()` with proper history for multi-turn conversations instead of concatenating all messages.
--   **AI Adapter Cache TTL:** Adapter cache entries expire after 1 hour to avoid stale configurations.
+-   **AI Adapter Cache TTL:** Adapter cache entries expire after 1 hour to avoid stale configurations. Cache also cleared on provider deletion.
+-   **SSL CA Certificate:** Supports `DATABASE_SSL_CA` env var for `rejectUnauthorized: true` SSL connections to PostgreSQL. Falls back to `rejectUnauthorized: false` when no CA provided.
+-   **Performance:** `getStats()` uses `Promise.all` (4 parallel queries); `getActivityTrend()` uses 2 `GROUP BY` queries instead of N+1 loop (14 → 2 queries).
 
 ## External Dependencies
 -   **OpenAI:** GPT-4o, GPT-4o-mini for AI features (validation, insights, sentiment, predictions, suggestions) and `text-embedding-3-small` for semantic search.

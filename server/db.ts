@@ -94,7 +94,12 @@ function buildPoolConfig(connectionString: string, isLocal: boolean, enableSSL: 
   };
 
   if (enableSSL) {
-    config.ssl = { rejectUnauthorized: false };
+    const sslCa = process.env.DATABASE_SSL_CA;
+    if (sslCa) {
+      config.ssl = { rejectUnauthorized: true, ca: sslCa };
+    } else {
+      config.ssl = { rejectUnauthorized: false };
+    }
   }
 
   return config;

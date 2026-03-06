@@ -1,0 +1,188 @@
+⏺ Bash(git log --oneline -20)
+  ⎿  009992f feat: Implement audit log pagination, enhance security with Helmet and rate limiting, and improve AI client Gemini chat history handling.                                                                                                                                                                                                                  
+     3fad1bb chore: Update internal state files for log-query.db.
+     9b757b3 feat: Implement special database indexes for `tse_candidate_votes`, add a health check endpoint for them, and update Drizzle configuration and `db:push` script.                                                                                                                                                                                           
+     … +17 lines (ctrl+o to expand)                                        
+                                                                                                                                                                                                                                                                                                                                                                        
+⏺ Bash(git show 009992f --stat)                                                                                                                                                                                                                                                                                                                                         
+  ⎿  commit 009992fad095b25a6a9a93cbcd1ae26df8ab1cb0                       
+     Author: Denis Bezerra <denisbezerra@me.com>                                                                                                                                                                                                                                                                                                                        
+     Date:   Fri Mar 6 10:49:36 2026 -0300                                                                                                                                                                                                                                                                                                                              
+     … +24 lines (ctrl+o to expand)                                        
+                                                                                                                                                                                                                                                                                                                                                                        
+⏺ Searched for 3 patterns, read 9 files (ctrl+o to expand)                                                                                                                                                                                                                                                                                                              
+                                                                           
+⏺ Tenho tudo que preciso. Vou compilar a revisão.                                                                                                                                                                                                                                                                                                                       
+                                                                                                                                                                                                                                                                                                                                                                        
+⏺ Searched for 1 pattern, read 1 file (ctrl+o to expand)                   
+                                                                                                                                                                                                                                                                                                                                                                        
+⏺ Tenho tudo que preciso. Vou atualizar a memória e entregar o relatório.                                                                                                                                                                                                                                                                                               
+                                                                                                                                                                                                                                                                                                                                                                        
+❯ Tool loaded.                                                                                                                                                                                                                                                                                                                                                          
+                                                                                                                                                                                                                                                                                                                                                                      
+⏺ Wrote 1 memory (ctrl+o to expand)                                                                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                                                                        
+⏺ ---                                                                                                                                                                                                                                                                                                                                                                   
+  Revisão Pós-Atualização — Commit 009992f                                                                                                                                                                                                                                                                                                                              
+                  
+  O que foi resolvido                                                                                                                                                                                                                                                                                                                                                   
+                  
+  Todos os itens de Prioridade 1 (Segurança) e a maioria dos de Prioridade 2 (Confiabilidade) da avaliação anterior foram endereçados:                                                                                                                                                                                                                                  
+                  
+  ┌────────────────────────────────┬──────────────┬────────────────────────────────────────────────────────────┐
+  │              Item              │    Status    │                          Detalhe                           │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ Helmet                         │ ✅ Resolvido │ helmet() instalado, CSP off em dev, COEP off               │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ Rate limiting login            │ ✅ Resolvido │ 20 req / 15 min                                            │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ Rate limiting reset-admin      │ ✅ Resolvido │ 5 req / hora                                               │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ Rate limiting IA               │ ✅ Resolvido │ 30 req / min em /api/ai                                    │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ SQL injection DROP INDEX       │ ✅ Resolvido │ Regex /^[a-zA-Z_][a-zA-Z0-9_]*$/ protege row.indexname     │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ Log vaza resposta sensível     │ ✅ Resolvido │ Filtra /api/auth, /api/users, /api/ai; trunca a 200 chars  │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ calculateNextRun timezone      │ ✅ Resolvido │ Usa toLocaleString + conversão UTC correta com toUtcFromTz │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ Audit log paginação            │ ✅ Resolvido │ limit/offset na rota, UI com páginas de 50                 │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ staleTime: Infinity            │ ✅ Resolvido │ Agora 5 * 60 * 1000, refetchOnWindowFocus: true            │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ dashboard-service.ts sem tipos │ ✅ Resolvido │ Tipado com InsertCustomDashboard                           │
+  ├────────────────────────────────┼──────────────┼────────────────────────────────────────────────────────────┤
+  │ Gemini multi-turno             │ ✅ Resolvido │ Usa startChat({ history }) para conversas com histórico    │
+  └────────────────────────────────┴──────────────┴────────────────────────────────────────────────────────────┘
+
+  ---
+  Problemas que Permanecem
+
+  1. Segurança — Médio
+
+  1.1 rejectUnauthorized: false no SSL (ainda presente)
+
+  // server/db.ts:97
+  config.ssl = { rejectUnauthorized: false };
+  Ainda ativo no modo "force" e "auto (fallback)". Em produção com banco externo (Supabase, etc.) isso desabilita a verificação do certificado. A correção ideal é carregar o certificado CA via DATABASE_SSL_CA env var.
+
+  1.2 Rate limiter de IA usa IP, não usuário
+
+  // server/index.ts:131
+  const aiLimiter = rateLimit({ windowMs: 1 * 60 * 1000, max: 30, ... });
+  O express-rate-limit usa IP por padrão. Atrás de um proxy/load balancer (como no Replit/Vercel), todos os usuários compartilham o mesmo IP e o limite de 30/min é compartilhado entre todos. Deveria usar keyGenerator: (req) => req.user?.id || req.ip para usuários autenticados.
+
+  1.3 Log ainda expõe dados de rotas de negócio
+
+  O filtro atual cobre /api/auth, /api/users, /api/ai, mas rotas como /api/campaigns, /api/scenarios, /api/predictions ainda logam o corpo completo (truncado em 200 chars, mas ainda pode conter dados sensíveis). Considere inverter a lógica: log apenas para rotas explicitamente seguras, ou remover o corpo completamente dos logs em produção.
+
+  ---
+  2. Performance — Médio
+
+  2.1 getStats() — 4 queries sequenciais
+
+  // server/storage.ts:1045-1049
+  const [partiesCount]    = await db.select(...).from(parties);
+  const [candidatesCount] = await db.select(...).from(candidates);
+  const [scenariosCount]  = await db.select(...).from(scenarios);
+  const [simulationsCount]= await db.select(...).from(simulations);
+  Essas 4 queries são independentes e rodam sequencialmente. Promise.all reduziria a latência de ~4x para ~1x o tempo da query mais lenta. Este endpoint é chamado no health check e no dashboard.
+
+  2.2 getActivityTrend() — N+1 problem (14 queries por chamada)
+
+  // server/storage.ts:1063-1087
+  for (let i = days - 1; i >= 0; i--) {
+    // 2 queries dentro do loop (scenarios + simulations por dia)
+  }
+  Para 7 dias são 14 queries sequenciais. Pode ser substituído por 2 queries com GROUP BY DATE(created_at).
+
+  ---
+  3. Confiabilidade — Médio
+
+  3.1 Fila TSE ainda in-memory
+
+  tse-queue-service.ts mantém a fila em um array simples. Um restart perde todos os jobs pendentes. O código de startup já marca jobs stuck como failed, mas jobs que estavam na fila (aguardando processamento) somem silenciosamente. Considere persistir o estado queued na coluna de status do banco.
+
+  3.2 refreshAllSummaries sem lock distribuído
+
+  A flag refreshInProgress funciona numa única instância, mas com múltiplos pods/workers simultâneos duas instâncias podem executar o refresh ao mesmo tempo, causando DELETE + INSERT concorrentes. A solução é um PostgreSQL advisory lock: SELECT pg_try_advisory_lock(hash).
+
+  ---
+  4. Qualidade de Código — Médio
+
+  4.1 parseInt sem validação — 160 ocorrências
+
+  // Exemplo em analytics.ts
+  const limit = limit ? parseInt(limit as string) : 20;
+  // Se ?limit=abc → NaN → storage recebe NaN, comportamento indefinido
+  Nenhum endpoint valida os query params com Zod ou verifica isNaN(). A forma correta é criar um helper ou usar Zod parse nos routers.
+
+  4.2 adapterCache sem TTL
+
+  // server/ai-client.ts:274
+  const adapterCache = new Map<number, { adapter; updatedAt }>();
+  Providers deletados ficam no Map para sempre. Bastaria verificar if (providerId && !activeProviderIds.has(providerId)) adapterCache.delete(...) ou limpar no delete do provider.
+
+  4.3 suggestions: any[] em dashboard-service
+
+  // server/services/dashboard-service.ts:46
+  cachedAiCall<{ suggestions: any[] }>
+  O único any remanescente visível — o tipo da sugestão poderia ser definido inline.
+
+  ---
+  5. Ausência de Testes — Alto Risco a Longo Prazo
+
+  Nenhum arquivo de teste foi encontrado. O código mais crítico sem cobertura:
+  - calculateNextRun — lógica de timezone complexa e recém-modificada
+  - repairAndParseJSON — heurística de reparo de JSON truncado da IA
+  - mapParsedRowToVote — mapeamento de CSV do TSE para o banco
+  - Rotas de autenticação (login, troca de senha, reset-admin)
+
+  ---
+  Plano de Melhorias Atualizado
+
+  Prioridade 1 — Rápido (< 1 dia no total)
+
+  ┌──────┬──────────────────────────────────────────────────────────────────────┬─────────┐
+  │  #   │                                 Ação                                 │ Esforço │
+  ├──────┼──────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1.1 │ Usar keyGenerator no rate limiter de IA com `req.user?.id            │         │
+  ├──────┼──────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1.2 │ Converter getStats() para Promise.all (4 queries → paralelas)        │ 15 min  │
+  ├──────┼──────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1.3 │ Converter getActivityTrend() de loop N+1 para 2 queries com GROUP BY │ 1h      │
+  ├──────┼──────────────────────────────────────────────────────────────────────┼─────────┤
+  │ P1.4 │ Limpar adapterCache quando provider é deletado                       │ 30 min  │
+  └──────┴──────────────────────────────────────────────────────────────────────┴─────────┘
+
+  Prioridade 2 — Próxima sprint
+
+  ┌──────┬───────────────────────────────────────────────────────────────────┬─────────┐
+  │  #   │                               Ação                                │ Esforço │
+  ├──────┼───────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2.1 │ rejectUnauthorized: true com suporte a DATABASE_SSL_CA env        │ 2h      │
+  ├──────┼───────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2.2 │ Advisory lock em refreshAllSummaries para suporte multi-instância │ 3h      │
+  ├──────┼───────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2.3 │ Persistir jobs em estado queued no banco para sobreviver restarts │ 4h      │
+  ├──────┼───────────────────────────────────────────────────────────────────┼─────────┤
+  │ P2.4 │ Centralizar validação de req.query com helper Zod                 │ 1 dia   │
+  └──────┴───────────────────────────────────────────────────────────────────┴─────────┘
+
+  Prioridade 3 — Investimento (sprints futuras)
+
+  ┌──────┬─────────────────────────────────────────────────────────────────────────────────┬──────────┐
+  │  #   │                                      Ação                                       │ Esforço  │
+  ├──────┼─────────────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ P3.1 │ Testes: Vitest + cobertura de calculateNextRun, repairAndParseJSON, auth routes │ 2 dias   │
+  ├──────┼─────────────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ P3.2 │ Substituir any restantes por tipos explícitos                                   │ 1-2 dias │
+  ├──────┼─────────────────────────────────────────────────────────────────────────────────┼──────────┤
+  │ P3.3 │ Dividir storage.ts por domínio (UserStorage, CampaignStorage, etc.)             │ 3 dias   │
+  └──────┴─────────────────────────────────────────────────────────────────────────────────┴──────────┘
+
+  ---
+  Resumo Executivo
+
+  O commit 009992f resolveu todos os problemas críticos de segurança da avaliação anterior — excelente progresso. O projeto está em estado seguro para ambiente de desenvolvimento. Para produção real com dados eleitorais sensíveis, os itens que ainda merecem atenção são: o rejectUnauthorized: false no SSL do banco, a ausência de testes (especialmente para a
+  lógica de timezone recém-corrigida), e o N+1 em getActivityTrend que pode degradar o dashboard à medida que o banco cresce.

@@ -1043,56 +1043,61 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStats(): Promise<{ parties: number; candidates: number; scenarios: number; simulations: number }> {
-    const [partiesCount] = await db.select({ count: sql<number>`count(*)::int` }).from(parties);
-    const [candidatesCount] = await db.select({ count: sql<number>`count(*)::int` }).from(candidates);
-    const [scenariosCount] = await db.select({ count: sql<number>`count(*)::int` }).from(scenarios);
-    const [simulationsCount] = await db.select({ count: sql<number>`count(*)::int` }).from(simulations);
+    const [partiesCount, candidatesCount, scenariosCount, simulationsCount] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` }).from(parties),
+      db.select({ count: sql<number>`count(*)::int` }).from(candidates),
+      db.select({ count: sql<number>`count(*)::int` }).from(scenarios),
+      db.select({ count: sql<number>`count(*)::int` }).from(simulations),
+    ]);
 
     return {
-      parties: partiesCount?.count || 0,
-      candidates: candidatesCount?.count || 0,
-      scenarios: scenariosCount?.count || 0,
-      simulations: simulationsCount?.count || 0,
+      parties: partiesCount[0]?.count || 0,
+      candidates: candidatesCount[0]?.count || 0,
+      scenarios: scenariosCount[0]?.count || 0,
+      simulations: simulationsCount[0]?.count || 0,
     };
   }
 
   async getActivityTrend(days: number = 7): Promise<{ day: string; simulacoes: number; cenarios: number }[]> {
     const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - (days - 1));
+    startDate.setHours(0, 0, 0, 0);
+    const startIso = startDate.toISOString();
+
+    const [scenarioRows, simulationRows] = await Promise.all([
+      db.select({
+        day: sql<string>`DATE(${scenarios.createdAt})::text`,
+        count: sql<number>`count(*)::int`,
+      }).from(scenarios)
+        .where(sql`${scenarios.createdAt} >= ${startIso}`)
+        .groupBy(sql`DATE(${scenarios.createdAt})`),
+      db.select({
+        day: sql<string>`DATE(${simulations.createdAt})::text`,
+        count: sql<number>`count(*)::int`,
+      }).from(simulations)
+        .where(sql`${simulations.createdAt} >= ${startIso}`)
+        .groupBy(sql`DATE(${simulations.createdAt})`),
+    ]);
+
+    const scenarioMap = new Map(scenarioRows.map(r => [r.day, r.count]));
+    const simulationMap = new Map(simulationRows.map(r => [r.day, r.count]));
+
     const result: { day: string; simulacoes: number; cenarios: number }[] = [];
-    
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       date.setHours(0, 0, 0, 0);
-      
-      const nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-      
-      // Count scenarios created on this day
-      const [scenariosOnDay] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(scenarios)
-        .where(and(
-          sql`${scenarios.createdAt} >= ${date.toISOString()}`,
-          sql`${scenarios.createdAt} < ${nextDate.toISOString()}`
-        ));
-      
-      // Count simulations created on this day
-      const [simulationsOnDay] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(simulations)
-        .where(and(
-          sql`${simulations.createdAt} >= ${date.toISOString()}`,
-          sql`${simulations.createdAt} < ${nextDate.toISOString()}`
-        ));
-      
+      const dateKey = date.toISOString().slice(0, 10);
+
       result.push({
         day: dayNames[date.getDay()],
-        simulacoes: simulationsOnDay?.count || 0,
-        cenarios: scenariosOnDay?.count || 0,
+        simulacoes: simulationMap.get(dateKey) || 0,
+        cenarios: scenarioMap.get(dateKey) || 0,
       });
     }
-    
+
     return result;
   }
 
