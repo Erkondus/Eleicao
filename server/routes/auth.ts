@@ -72,6 +72,48 @@ router.get("/api/health", async (_req, res) => {
   }
 });
 
+router.get("/api/health/indexes", requireAuth, requireRole("admin"), async (_req, res) => {
+  try {
+    const { pool: dbPool } = await import("../db");
+    const client = await dbPool.connect();
+    try {
+      const result = await client.query(`
+        SELECT indexname, indexdef 
+        FROM pg_indexes 
+        WHERE tablename = 'tse_candidate_votes' 
+        ORDER BY indexname
+      `);
+      const specialNames = [
+        'idx_tse_cv_nm_urna_upper',
+        'idx_tse_cv_nm_cand_upper',
+        'idx_tse_cv_nm_candidato_trgm',
+        'idx_tse_cv_nm_urna_trgm',
+      ];
+      const indexes = result.rows.map((r: any) => ({
+        name: r.indexname,
+        definition: r.indexdef,
+        isSpecial: specialNames.includes(r.indexname),
+      }));
+      const missingSpecial = specialNames.filter(
+        n => !indexes.some((i: any) => i.name === n)
+      );
+      res.json({
+        total: indexes.length,
+        indexes,
+        specialIndexes: {
+          expected: specialNames,
+          missing: missingSpecial,
+          allPresent: missingSpecial.length === 0,
+        },
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 router.post("/api/auth/reset-admin", async (req, res) => {
   try {
     const { secret, newPassword } = req.body;

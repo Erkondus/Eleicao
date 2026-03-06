@@ -221,21 +221,31 @@ export async function initializeDatabase(): Promise<void> {
   }
 }
 
-async function createIndexesInBackground(indexes: { name: string; sql: string }[], pool: any): Promise<void> {
+async function ensureIndexesInBackground(indexes: { name: string; sql: string }[], pool: any): Promise<void> {
   (async () => {
     for (const idx of indexes) {
       const client = await pool.connect();
       try {
+        const check = await client.query(
+          `SELECT 1 FROM pg_indexes WHERE indexname = $1 LIMIT 1`,
+          [idx.name]
+        );
+        if (check.rows.length > 0) {
+          continue;
+        }
         console.log(`[Migration/BG] Creating index ${idx.name}...`);
         await client.query(idx.sql);
         console.log(`[Migration/BG] Index ${idx.name} created.`);
       } catch (e: any) {
+        if (e.message?.includes('already exists')) {
+          continue;
+        }
         console.warn(`[Migration/BG] Index ${idx.name} failed (non-fatal): ${e.message}`);
       } finally {
         client.release();
       }
     }
-    console.log("[Migration/BG] Background index creation complete.");
+    console.log("[Migration/BG] Background index check complete.");
   })();
 }
 
@@ -271,28 +281,19 @@ export async function runSafeMigrations(): Promise<void> {
       `);
       if (tableCheck.rows.length > 0) {
         const invalidIndexes = await client.query(`
-          SELECT ci.relname AS indexname
-          FROM pg_index i
-          JOIN pg_class ci ON ci.oid = i.indexrelid
-          JOIN pg_class ct ON ct.oid = i.indrelid
-          WHERE ct.relname = 'tse_candidate_votes'
-            AND NOT i.indisvalid
-            AND ci.relname LIKE 'idx_tse_cv_%'
+          SELECT indexname FROM pg_indexes 
+          WHERE tablename = 'tse_candidate_votes' 
+            AND indexname LIKE 'idx_tse_cv_%'
+            AND indexname NOT IN (
+              SELECT ci.relname FROM pg_index i
+              JOIN pg_class ci ON ci.oid = i.indexrelid
+              WHERE i.indisvalid
+            )
         `);
         for (const row of invalidIndexes.rows) {
           console.log(`[Migration] Dropping invalid index ${row.indexname}...`);
           await client.query(`DROP INDEX IF EXISTS ${row.indexname}`);
         }
-
-        const existingIndexes = await client.query(`
-          SELECT ci.relname AS indexname
-          FROM pg_index i
-          JOIN pg_class ci ON ci.oid = i.indexrelid
-          JOIN pg_class ct ON ct.oid = i.indrelid
-          WHERE ct.relname = 'tse_candidate_votes'
-            AND i.indisvalid
-        `);
-        const existingSet = new Set(existingIndexes.rows.map((r: any) => r.indexname));
 
         const allIndexes: { name: string; sql: string }[] = [
           { name: "idx_tse_cv_nm_urna_upper", sql: `CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)` },
@@ -305,7 +306,13 @@ export async function runSafeMigrations(): Promise<void> {
           );
         }
 
+        const existingCheck = await client.query(
+          `SELECT indexname FROM pg_indexes WHERE tablename = 'tse_candidate_votes' AND indexname = ANY($1)`,
+          [allIndexes.map(i => i.name)]
+        );
+        const existingSet = new Set(existingCheck.rows.map((r: any) => r.indexname));
         const missing = allIndexes.filter(i => !existingSet.has(i.name));
+
         if (missing.length === 0) {
           console.log(`[Migration] All ${allIndexes.length} special indexes already exist. Skipping.`);
         } else {
@@ -313,7 +320,7 @@ export async function runSafeMigrations(): Promise<void> {
           console.log(`[Migration] Creating in background (server will start now)...`);
           client.release();
           clientReleased = true;
-          createIndexesInBackground(missing, _pool!);
+          ensureIndexesInBackground(missing, _pool!);
         }
       }
     } finally {

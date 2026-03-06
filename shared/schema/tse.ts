@@ -102,6 +102,13 @@ export const tseCandidateVotes = pgTable("tse_candidate_votes", {
   idxSqCandidato: index("idx_tse_cv_sq_candidato").on(table.sqCandidato),
 }));
 
+export const tseCandidateVotesExprIndexes = {
+  nmUrnaUpper: sql`CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)`,
+  nmCandUpper: sql`CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_cand_upper ON tse_candidate_votes (UPPER(nm_candidato) text_pattern_ops)`,
+  nmCandidatoTrgm: sql`CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_candidato_trgm ON tse_candidate_votes USING gin (nm_candidato gin_trgm_ops)`,
+  nmUrnaTrgm: sql`CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_trgm ON tse_candidate_votes USING gin (nm_urna_candidato gin_trgm_ops)`,
+};
+
 export const tseImportErrors = pgTable("tse_import_errors", {
   id: serial("id").primaryKey(),
   importJobId: integer("import_job_id").notNull().references(() => tseImportJobs.id, { onDelete: "cascade" }),
