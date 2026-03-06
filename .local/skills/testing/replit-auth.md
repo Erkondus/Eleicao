@@ -1,7 +1,11 @@
 ---
 name: replit-auth-testing
-description: Complements the `testing` skill for application that uses special OIDC auth provided by Replit. Read this skill if a) you need to use playwright testing skill, b) you are testing auth and c) `javascript_log_in_with_replit` or `python_log_in_with_replit` is present in `.replit` as an integration.
+description: Programmatic login for testing applications that use Replit Auth.
 ---
+
+## How does Testing Skill Interact with Replit Auth
+
+Replit Auth allows for testing arbitary users. When calling the `runTest` callback, you can additional pass in `await runTest({...., testReplitAuth: true})` to activate the replit auth testing capability.
 
 During testing, the ISSUER_URL env var will be overridden a custom endpoint that could set and clear the next login claims, with no action needed from you. This means that to test replit auth application, you need to instruct the testing agent what the next login claims should be. Ask it to login then check if the result is correct.
 

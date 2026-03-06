@@ -32,8 +32,14 @@ import {
   MessageSquare,
   ThumbsUp,
   ThumbsDown,
-  Newspaper
+  Newspaper,
+  History,
+  Eye,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import {
   BarChart,
@@ -74,6 +80,7 @@ export default function AIInsightsPage() {
   const [filters, setFilters] = useState<{
     year?: number;
     uf?: string;
+    position?: string;
     electionType?: string;
     party?: string;
     targetYear?: number;
@@ -170,7 +177,7 @@ export default function AIInsightsPage() {
           <CardDescription>Configure os parâmetros para as análises de IA</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
               <Label>Ano Base</Label>
               <Select
@@ -232,6 +239,29 @@ export default function AIInsightsPage() {
             </div>
 
             <div>
+              <Label>Cargo Disputado</Label>
+              <Select
+                value={filters.position || "_all"}
+                onValueChange={(value) => setFilters((prev) => ({ ...prev, position: value && value !== "_all" ? value : undefined }))}
+              >
+                <SelectTrigger data-testid="select-position">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Todos</SelectItem>
+                  <SelectItem value="Presidente">Presidente</SelectItem>
+                  <SelectItem value="Governador">Governador</SelectItem>
+                  <SelectItem value="Senador">Senador</SelectItem>
+                  <SelectItem value="Deputado Federal">Deputado Federal</SelectItem>
+                  <SelectItem value="Deputado Estadual">Deputado Estadual</SelectItem>
+                  <SelectItem value="Deputado Distrital">Deputado Distrital</SelectItem>
+                  <SelectItem value="Prefeito">Prefeito</SelectItem>
+                  <SelectItem value="Vereador">Vereador</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label>Tipo de Eleição</Label>
               <Select
                 value={filters.electionType || "_all"}
@@ -263,7 +293,7 @@ export default function AIInsightsPage() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="turnout" className="flex items-center gap-2" data-testid="tab-turnout">
             <Users className="h-4 w-4" />
             Comparecimento
@@ -283,6 +313,10 @@ export default function AIInsightsPage() {
           <TabsTrigger value="insights" className="flex items-center gap-2" data-testid="tab-insights">
             <Lightbulb className="h-4 w-4" />
             Insights
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2" data-testid="tab-history">
+            <History className="h-4 w-4" />
+            Histórico
           </TabsTrigger>
         </TabsList>
 
@@ -948,7 +982,380 @@ export default function AIInsightsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
+          <InsightHistoryTab />
+        </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+const INSIGHT_TYPE_LABELS: Record<string, string> = {
+  turnout: "Comparecimento",
+  candidate_success: "Candidatos",
+  party_performance: "Partidos",
+  electoral_insights: "Insights Eleitorais",
+  sentiment: "Sentimento",
+};
+
+const INSIGHT_TYPE_ICONS: Record<string, typeof Users> = {
+  turnout: Users,
+  candidate_success: Target,
+  party_performance: Building2,
+  electoral_insights: Lightbulb,
+  sentiment: MessageSquare,
+};
+
+function InsightHistoryTab() {
+  const [typeFilter, setTypeFilter] = useState("_all");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  const { data: history, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/saved-predictions", typeFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (typeFilter && typeFilter !== "_all") params.set("type", typeFilter);
+      params.set("limit", "200");
+      const res = await fetch(`/api/saved-predictions?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch history");
+      return res.json();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/saved-predictions/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-predictions"], exact: false });
+    },
+  });
+
+  const insightTypes = ["turnout", "candidate_success", "party_performance", "electoral_insights", "sentiment"];
+  const filteredHistory = history?.filter(
+    (h: any) => insightTypes.includes(h.predictionType)
+  ) || [];
+
+  const grouped: Record<string, any[]> = {};
+  for (const item of filteredHistory) {
+    const key = item.title;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item);
+  }
+
+  for (const key of Object.keys(grouped)) {
+    grouped[key].sort((a: any, b: any) => (b.version || 1) - (a.version || 1));
+  }
+
+  const sortedGroups = Object.entries(grouped).sort(
+    ([, a], [, b]) => new Date(b[0].createdAt).getTime() - new Date(a[0].createdAt).getTime()
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Histórico de Insights
+            </CardTitle>
+            <CardDescription>
+              Todas as análises geradas, organizadas por versão
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm">Filtrar por tipo:</Label>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-history-type">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">Todos os tipos</SelectItem>
+                {insightTypes.map((t) => (
+                  <SelectItem key={t} value={t}>{INSIGHT_TYPE_LABELS[t] || t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16" />)}
+          </div>
+        ) : sortedGroups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+            <History className="h-12 w-12 mb-4 opacity-50" />
+            <p>Nenhum insight salvo ainda</p>
+            <p className="text-sm mt-1">Execute análises nas outras abas para gerar histórico</p>
+          </div>
+        ) : (
+          <ScrollArea className="h-[600px]">
+            <div className="space-y-4">
+              {sortedGroups.map(([title, versions]) => {
+                const latest = versions[0];
+                const IconComp = INSIGHT_TYPE_ICONS[latest.predictionType] || Lightbulb;
+                const isExpanded = expandedId === latest.id;
+
+                return (
+                  <Card key={title} className="overflow-hidden" data-testid={`history-group-${latest.id}`}>
+                    <div
+                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30"
+                      onClick={() => setExpandedId(isExpanded ? null : latest.id)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-primary/10">
+                          <IconComp className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold truncate">{title}</p>
+                            <Badge variant="outline">
+                              v{latest.version || 1}
+                            </Badge>
+                            {versions.length > 1 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {versions.length} versões
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Badge variant="outline" className="text-xs">
+                              {INSIGHT_TYPE_LABELS[latest.predictionType] || latest.predictionType}
+                            </Badge>
+                            <span>{latest.description}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(latest.createdAt).toLocaleString("pt-BR")}
+                        </span>
+                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="border-t px-4 pb-4">
+                        <div className="mt-3 space-y-2">
+                          {versions.map((v: any) => (
+                            <div
+                              key={v.id}
+                              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/20"
+                              data-testid={`history-version-${v.id}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Badge variant={v.id === latest.id ? "default" : "outline"}>
+                                  v{v.version || 1}
+                                </Badge>
+                                <div>
+                                  <p className="text-sm">
+                                    {new Date(v.createdAt).toLocaleString("pt-BR", {
+                                      day: "2-digit", month: "2-digit", year: "numeric",
+                                      hour: "2-digit", minute: "2-digit"
+                                    })}
+                                  </p>
+                                  {v.confidence && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Confiança: {(Number(v.confidence) * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <InsightDetailDialog item={v} />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteMutation.mutate(v.id);
+                                  }}
+                                  disabled={deleteMutation.isPending}
+                                  data-testid={`button-delete-${v.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function InsightDetailDialog({ item }: { item: any }) {
+  const [open, setOpen] = useState(false);
+  const result = item.fullResult;
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        data-testid={`button-view-${item.id}`}
+      >
+        <Eye className="h-4 w-4" />
+      </Button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
+          <div
+            className="bg-background border rounded-lg shadow-lg w-full max-w-3xl max-h-[80vh] overflow-auto m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold">{item.title}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge>{INSIGHT_TYPE_LABELS[item.predictionType] || item.predictionType}</Badge>
+                    <Badge variant="outline">v{item.version || 1}</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {new Date(item.createdAt).toLocaleString("pt-BR")}
+                    </span>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Fechar</Button>
+              </div>
+
+              {item.description && (
+                <p className="text-sm text-muted-foreground mb-4">{item.description}</p>
+              )}
+
+              {result?.analysis && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">Análise</h4>
+                  <p className="text-sm whitespace-pre-wrap border rounded-lg p-3 bg-muted/30">{result.analysis}</p>
+                </div>
+              )}
+
+              {result?.summary && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">Resumo</h4>
+                  <p className="text-sm whitespace-pre-wrap border rounded-lg p-3 bg-muted/30">{result.summary}</p>
+                </div>
+              )}
+
+              {result?.methodology && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">Metodologia</h4>
+                  <p className="text-sm border rounded-lg p-3 bg-muted/30">{result.methodology}</p>
+                </div>
+              )}
+
+              {result?.predictedTurnout !== undefined && (
+                <div className="mb-4 grid grid-cols-3 gap-3">
+                  <Card className="bg-primary/5">
+                    <CardContent className="pt-4 text-center">
+                      <p className="text-sm text-muted-foreground">Comparecimento</p>
+                      <p className="text-2xl font-bold text-primary">{result.predictedTurnout?.toFixed(1)}%</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-secondary/5">
+                    <CardContent className="pt-4 text-center">
+                      <p className="text-sm text-muted-foreground">Confiança</p>
+                      <p className="text-2xl font-bold">{((result.confidence || 0) * 100).toFixed(0)}%</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4 text-center">
+                      <p className="text-sm text-muted-foreground">Fatores</p>
+                      <p className="text-2xl font-bold">{result.factors?.length || 0}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {result?.recommendations?.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">Recomendações</h4>
+                  <ul className="space-y-1">
+                    {result.recommendations.map((r: string, i: number) => (
+                      <li key={i} className="text-sm flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {result?.keyFindings?.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">Descobertas Principais</h4>
+                  <div className="space-y-2">
+                    {result.keyFindings.map((f: any, i: number) => (
+                      <div key={i} className="text-sm flex items-start gap-2 border rounded-lg p-2">
+                        <Badge variant={f.importance === "high" ? "destructive" : f.importance === "medium" ? "default" : "secondary"} className="shrink-0 mt-0.5">
+                          {f.importance}
+                        </Badge>
+                        <span>{f.finding}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {Array.isArray(result?.predictions) && result.predictions.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">Previsões ({result.predictions.length})</h4>
+                  <ScrollArea className="max-h-[300px]">
+                    <div className="space-y-2">
+                      {result.predictions.slice(0, 20).map((p: any, i: number) => (
+                        <div key={i} className="text-sm flex items-center justify-between border rounded-lg p-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{p.candidateName || p.party || p.partyName || `#${i+1}`}</span>
+                            {p.party && p.candidateName && <Badge variant="outline">{p.party}</Badge>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {p.successProbability !== undefined && (
+                              <span className="font-bold">{(p.successProbability * 100).toFixed(0)}%</span>
+                            )}
+                            {p.predictedVoteShare !== undefined && (
+                              <span className="font-bold">{Number(p.predictedVoteShare).toFixed(1)}%</span>
+                            )}
+                            {p.trend && (
+                              <Badge variant="outline" className="text-xs">{p.trend}</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {result?.warnings?.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2 flex items-center gap-1 text-yellow-600">
+                    <AlertTriangle className="h-4 w-4" /> Avisos
+                  </h4>
+                  <ul className="space-y-1">
+                    {result.warnings.map((w: string, i: number) => (
+                      <li key={i} className="text-sm text-yellow-600">{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

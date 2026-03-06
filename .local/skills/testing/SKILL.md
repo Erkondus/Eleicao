@@ -5,7 +5,7 @@ description: Run automated UI tests against your application using a Playwright-
 
 # Testing Skill
 
-The `runTest(testPlan)` function launches a specialized Playwright-based testing subagent that:
+The `runTest` function launches a specialized Playwright-based testing subagent that:
 
 - Interacts with your application in a real browser
 - Analyzes both browser and backend logs
@@ -56,10 +56,9 @@ Run UI tests against the application using an automated Playwright-based testing
 **Returns:** Dict with:
 
 - `status`: One of "success", "failure", "unable", "skipped", "blocked", or "error"
-- `message`: Summary of what happened during testing
 - `testOutput`: Detailed test output and observations
 - `subagentId`: ID of the testing subagent (for reference)
-- `screenshots`: List of relevant screenshot URLs (typically for failures)
+- `screenshotPaths`: List of local screenshot file paths (e.g. `/tmp/testing-screenshots/<id>.jpeg`)
 
 **Example:**
 
@@ -86,10 +85,10 @@ const result = await runTest({
 if (result.status === 'success') {
     console.log("All tests passed!");
 } else if (result.status === 'failure') {
-    console.log(`Tests failed: ${result.message}`);
-    for (const screenshot of result.screenshots) {
-        // You can save the screenshots and then open them to see them visually
-        console.log(`See screenshot: ${screenshot.url}`);
+    console.log("Tests failed");
+    console.log(result.testOutput);
+    for (const screenshotPath of result.screenshotPaths) {
+        console.log(`See screenshot: ${screenshotPath}`);
     }
 }
 ```
@@ -166,10 +165,11 @@ The testing environment uses the **same development database** as you and the us
 
 If the application uses a database and you need to inject data, set roles, or verify DB state during tests, see `database-testing.md` for how to use `[DB]` steps in test plans.
 
-## Replit Auth
-
-If the application uses Replit's OIDC auth (`javascript_log_in_with_replit` or `python_log_in_with_replit` in `.replit`), see `replit-auth.md` for how to configure login claims in test plans. It is not relevant for other auth providers or simple username/password auth.
-
 ## External Services
 
 If the application connects to external services, be mindful of side effects. Clean up resources created during tests, and limit notifications sent to third parties. Balance thorough testing with responsible use of external services.
+
+## Replit Auth
+
+If the application uses Replit's OIDC auth — typically indicated by `javascript_log_in_with_replit` or `python_log_in_with_replit` in `.replit`, or the presence of `replitAuth.ts` / `replit_auth.py` — see `replit-auth.md` for how to handle programmatic login in test plans.
+

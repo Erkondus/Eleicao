@@ -593,10 +593,11 @@ JSON: {"overallRisk":"baixo|médio|alto","summary":"1-2 parágrafos","anomalies"
   };
 }
 
-export async function predictTurnout(params: { year?: number; uf?: string; electionType?: string; targetYear?: number }) {
+export async function predictTurnout(params: { year?: number; uf?: string; position?: string; electionType?: string; targetYear?: number }) {
   const schema = z.object({
     year: z.number().optional(),
     uf: z.string().optional(),
+    position: z.string().optional(),
     electionType: z.string().optional(),
     targetYear: z.number().optional()
   });
@@ -605,16 +606,16 @@ export async function predictTurnout(params: { year?: number; uf?: string; elect
     throw { status: 400, message: "Invalid request parameters", details: parsed.error.errors };
   }
 
-  const { year, uf, electionType, targetYear } = parsed.data;
+  const { year, uf, position, electionType, targetYear } = parsed.data;
 
-  const cacheKey = `turnout_${year || 'all'}_${uf || 'all'}_${electionType || 'all'}_${targetYear || 'next'}`;
+  const cacheKey = `turnout_${year || 'all'}_${uf || 'all'}_${position || 'all'}_${electionType || 'all'}_${targetYear || 'next'}`;
   const cached = await storage.getAiPrediction(cacheKey);
   if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
     return cached.prediction;
   }
 
   const { predictVoterTurnout } = await import("../ai-insights");
-  const prediction = await predictVoterTurnout({ year, uf, electionType, targetYear });
+  const prediction = await predictVoterTurnout({ year, uf, position, electionType, targetYear });
 
   await storage.saveAiPrediction({
     cacheKey,
@@ -626,13 +627,14 @@ export async function predictTurnout(params: { year?: number; uf?: string; elect
   return prediction;
 }
 
-export async function predictCandidateSuccessService(params: { candidateNumber?: number; candidateName?: string; party?: string; year?: number; uf?: string; electionType?: string }) {
+export async function predictCandidateSuccessService(params: { candidateNumber?: number; candidateName?: string; party?: string; year?: number; uf?: string; position?: string; electionType?: string }) {
   const schema = z.object({
     candidateNumber: z.number().optional(),
     candidateName: z.string().optional(),
     party: z.string().optional(),
     year: z.number().optional(),
     uf: z.string().optional(),
+    position: z.string().optional(),
     electionType: z.string().optional()
   });
   const parsed = schema.safeParse(params);
@@ -640,10 +642,10 @@ export async function predictCandidateSuccessService(params: { candidateNumber?:
     throw { status: 400, message: "Invalid request parameters", details: parsed.error.errors };
   }
 
-  const { candidateNumber, candidateName, party, year, uf, electionType } = parsed.data;
+  const { candidateNumber, candidateName, party, year, uf, position, electionType } = parsed.data;
   console.log("[AI CandidateSuccess Service] Request:", JSON.stringify(parsed.data));
 
-  const cacheKey = `candidate_${candidateNumber || 'all'}_${party || 'all'}_${year || 'all'}_${uf || 'all'}`;
+  const cacheKey = `candidate_${candidateNumber || 'all'}_${party || 'all'}_${year || 'all'}_${uf || 'all'}_${position || 'all'}`;
   const cached = await storage.getAiPrediction(cacheKey);
   if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
     return cached.prediction;
@@ -656,6 +658,7 @@ export async function predictCandidateSuccessService(params: { candidateNumber?:
     party, 
     year, 
     uf, 
+    position,
     electionType 
   });
 
@@ -669,11 +672,12 @@ export async function predictCandidateSuccessService(params: { candidateNumber?:
   return predictions;
 }
 
-export async function predictPartyPerformanceService(params: { party?: string; year?: number; uf?: string; electionType?: string; targetYear?: number }) {
+export async function predictPartyPerformanceService(params: { party?: string; year?: number; uf?: string; position?: string; electionType?: string; targetYear?: number }) {
   const schema = z.object({
     party: z.string().optional(),
     year: z.number().optional(),
     uf: z.string().optional(),
+    position: z.string().optional(),
     electionType: z.string().optional(),
     targetYear: z.number().optional()
   });
@@ -682,16 +686,16 @@ export async function predictPartyPerformanceService(params: { party?: string; y
     throw { status: 400, message: "Invalid request parameters", details: parsed.error.errors };
   }
 
-  const { party, year, uf, electionType, targetYear } = parsed.data;
+  const { party, year, uf, position, electionType, targetYear } = parsed.data;
 
-  const cacheKey = `party_${party || 'all'}_${year || 'all'}_${uf || 'all'}_${targetYear || 'next'}`;
+  const cacheKey = `party_${party || 'all'}_${year || 'all'}_${uf || 'all'}_${position || 'all'}_${targetYear || 'next'}`;
   const cached = await storage.getAiPrediction(cacheKey);
   if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
     return cached.prediction;
   }
 
   const { predictPartyPerformance } = await import("../ai-insights");
-  const predictions = await predictPartyPerformance({ party, year, uf, electionType, targetYear });
+  const predictions = await predictPartyPerformance({ party, year, uf, position, electionType, targetYear });
 
   await storage.saveAiPrediction({
     cacheKey,
@@ -703,10 +707,11 @@ export async function predictPartyPerformanceService(params: { party?: string; y
   return predictions;
 }
 
-export async function generateElectoralInsightsService(params: { year?: number; uf?: string; electionType?: string; party?: string }) {
+export async function generateElectoralInsightsService(params: { year?: number; uf?: string; position?: string; electionType?: string; party?: string }) {
   const schema = z.object({
     year: z.number().optional(),
     uf: z.string().optional(),
+    position: z.string().optional(),
     electionType: z.string().optional(),
     party: z.string().optional()
   });
@@ -715,16 +720,16 @@ export async function generateElectoralInsightsService(params: { year?: number; 
     throw { status: 400, message: "Invalid request parameters", details: parsed.error.errors };
   }
 
-  const { year, uf, electionType, party } = parsed.data;
+  const { year, uf, position, electionType, party } = parsed.data;
 
-  const cacheKey = `insights_${year || 'all'}_${uf || 'all'}_${electionType || 'all'}_${party || 'all'}`;
+  const cacheKey = `insights_${year || 'all'}_${uf || 'all'}_${position || 'all'}_${electionType || 'all'}_${party || 'all'}`;
   const cached = await storage.getAiPrediction(cacheKey);
   if (cached && cached.validUntil && new Date(cached.validUntil) > new Date()) {
     return cached.prediction;
   }
 
   const { generateElectoralInsights } = await import("../ai-insights");
-  const insights = await generateElectoralInsights({ year, uf, electionType, party });
+  const insights = await generateElectoralInsights({ year, uf, position, electionType, party });
 
   await storage.saveAiPrediction({
     cacheKey,

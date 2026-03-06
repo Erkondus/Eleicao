@@ -2947,7 +2947,35 @@ export class DatabaseStorage implements IStorage {
     return prediction;
   }
 
+  async getNextSavedPredictionVersion(predictionType: string, title: string): Promise<number> {
+    const [result] = await db
+      .select({ maxVersion: sql<number>`COALESCE(MAX(${savedPredictions.version}), 0)` })
+      .from(savedPredictions)
+      .where(and(
+        eq(savedPredictions.predictionType, predictionType),
+        eq(savedPredictions.title, title),
+      ));
+    return (result?.maxVersion || 0) + 1;
+  }
+
   async createSavedPrediction(data: InsertSavedPrediction): Promise<SavedPrediction> {
+    if (!data.version) {
+      const [created] = await db.transaction(async (tx) => {
+        const [result] = await tx
+          .select({ maxVersion: sql<number>`COALESCE(MAX(${savedPredictions.version}), 0)` })
+          .from(savedPredictions)
+          .where(and(
+            eq(savedPredictions.predictionType, data.predictionType),
+            eq(savedPredictions.title, data.title),
+          ));
+        const nextVersion = (result?.maxVersion || 0) + 1;
+        return tx
+          .insert(savedPredictions)
+          .values({ ...data, version: nextVersion })
+          .returning();
+      });
+      return created;
+    }
     const [created] = await db
       .insert(savedPredictions)
       .values(data)

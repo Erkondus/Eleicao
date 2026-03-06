@@ -191,10 +191,58 @@ router.post("/api/ai/anomalies", requireAuth, requireRole("admin", "analyst"), a
   }
 });
 
+function buildInsightTitle(type: string, filters: Record<string, any>): string {
+  const parts: string[] = [];
+  const typeLabels: Record<string, string> = {
+    turnout: "Comparecimento",
+    candidate_success: "Candidatos",
+    party_performance: "Partidos",
+    electoral_insights: "Insights Eleitorais",
+    sentiment: "Sentimento",
+  };
+  parts.push(typeLabels[type] || type);
+  if (filters.position) parts.push(filters.position);
+  if (filters.uf) parts.push(filters.uf);
+  if (filters.party) parts.push(filters.party);
+  if (filters.year) parts.push(String(filters.year));
+  return parts.join(" — ");
+}
+
+function buildInsightDescription(type: string, filters: Record<string, any>): string {
+  const segments: string[] = [];
+  if (filters.year) segments.push(`Ano: ${filters.year}`);
+  if (filters.uf) segments.push(`UF: ${filters.uf}`);
+  if (filters.position) segments.push(`Cargo: ${filters.position}`);
+  if (filters.party) segments.push(`Partido: ${filters.party}`);
+  if (filters.electionType) segments.push(`Tipo: ${filters.electionType}`);
+  if (filters.targetYear) segments.push(`Alvo: ${filters.targetYear}`);
+  return segments.length > 0 ? segments.join(" | ") : "Sem filtros";
+}
+
+async function autoSaveInsight(type: string, filters: Record<string, any>, result: any, userId?: string) {
+  try {
+    const title = buildInsightTitle(type, filters);
+    const description = buildInsightDescription(type, filters);
+    await storage.createSavedPrediction({
+      predictionType: type,
+      title,
+      description,
+      filters,
+      fullResult: result,
+      confidence: result?.confidence?.toString() || null,
+      status: "completed",
+      createdBy: userId || null,
+    });
+  } catch (e) {
+    console.warn(`[AI] Failed to auto-save insight (${type}):`, e);
+  }
+}
+
 router.post("/api/ai/turnout", requireAuth, requireRole("admin", "analyst"), async (req, res) => {
   try {
     const prediction = await predictTurnout(req.body);
     await logAudit(req, "ai_prediction", "turnout", undefined, req.body);
+    await autoSaveInsight("turnout", req.body, prediction, (req.user as any)?.id);
     res.json(prediction);
   } catch (error: any) {
     handleServiceError(res, error, "AI Turnout Prediction error:");
@@ -205,6 +253,7 @@ router.post("/api/ai/candidate-success", requireAuth, requireRole("admin", "anal
   try {
     const predictions = await predictCandidateSuccessService(req.body);
     await logAudit(req, "ai_prediction", "candidate_success", undefined, { party: req.body.party, year: req.body.year, uf: req.body.uf });
+    await autoSaveInsight("candidate_success", req.body, predictions, (req.user as any)?.id);
     res.json(predictions);
   } catch (error: any) {
     const isDataError = error.message?.includes("Nenhum dado de candidato");
@@ -219,6 +268,7 @@ router.post("/api/ai/party-performance", requireAuth, requireRole("admin", "anal
   try {
     const predictions = await predictPartyPerformanceService(req.body);
     await logAudit(req, "ai_prediction", "party_performance", undefined, { party: req.body.party, year: req.body.year, uf: req.body.uf });
+    await autoSaveInsight("party_performance", req.body, predictions, (req.user as any)?.id);
     res.json(predictions);
   } catch (error: any) {
     handleServiceError(res, error, "AI Party Performance error:");
@@ -229,6 +279,7 @@ router.post("/api/ai/electoral-insights", requireAuth, requireRole("admin", "ana
   try {
     const insights = await generateElectoralInsightsService(req.body);
     await logAudit(req, "ai_prediction", "electoral_insights", undefined, { year: req.body.year, uf: req.body.uf, electionType: req.body.electionType });
+    await autoSaveInsight("electoral_insights", req.body, insights, (req.user as any)?.id);
     res.json(insights);
   } catch (error: any) {
     handleServiceError(res, error, "AI Electoral Insights error:");
@@ -239,6 +290,7 @@ router.post("/api/ai/sentiment", requireAuth, requireRole("admin", "analyst"), a
   try {
     const analysis = await analyzeSentimentService(req.body);
     await logAudit(req, "ai_prediction", "sentiment", undefined, { party: req.body.party, articlesCount: req.body.newsArticles?.length || 0 });
+    await autoSaveInsight("sentiment", req.body, analysis, (req.user as any)?.id);
     res.json(analysis);
   } catch (error: any) {
     handleServiceError(res, error, "AI Sentiment Analysis error:");

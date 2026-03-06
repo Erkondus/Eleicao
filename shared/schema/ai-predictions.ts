@@ -347,6 +347,7 @@ export const savedPredictions = pgTable("saved_predictions", {
   predictionType: text("prediction_type").notNull(),
   title: text("title").notNull(),
   description: text("description"),
+  version: integer("version").notNull().default(1),
   scenarioId: integer("scenario_id"),
   scenarioName: text("scenario_name"),
   sourceEntityId: integer("source_entity_id"),
