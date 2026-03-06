@@ -205,30 +205,60 @@ echo "Running database schema sync (db:push)..."
 
 DB_PUSH_TIMEOUT=120
 
-if timeout ${DB_PUSH_TIMEOUT} npm run db:push 2>&1; then
+if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "" | npm run db:push 2>&1'; then
   echo "db:push completed successfully!"
 else
   EXIT_CODE=$?
   if [ "$EXIT_CODE" = "124" ]; then
     echo "db:push timed out after ${DB_PUSH_TIMEOUT}s."
   else
-    echo "db:push failed (exit code: $EXIT_CODE), retrying..."
+    echo "db:push failed (exit code: $EXIT_CODE)"
   fi
-  if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "" | npm run db:push 2>&1'; then
-    echo "db:push (retry) completed successfully!"
-  else
-    echo ""
-    echo "============================================"
-    echo "WARNING: db:push failed!"
-    echo "============================================"
-    echo "Tabelas podem nao ter sido criadas."
-    echo ""
-    echo "Para criar manualmente:"
-    echo "1. SQL Editor do Supabase: cole scripts/create-tables.sql"
-    echo "2. psql: psql \$DATABASE_URL -f scripts/create-tables.sql"
-    echo "============================================"
-  fi
+  echo ""
+  echo "============================================"
+  echo "WARNING: db:push failed!"
+  echo "============================================"
+  echo "Tabelas podem nao ter sido criadas."
+  echo ""
+  echo "Para criar manualmente:"
+  echo "1. SQL Editor do Supabase: cole scripts/create-tables.sql"
+  echo "2. psql: psql \$DATABASE_URL -f scripts/create-tables.sql"
+  echo "============================================"
 fi
+
+echo ""
+echo "Restoring expression-based indexes (not managed by Drizzle)..."
+node -e "
+const { Pool } = require('pg');
+(async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'disable' ? false : { rejectUnauthorized: false } });
+  const client = await pool.connect();
+  try {
+    const tableCheck = await client.query(\"SELECT 1 FROM information_schema.tables WHERE table_name = 'tse_candidate_votes' LIMIT 1\");
+    if (tableCheck.rows.length === 0) { console.log('Table tse_candidate_votes not found, skipping indexes.'); return; }
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_upper ON tse_candidate_votes (UPPER(nm_urna_candidato) text_pattern_ops)',
+      'CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_cand_upper ON tse_candidate_votes (UPPER(nm_candidato) text_pattern_ops)',
+    ];
+    const trgmCheck = await client.query(\"SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'\");
+    if (trgmCheck.rows.length > 0) {
+      indexes.push(
+        'CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_candidato_trgm ON tse_candidate_votes USING gin (nm_candidato gin_trgm_ops)',
+        'CREATE INDEX IF NOT EXISTS idx_tse_cv_nm_urna_trgm ON tse_candidate_votes USING gin (nm_urna_candidato gin_trgm_ops)'
+      );
+    }
+    for (const sql of indexes) {
+      const name = sql.match(/IF NOT EXISTS (\w+)/)?.[1] || 'unknown';
+      const exists = await client.query(\"SELECT 1 FROM pg_indexes WHERE indexname = \$1\", [name]);
+      if (exists.rows.length > 0) { continue; }
+      console.log('Creating index ' + name + '...');
+      await client.query(sql);
+      console.log('Index ' + name + ' created.');
+    }
+    console.log('Expression indexes verified.');
+  } finally { client.release(); await pool.end(); }
+})().catch(e => { console.error('Index restore warning:', e.message); });
+" 2>&1 || echo "Index restore skipped (non-fatal)"
 
 echo ""
 echo "Starting application..."
