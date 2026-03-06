@@ -202,7 +202,7 @@ export function QuickPrediction({
                 <SelectContent>
                   {scenarios?.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
-                      {s.name} ({s.availableSeats} vagas)
+                      {s.name} ({s.availableSeats.toLocaleString("pt-BR")} vagas)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -213,7 +213,7 @@ export function QuickPrediction({
                 <div className="text-sm text-muted-foreground space-y-1">
                   <div><strong>Cargo:</strong> {selectedScenario.position}</div>
                   <div><strong>Votos válidos:</strong> {selectedScenario.validVotes.toLocaleString("pt-BR")}</div>
-                  <div><strong>Vagas:</strong> {selectedScenario.availableSeats}</div>
+                  <div><strong>Vagas:</strong> {selectedScenario.availableSeats.toLocaleString("pt-BR")}</div>
                 </div>
               </div>
             )}

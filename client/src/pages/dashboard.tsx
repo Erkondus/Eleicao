@@ -618,7 +618,7 @@ export default function Dashboard() {
                         </span>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="font-mono" data-testid={`text-scenario-seats-${scenario.id}`}>{scenario.availableSeats} vagas</span>
+                            <span className="font-mono" data-testid={`text-scenario-seats-${scenario.id}`}>{scenario.availableSeats.toLocaleString("pt-BR")} vagas</span>
                           </TooltipTrigger>
                           <TooltipContent>Número de vagas disponíveis neste cenário</TooltipContent>
                         </Tooltip>

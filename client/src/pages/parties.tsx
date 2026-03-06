@@ -781,7 +781,7 @@ export default function Parties() {
                     <CardTitle className="text-sm font-medium text-muted-foreground">Total de Candidatos</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-bold">{partyDetails.candidateCount}</p>
+                    <p className="text-2xl font-bold">{partyDetails.candidateCount.toLocaleString("pt-BR")}</p>
                   </CardContent>
                 </Card>
                 <Card>

@@ -151,7 +151,7 @@ export function BatchDialog({ hook }: BatchDialogProps) {
                       </TableCell>
                       <TableCell>
                         {(batch.errorCount ?? 0) > 0 ? (
-                          <span className="text-red-600 font-medium">{batch.errorCount}</span>
+                          <span className="text-red-600 font-medium">{batch.errorCount.toLocaleString("pt-BR")}</span>
                         ) : (
                           <span className="text-muted-foreground">0</span>
                         )}

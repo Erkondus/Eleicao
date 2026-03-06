@@ -115,7 +115,7 @@ function renderPredictionData(doc: jsPDF, data: any, margin: number, yPos: numbe
       i + 1,
       p.party,
       `${(p.voteShare || 0).toFixed(1)}%`,
-      p.seats || "-",
+      p.seats ? p.seats.toLocaleString("pt-BR") : "-",
       p.trend === "growing" ? "↑" : p.trend === "declining" ? "↓" : "-"
     ]);
 

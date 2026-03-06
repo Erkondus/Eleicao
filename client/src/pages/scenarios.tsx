@@ -337,7 +337,7 @@ export default function Scenarios() {
                     <p className="text-xs text-muted-foreground mt-0.5">Votos Válidos</p>
                   </div>
                   <div className="text-center p-2 bg-muted rounded-md overflow-hidden">
-                    <p className="text-sm sm:text-base lg:text-sm xl:text-base font-mono font-bold leading-tight">{scenario.availableSeats}</p>
+                    <p className="text-sm sm:text-base lg:text-sm xl:text-base font-mono font-bold leading-tight">{scenario.availableSeats.toLocaleString("pt-BR")}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Vagas</p>
                   </div>
                 </div>

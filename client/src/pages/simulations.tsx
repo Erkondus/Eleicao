@@ -348,7 +348,7 @@ export default function Simulations() {
                 <SelectContent>
                   {scenarios?.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
-                      {s.name} ({s.availableSeats} vagas)
+                      {s.name} ({s.availableSeats.toLocaleString("pt-BR")} vagas)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -363,14 +363,14 @@ export default function Simulations() {
                     <div className="p-3 bg-muted rounded-md">
                       <span className="text-2xl font-mono font-bold">{qe.toLocaleString("pt-BR")}</span>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {selectedScenario.validVotes.toLocaleString("pt-BR")} / {selectedScenario.availableSeats} vagas
+                        {selectedScenario.validVotes.toLocaleString("pt-BR")} / {selectedScenario.availableSeats.toLocaleString("pt-BR")} vagas
                       </p>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Vagas Disponíveis</Label>
                     <div className="p-3 bg-muted rounded-md">
-                      <span className="text-2xl font-mono font-bold">{selectedScenario.availableSeats}</span>
+                      <span className="text-2xl font-mono font-bold">{selectedScenario.availableSeats.toLocaleString("pt-BR")}</span>
                       <p className="text-xs text-muted-foreground mt-1">
                         Barreira: {Math.floor(qe * 0.8).toLocaleString("pt-BR")} | Mín. ind.: {Math.floor(qe * 0.2).toLocaleString("pt-BR")}
                       </p>
@@ -608,13 +608,13 @@ export default function Simulations() {
                               )}
                             </TableCell>
                             <TableCell className="text-right font-mono font-bold text-success">
-                              {pr.seatsFromQuotient}
+                              {pr.seatsFromQuotient.toLocaleString("pt-BR")}
                             </TableCell>
                             <TableCell className="text-right font-mono font-bold text-accent-foreground">
-                              {pr.seatsFromRemainder}
+                              {pr.seatsFromRemainder.toLocaleString("pt-BR")}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Badge className="font-mono text-lg">{pr.totalSeats}</Badge>
+                              <Badge className="font-mono text-lg">{pr.totalSeats.toLocaleString("pt-BR")}</Badge>
                             </TableCell>
                           </TableRow>
                         );
@@ -661,7 +661,7 @@ export default function Simulations() {
                           style={{ backgroundColor: (pr as any).color || "#003366" }}
                         />
                         <h4 className="font-semibold">{pr.partyName}</h4>
-                        <Badge>{pr.totalSeats} {pr.totalSeats === 1 ? "vaga" : "vagas"}</Badge>
+                        <Badge>{pr.totalSeats.toLocaleString("pt-BR")} {pr.totalSeats === 1 ? "vaga" : "vagas"}</Badge>
                         {(pr as any).federationName && (
                           <Badge variant="secondary">{(pr as any).federationName}</Badge>
                         )}

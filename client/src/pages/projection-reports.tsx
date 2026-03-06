@@ -632,9 +632,9 @@ export default function ProjectionReportsPage() {
                                   </div>
                                   <div>
                                     <div className="text-sm text-muted-foreground">Cadeiras Projetadas</div>
-                                    <div className="font-medium text-lg">{party.seats.expected}</div>
+                                    <div className="font-medium text-lg">{party.seats.expected.toLocaleString("pt-BR")}</div>
                                     <div className="text-xs text-muted-foreground">
-                                      Intervalo: {party.seats.min} - {party.seats.max}
+                                      Intervalo: {party.seats.min.toLocaleString("pt-BR")} - {party.seats.max.toLocaleString("pt-BR")}
                                     </div>
                                   </div>
                                 </div>
@@ -763,7 +763,7 @@ export default function ProjectionReportsPage() {
                                         <div className="flex flex-wrap gap-2">
                                           {scenario.outcomes.slice(0, 5).map((outcome, j) => (
                                             <Badge key={j} variant="outline">
-                                              {outcome.party}: {outcome.seats} cad. ({outcome.voteShare.toFixed(1)}%)
+                                              {outcome.party}: {outcome.seats.toLocaleString("pt-BR")} cad. ({outcome.voteShare.toFixed(1)}%)
                                             </Badge>
                                           ))}
                                         </div>
