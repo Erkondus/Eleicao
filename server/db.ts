@@ -291,8 +291,13 @@ export async function runSafeMigrations(): Promise<void> {
             )
         `);
         for (const row of invalidIndexes.rows) {
-          console.log(`[Migration] Dropping invalid index ${row.indexname}...`);
-          await client.query(`DROP INDEX IF EXISTS ${row.indexname}`);
+          const idxName = row.indexname;
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(idxName)) {
+            console.warn(`[Migration] Skipping index with suspicious name: ${idxName}`);
+            continue;
+          }
+          console.log(`[Migration] Dropping invalid index ${idxName}...`);
+          await client.query(`DROP INDEX IF EXISTS "${idxName}"`);
         }
 
         const allIndexes: { name: string; sql: string }[] = [

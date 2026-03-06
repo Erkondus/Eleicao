@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes/index";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -105,6 +107,36 @@ function startReportScheduler() {
 }
 const httpServer = createServer(app);
 
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: "Muitas tentativas. Tente novamente em 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/reset-admin", rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: "Muitas tentativas de reset. Tente novamente em 1 hora." },
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
+
+const aiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  message: { error: "Limite de requisições de IA atingido. Aguarde 1 minuto." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/ai", aiLimiter);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -135,7 +167,12 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        const sensitiveRoutes = ["/api/auth", "/api/users", "/api/ai"];
+        const isSensitive = sensitiveRoutes.some(r => path.startsWith(r));
+        if (!isSensitive) {
+          const jsonStr = JSON.stringify(capturedJsonResponse);
+          logLine += ` :: ${jsonStr.length > 200 ? jsonStr.substring(0, 200) + "..." : jsonStr}`;
+        }
       }
 
       log(logLine);

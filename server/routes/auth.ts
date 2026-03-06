@@ -413,8 +413,10 @@ router.delete("/api/users/:id", requireAuth, requirePermission("manage_users"), 
 
 router.get("/api/audit", requireAuth, requirePermission("view_audit"), async (req, res) => {
   try {
-    const logs = await storage.getAuditLogs();
-    res.json(logs);
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 500);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+    const result = await storage.getAuditLogs(limit, offset);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch audit logs" });
   }

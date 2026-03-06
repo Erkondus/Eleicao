@@ -30,6 +30,17 @@ The application features a React + Vite + TailwindCSS + shadcn/ui frontend and a
 -   **Database Performance Optimization:** Employs reduced redundant indexes, pre-aggregated summary tables (`summary_party_votes`, `summary_candidate_votes`, `summary_state_votes`) for fast analytics, atomic summary refresh logic, and post-import asynchronous maintenance tasks.
 -   **Multi-Provider AI Configuration:** Allows administrators to manage AI providers (OpenAI, Anthropic, Google Gemini, OpenAI-compatible) and assign specific models per task, with API keys stored securely as environment variables.
 
+## Security & Reliability
+-   **Helmet:** HTTP security headers (CSP, X-Frame-Options, HSTS, etc.) via `helmet` middleware. CSP disabled in development for Vite compatibility.
+-   **Rate Limiting:** `express-rate-limit` applied to `/api/auth/login` (20/15min), `/api/auth/reset-admin` (5/1h), and `/api/ai/*` (30/1min).
+-   **Log Sanitization:** API response bodies are not logged for sensitive routes (`/api/auth`, `/api/users`, `/api/ai`). Non-sensitive routes truncate at 200 chars.
+-   **SQL Injection Prevention:** Index names validated via regex and double-quoted in `DROP INDEX` statements.
+-   **Timezone-Aware Scheduling:** `calculateNextRun()` uses `Intl` APIs to convert between timezone-local time and UTC, respecting the configured timezone parameter.
+-   **React Query Caching:** `staleTime` set to 5 minutes (previously `Infinity`), `refetchOnWindowFocus` enabled for data freshness.
+-   **Audit Log Pagination:** `/api/audit` supports `limit` and `offset` query params; frontend includes pagination controls.
+-   **Gemini Multi-Turn:** `GeminiAdapter.chatCompletion` uses `startChat()` with proper history for multi-turn conversations instead of concatenating all messages.
+-   **AI Adapter Cache TTL:** Adapter cache entries expire after 1 hour to avoid stale configurations.
+
 ## External Dependencies
 -   **OpenAI:** GPT-4o, GPT-4o-mini for AI features (validation, insights, sentiment, predictions, suggestions) and `text-embedding-3-small` for semantic search.
 -   **Anthropic:** Claude models (optional AI provider).

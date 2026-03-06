@@ -1,0 +1,210 @@
+  Avaliação Detalhada do Código — SimulaVoto
+
+  Visão Geral
+
+  O projeto é bem estruturado para sua complexidade: monorepo com separação clara entre server/, client/ e shared/, uso consistente de TypeScript, ORM tipado (Drizzle), autenticação robusta com Passport + sessão em PostgreSQL, e uma arquitetura de múltiplos providers de IA. Há bastante qualidade — a avaliação a seguir foca nos pontos de risco e melhoria.
+
+  ---
+  Problemas Encontrados
+
+  1. SEGURANÇA — CRÍTICO
+
+  1.1 SQL Injection em server/db.ts:295
+
+  await client.query(`DROP INDEX IF EXISTS ${row.indexname}`);
+  O row.indexname vem diretamente de pg_indexes (banco), o que em condições normais é seguro. Mas se um atacante com acesso ao banco conseguir criar um índice com nome malicioso (improvável mas possível), isso executa SQL arbitrário. Deveria usar format() ou identifiers quoted.
+
+  1.2 Sem Rate Limiting
+
+  Nenhum endpoint tem rate limiting. Isso expõe:
+  - /api/auth/login — força bruta de senhas
+  - /api/auth/reset-admin — força bruta do ADMIN_RESET_SECRET
+  - Endpoints de IA — abuso de tokens/custo
+
+  1.3 Sem Headers de Segurança HTTP (Helmet)
+
+  Nenhum middleware helmet está instalado. Faltam: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, etc.
+
+  1.4 rejectUnauthorized: false no SSL
+
+  // server/db.ts:97
+  config.ssl = { rejectUnauthorized: false };
+  Em produção isso abre para ataques MITM contra o banco de dados. Deveria usar rejectUnauthorized: true com o certificado da CA configurado, ou ao menos só desabilitar em ambientes locais já que o código já detecta isso.
+
+  1.5 Log vaza corpo completo de respostas
+
+  // server/index.ts:136-140
+  logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+  Qualquer resposta JSON de API (incluindo dados de usuário, tokens, etc.) vai para o log. Em produção isso pode vazar dados sensíveis em logs.
+
+  ---
+  2. CONFIABILIDADE — ALTO
+
+  2.1 Fila TSE é Puramente In-Memory
+
+  tse-queue-service.ts mantém a fila em um array em memória. Se o servidor reiniciar durante uma importação em curso, o job fica "stuck" — o código de startup já trata isso ao marcar jobs como failed, o que é bom, mas o restart perde toda a fila pendente silenciosamente.
+
+  2.2 calculateNextRun Ignora Timezone Real
+
+  // server/routes/shared.ts:98
+  let nextRun = new Date(now); // usa timezone do servidor
+  nextRun.setHours(hours, minutes, 0, 0);
+  O parâmetro timezone: "America/Sao_Paulo" é aceito mas nunca usado. O cálculo usa a timezone local do processo Node.js, que pode não ser UTC-3 em ambientes de cloud.
+
+  2.3 refreshAllSummaries com Flag Global Não Atômica
+
+  // server/summary-refresh.ts:4
+  let refreshInProgress = false;
+  Em Node.js single-thread isso é suficiente para prevenir concorrência local, mas não funciona entre múltiplas instâncias do servidor (ex: deploy com 2+ pods). Sem um lock distribuído (Redis, Postgres advisory lock), duas instâncias podem executar o refresh simultaneamente causando dados duplicados.
+
+  2.4 staleTime: Infinity no QueryClient
+
+  // client/src/lib/queryClient.ts:72
+  staleTime: Infinity,
+  Dados buscados pelo React Query nunca ficam stale e nunca são refetchados automaticamente (nem ao focar a janela, nem por intervalo). O usuário pode ver dados desatualizados indefinidamente sem saber.
+
+  2.5 getAuditLogs() Sem Paginação Real
+
+  // server/storage.ts:1040
+  return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(100);
+  O limite está hardcoded em 100. A rota /api/audit não aceita parâmetros de paginação. Com o tempo isso torna a auditoria inútil — os primeiros 100 registros mais recentes e nada mais.
+
+  ---
+  3. QUALIDADE DE CÓDIGO — MÉDIO
+
+  3.1 327 Usos de any no Servidor
+
+  server/storage.ts:40  server/routes/auth.ts:7  server/ai-insights.ts:9 ...
+  A tipagem com any anula os benefícios do TypeScript. Casos comuns: error: any em catch blocks (correto seria error instanceof Error ? error.message : String(error)), parâmetros de funções de dashboard, e muitos (row as any).
+
+  3.2 dashboard-service.ts Com any em Parâmetros Públicos
+
+  export async function createCustomDashboard(data: any) { ... }
+  export async function updateCustomDashboard(id: number, data: any) { ... }
+  Funções de serviço de negócio sem tipos é um risco de runtime silencioso.
+
+  3.3 MODEL_MAP Hardcoded em ai-cache.ts
+
+  const MODEL_MAP: Record<ModelTier, string> = {
+    fast: "gpt-4o-mini",
+    standard: "gpt-4o",
+  };
+  O fallback padrão está hardcoded para OpenAI mesmo com o sistema de providers configurável. Se nenhum provider estiver configurado e OPENAI_API_KEY não existir, o erro só aparece em runtime.
+
+  3.4 Parâmetros de Query Sem Validação de Tipo
+
+  // server/routes/analytics.ts
+  const { year, uf, electionType, position } = req.query;
+  // Tudo é string | string[] | undefined - sem validação
+  parseInt(year as string) // sem verificar NaN
+  160 ocorrências de parseInt(req.query.*) sem verificar se o resultado é NaN. Um ?year=abc quebra silenciosamente.
+
+  3.5 Duplicação nos Adapters de IA
+
+  GeminiAdapter.chatCompletion concatena mensagens com \n\n ignorando os roles de assistant — conversas multi-turno não funcionam corretamente no Gemini com esse código.
+
+  ---
+  4. PERFORMANCE — MÉDIO
+
+  4.1 getAuditLogs e getStats São Queries N+1-Prone
+
+  getStats() em storage.ts:1043 faz 4 queries separadas em sequência. Em server/routes/auth.ts:233 o getDbStats do admin faz 10 queries em Promise.all (isso está bom), mas o padrão de 4 queries para stats básicos poderia ser 1.
+
+  4.2 Summary Refresh Sem Índices nas Tabelas de Summary
+
+  As tabelas summary_* são populadas com queries pesadas de agregação mas não há garantia de índices criados nelas (apenas na tse_candidate_votes). Consultas frequentes nas summaries podem ser lentas.
+
+  4.3 adapterCache de IA Nunca Expira
+
+  // server/ai-client.ts:274
+  const adapterCache = new Map<number, { adapter; updatedAt }>();
+  O cache de adapters cresce indefinidamente. Se providers são deletados, o entry fica no Map para sempre.
+
+  ---
+  5. MANUTENIBILIDADE — MÉDIO
+
+  5.1 Nenhum Teste Automatizado
+
+  Nenhum arquivo de teste foi encontrado (*.test.ts, *.spec.ts, vitest.config.ts, jest.config.ts). O código tem lógica complexa (cálculo de eleições, processamento CSV, forecasting) sem cobertura alguma.
+
+  5.2 runSafeMigrations Mistura Migração e Lógica de Negócio
+
+  server/db.ts contém lógica específica de índices de negócio. À medida que o schema evolui, essa função vai crescer de forma não controlada. O sistema de migração do Drizzle (drizzle-kit) existe exatamente para isso.
+
+  5.3 storage.ts É Uma God Class
+
+  O arquivo tem centenas de métodos para todos os domínios (usuários, partidos, candidatos, campanhas, IA, relatórios, sentimentos...). Isso torna difícil encontrar e manter código específico.
+
+  ---
+  Plano de Melhorias Priorizado
+
+  Prioridade 1 — Segurança (fazer imediatamente)
+
+  ┌─────┬──────────────────────────────────────────────────────────────────────────────────────────┬───────────────┐
+  │  #  │                                           Ação                                           │    Esforço    │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ S1  │ Instalar helmet e configurar headers HTTP                                                │ Baixo (30min) │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ S2  │ Instalar express-rate-limit em /api/auth/login, /api/auth/reset-admin, e endpoints de IA │ Baixo (1h)    │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ S3  │ Truncar ou remover o corpo JSON do log de requisições (ou filtrar por rota)              │ Baixo (15min) │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ S4  │ Configurar rejectUnauthorized: true com certificado CA no ambiente de produção           │ Médio (2h)    │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ S5  │ Escapar row.indexname com format() do pg ou usar query parametrizada                     │ Baixo (15min) │
+  └─────┴──────────────────────────────────────────────────────────────────────────────────────────┴───────────────┘
+
+  Prioridade 2 — Confiabilidade (próxima sprint)
+
+  ┌─────┬────────────────────────────────────────────────────────────────────────────────────────────┬──────────────┐
+  │  #  │                                            Ação                                            │   Esforço    │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────┼──────────────┤
+  │ R1  │ Usar Intl/date-fns-tz em calculateNextRun com a timezone recebida                          │ Médio (2h)   │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────┼──────────────┤
+  │ R2  │ Adicionar PostgreSQL advisory lock em refreshAllSummaries para suporte multi-instância     │ Médio (3h)   │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────┼──────────────┤
+  │ R3  │ Revisar staleTime por rota — dados de dashboard podem ter staleTime: 5 * 60 * 1000 (5 min) │ Baixo (1h)   │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────┼──────────────┤
+  │ R4  │ Implementar paginação real em /api/audit com limit e offset                                │ Baixo (1h)   │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────────────────┼──────────────┤
+  │ R5  │ Persistir fila TSE no banco para sobreviver restarts (ou ao menos logar perda da fila)     │ Alto (1 dia) │
+  └─────┴────────────────────────────────────────────────────────────────────────────────────────────┴──────────────┘
+
+  Prioridade 3 — Qualidade de Código (refatoração contínua)
+
+  ┌─────┬───────────────────────────────────────────────────────────────────────────┬───────────────┐
+  │  #  │                                   Ação                                    │    Esforço    │
+  ├─────┼───────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ Q1  │ Criar schemas Zod para todos os req.query e req.params nos routers        │ Alto (2 dias) │
+  ├─────┼───────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ Q2  │ Substituir any nos catch blocks por error instanceof Error pattern        │ Médio (4h)    │
+  ├─────┼───────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ Q3  │ Tipar parâmetros de dashboard-service.ts e outros serviços                │ Baixo (1h)    │
+  ├─────┼───────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ Q4  │ Corrigir GeminiAdapter.chatCompletion para suportar conversas multi-turno │ Médio (2h)    │
+  ├─────┼───────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ Q5  │ Adicionar TTL ou limpeza periódica ao adapterCache                        │ Baixo (30min) │
+  └─────┴───────────────────────────────────────────────────────────────────────────┴───────────────┘
+
+  Prioridade 4 — Testes (investimento a longo prazo)
+
+  ┌─────┬────────────────────────────────────────────────────────────────────────────────┬───────────────┐
+  │  #  │                                      Ação                                      │    Esforço    │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ T1  │ Configurar Vitest + cobertura mínima                                           │ Médio (1 dia) │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ T2  │ Testes unitários para calculateNextRun, repairAndParseJSON, mapParsedRowToVote │ Médio (1 dia) │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ T3  │ Testes de integração para rotas de auth (login, reset, change-password)        │ Alto (2 dias) │
+  └─────┴────────────────────────────────────────────────────────────────────────────────┴───────────────┘
+
+  Prioridade 5 — Arquitetura (longo prazo)
+
+  ┌─────┬──────────────────────────────────────────────────────────────────────────────────┬───────────────┐
+  │  #  │                                       Ação                                       │    Esforço    │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ A1  │ Dividir storage.ts em domínios: UserStorage, PartyStorage, CampaignStorage, etc. │ Alto (3 dias) │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ A2  │ Migrar runSafeMigrations para scripts Drizzle Kit oficiais                       │ Alto (1 dia)  │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────┼───────────────┤
+  │ A3  │ Centralizar erros de query em um helper tipado (evitar parseInt sem NaN check)   │ Médio (1 dia) │

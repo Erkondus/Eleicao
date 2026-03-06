@@ -200,7 +200,7 @@ class GeminiAdapter implements AiClientAdapter {
 
   async chatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResult> {
     const systemMsg = options.messages.find(m => m.role === "system");
-    const userMessages = options.messages.filter(m => m.role !== "system");
+    const nonSystemMessages = options.messages.filter(m => m.role !== "system");
 
     let systemInstruction = systemMsg?.content || "";
     if (options.jsonMode) {
@@ -217,8 +217,23 @@ class GeminiAdapter implements AiClientAdapter {
       },
     });
 
-    const prompt = userMessages.map(m => m.content).join("\n\n");
-    const result = await model.generateContent(prompt);
+    if (nonSystemMessages.length === 0) {
+      throw new Error("Nenhuma mensagem de usuário fornecida para o Gemini");
+    }
+
+    const history = nonSystemMessages.slice(0, -1).map(m => ({
+      role: m.role === "assistant" ? "model" as const : "user" as const,
+      parts: [{ text: m.content }],
+    }));
+    const lastMsg = nonSystemMessages[nonSystemMessages.length - 1];
+
+    let result;
+    if (history.length > 0) {
+      const chat = model.startChat({ history });
+      result = await chat.sendMessage(lastMsg.content);
+    } else {
+      result = await model.generateContent(lastMsg.content);
+    }
     const text = result.response.text();
 
     if (!text) throw new Error("Sem resposta da IA (Gemini)");
@@ -271,12 +286,14 @@ class OpenAICompatibleAdapter extends OpenAIAdapter {
   }
 }
 
-const adapterCache = new Map<number, { adapter: AiClientAdapter; updatedAt: string }>();
+const ADAPTER_CACHE_TTL_MS = 60 * 60 * 1000;
+const adapterCache = new Map<number, { adapter: AiClientAdapter; updatedAt: string; cachedAt: number }>();
 
 export function createAiClient(provider: AiProvider): AiClientAdapter {
+  const now = Date.now();
   const cached = adapterCache.get(provider.id);
   const updatedStr = provider.updatedAt?.toString() || "";
-  if (cached && cached.updatedAt === updatedStr) {
+  if (cached && cached.updatedAt === updatedStr && (now - cached.cachedAt) < ADAPTER_CACHE_TTL_MS) {
     return cached.adapter;
   }
 
@@ -298,7 +315,7 @@ export function createAiClient(provider: AiProvider): AiClientAdapter {
       adapter = new OpenAIAdapter(provider);
   }
 
-  adapterCache.set(provider.id, { adapter, updatedAt: updatedStr });
+  adapterCache.set(provider.id, { adapter, updatedAt: updatedStr, cachedAt: Date.now() });
   return adapter;
 }
 

@@ -129,7 +129,7 @@ export interface IStorage {
   deleteSimulation(id: number): Promise<void>;
 
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
-  getAuditLogs(): Promise<AuditLog[]>;
+  getAuditLogs(limit?: number, offset?: number): Promise<{ logs: AuditLog[]; total: number }>;
 
   getStats(): Promise<{ parties: number; candidates: number; scenarios: number; simulations: number }>;
 
@@ -1036,8 +1036,10 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getAuditLogs(): Promise<AuditLog[]> {
-    return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(100);
+  async getAuditLogs(limit: number = 100, offset: number = 0): Promise<{ logs: AuditLog[]; total: number }> {
+    const [countResult] = await db.select({ count: sql<number>`count(*)::int` }).from(auditLogs);
+    const logs = await db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit).offset(offset);
+    return { logs, total: countResult.count };
   }
 
   async getStats(): Promise<{ parties: number; candidates: number; scenarios: number; simulations: number }> {

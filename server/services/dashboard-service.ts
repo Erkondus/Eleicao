@@ -1,5 +1,6 @@
 import { storage } from "../storage";
 import { cachedAiCall, SYSTEM_PROMPTS } from "../ai-cache";
+import type { InsertCustomDashboard } from "@shared/schema";
 
 export async function getCustomDashboards(userId: string) {
   return storage.getCustomDashboards(userId);
@@ -13,11 +14,11 @@ export async function getCustomDashboard(id: number) {
   return storage.getCustomDashboard(id);
 }
 
-export async function createCustomDashboard(data: any) {
+export async function createCustomDashboard(data: InsertCustomDashboard) {
   return storage.createCustomDashboard(data);
 }
 
-export async function updateCustomDashboard(id: number, data: any) {
+export async function updateCustomDashboard(id: number, data: Partial<InsertCustomDashboard>) {
   return storage.updateCustomDashboard(id, data);
 }
 
@@ -37,7 +38,7 @@ export async function applyAiSuggestion(id: number) {
   return storage.applyAiSuggestion(id);
 }
 
-export async function generateAiSuggestions(userId: string, filters?: Record<string, any>) {
+export async function generateAiSuggestions(userId: string, filters?: Record<string, string | number | undefined>) {
   const summary = await storage.getAnalyticsSummary(filters || {});
   const partyData = await storage.getVotesByParty({ ...(filters || {}) });
   const stateData = await storage.getAvailableStates(filters?.year);

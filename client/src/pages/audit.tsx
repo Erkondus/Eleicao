@@ -31,10 +31,15 @@ export default function Audit() {
   const [selectedLog, setSelectedLog] = useState<AuditLogWithUser | null>(null);
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [entityFilter, setEntityFilter] = useState<string>("all");
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
 
-  const { data: logs, isLoading } = useQuery<AuditLogWithUser[]>({
-    queryKey: ["/api/audit"],
+  const { data: auditData, isLoading } = useQuery<{ logs: AuditLogWithUser[]; total: number }>({
+    queryKey: ["/api/audit", { limit: String(pageSize), offset: String(page * pageSize) }],
   });
+  const logs = auditData?.logs;
+  const totalLogs = auditData?.total ?? 0;
+  const totalPages = Math.ceil(totalLogs / pageSize);
 
   const { data: users } = useQuery<UserType[]>({
     queryKey: ["/api/users"],
@@ -239,9 +244,40 @@ export default function Audit() {
               columns={columns}
               isLoading={isLoading}
               searchable={false}
-              pageSize={15}
+              pageSize={pageSize}
               emptyMessage="Nenhum registro de auditoria"
             />
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <span className="text-sm text-muted-foreground" data-testid="text-audit-total">
+                {totalLogs.toLocaleString("pt-BR")} registros no total
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  data-testid="button-audit-prev"
+                >
+                  Anterior
+                </Button>
+                <span className="text-sm" data-testid="text-audit-page">
+                  Página {page + 1} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  data-testid="button-audit-next"
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

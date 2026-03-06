@@ -92,16 +92,30 @@ export function calculateNextRun(
   timeOfDay: string = "08:00",
   timezone: string = "America/Sao_Paulo"
 ): Date {
-  const now = new Date();
   const [hours, minutes] = timeOfDay.split(":").map(Number);
-  
-  let nextRun = new Date(now);
-  nextRun.setHours(hours, minutes, 0, 0);
-  
-  if (nextRun <= now) {
-    nextRun.setDate(nextRun.getDate() + 1);
+
+  function nowInTz(): Date {
+    const nowStr = new Date().toLocaleString("en-US", { timeZone: timezone });
+    return new Date(nowStr);
   }
-  
+
+  function toUtcFromTz(localDate: Date): Date {
+    const targetStr = localDate.toISOString().slice(0, 10);
+    const formatted = `${targetStr}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
+    const fakeUtc = new Date(formatted + "Z");
+    const refInTz = new Date(fakeUtc.toLocaleString("en-US", { timeZone: timezone }));
+    const offsetMs = refInTz.getTime() - fakeUtc.getTime();
+    return new Date(fakeUtc.getTime() - offsetMs);
+  }
+
+  const localNow = nowInTz();
+  let candidate = new Date(localNow);
+  candidate.setHours(hours, minutes, 0, 0);
+
+  if (candidate <= localNow) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+
   switch (frequency) {
     case "once":
       break;
@@ -109,23 +123,23 @@ export function calculateNextRun(
       break;
     case "weekly": {
       const targetDay = dayOfWeek ?? 1;
-      while (nextRun.getDay() !== targetDay) {
-        nextRun.setDate(nextRun.getDate() + 1);
+      while (candidate.getDay() !== targetDay) {
+        candidate.setDate(candidate.getDate() + 1);
       }
       break;
     }
     case "monthly": {
       const targetDate = dayOfMonth ?? 1;
-      const daysInCurrentMonth = new Date(nextRun.getFullYear(), nextRun.getMonth() + 1, 0).getDate();
-      nextRun.setDate(Math.min(targetDate, daysInCurrentMonth));
-      if (nextRun <= now) {
-        nextRun.setMonth(nextRun.getMonth() + 1);
-        const daysInNextMonth = new Date(nextRun.getFullYear(), nextRun.getMonth() + 1, 0).getDate();
-        nextRun.setDate(Math.min(targetDate, daysInNextMonth));
+      const daysInCurrentMonth = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
+      candidate.setDate(Math.min(targetDate, daysInCurrentMonth));
+      if (candidate <= localNow) {
+        candidate.setMonth(candidate.getMonth() + 1);
+        const daysInNextMonth = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
+        candidate.setDate(Math.min(targetDate, daysInNextMonth));
       }
       break;
     }
   }
-  
-  return nextRun;
+
+  return toUtcFromTz(candidate);
 }
