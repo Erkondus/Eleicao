@@ -1,0 +1,129 @@
+  Revisão Pós-Atualização — Commits 3aa7e42 + d523841                                                                                                                                                                                                                                                                                                                   
+                                                                                                                                                                                                                                                                                                                                                                        
+  O que foi resolvido                                                                                                                                                                                                                                                                                                                                                   
+                  
+  ┌──────────────────────────────────┬────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────┐                                                                                                                                                                            
+  │               Item               │                   Status                   │                                                Detalhe                                                 │
+  ├──────────────────────────────────┼────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ SSL com rejectUnauthorized: true │ ✅ Resolvido parcialmente                  │ Usa DATABASE_SSL_CA env quando disponível                                                              │
+  ├──────────────────────────────────┼────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Rate limiter IA por usuário      │ ✅ Implementado — mas com bug (ver abaixo) │ keyGenerator com req.user?.id                                                                          │
+  ├──────────────────────────────────┼────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Log de produção                  │ ✅ Resolvido completamente                 │ Em produção, zero corpo de resposta logado; em dev, apenas rotas /api/health, /api/version, /api/stats │
+  ├──────────────────────────────────┼────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ getStats() paralelo              │ ✅ Resolvido                               │ Promise.all com 4 queries simultâneas                                                                  │
+  ├──────────────────────────────────┼────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ getActivityTrend() N+1           │ ✅ Resolvido                               │ 2 queries com GROUP BY DATE + Maps em memória                                                          │
+  ├──────────────────────────────────┼────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Restauração de índices no deploy │ ✅ Novo                                    │ docker-entrypoint.sh restaura automaticamente os expression-based indexes após db:push                 │
+  └──────────────────────────────────┴────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  Problema Novo Encontrado — Bug de Ordem de Middlewares
+
+  BUG: aiLimiter roda antes do Passport — req.user sempre undefined
+
+  Este é o problema mais importante desta revisão. O keyGenerator implementado para limitar IA por usuário não funciona devido à ordem de registro dos middlewares:
+
+  server/index.ts (síncrono, na inicialização):
+    linha 110 → app.use(helmet)
+    linha 147 → app.use("/api/ai", aiLimiter)   ← keyGenerator tenta req.user?.id
+    linha 149 → app.use(express.json())
+
+  (async IIFE, depois):
+    linha 198 → await registerRoutes(...)
+                  → app.use(session(...))         ← Passport só é registrado AQUI
+                  → app.use(passport.initialize())
+                  → app.use(passport.session())   ← req.user é populado AQUI
+
+  Quando uma requisição chega em /api/ai/..., a cadeia de execução é:
+  1. aiLimiter executa — req.user ainda é undefined (passport não rodou)
+  2. keyGenerator cai no fallback de IP
+  3. Passport roda depois (tarde demais para o rate limiter)
+
+  O resultado: o rate limiter de IA sempre usa IP, nunca por usuário autenticado — exatamente o comportamento que a melhoria pretendia corrigir.
+
+  Agravante: validate: false desabilita os avisos internos do express-rate-limit que normalmente alertariam sobre problemas de configuração como esse, mascarando o bug.
+
+  Correção: Mover o app.use("/api/ai", aiLimiter) para dentro de registerRoutes, após app.use(passport.session()). Ou alternativamente, como os endpoints de IA exigem requireAuth, o rate limiter poderia ser aplicado como middleware na rota após a autenticação, usando req.ip que já considera o trust proxy.
+
+  ---
+  Problemas Persistentes
+
+  1. rejectUnauthorized: false ainda é o caso mais comum
+
+  // server/db.ts:101
+  config.ssl = { rejectUnauthorized: false }; // fallback quando DATABASE_SSL_CA não está definida
+
+  A melhoria foi condicional: só usa rejectUnauthorized: true se DATABASE_SSL_CA for fornecido. Na prática, em deploys sem o certificado CA configurado (maioria dos casos), a conexão SSL ainda não valida o certificado do servidor. Além disso, o docker-entrypoint.sh também usa rejectUnauthorized: false hardcoded em dois scripts inline (linhas 176 e 234).
+
+  2. docker-entrypoint.sh — interpolação de variável em código Node inline
+
+  # linha 64 — DB_HOST interpolado diretamente:
+  dns.lookup('${DB_HOST}', { family: 4 }, ...)
+
+  # linha 147 — DB_HOST e DB_PORT interpolados:
+  s.connect(${DB_PORT}, '${DB_HOST}', ...)
+
+  Se DB_HOST contiver aspas simples ou caracteres especiais (ex: extraído de uma DATABASE_URL malformada), o código Node inline pode ser corrompido ou executar comandos inesperados. Em ambiente Docker controlado o risco é baixo, mas a prática é insegura. O correto seria passar os valores como variáveis de ambiente separadas e lê-los com process.env.
+
+  3. Demais pendências (sem mudança)
+
+  ┌──────────────────────────────────────────┬─────────────────────────────────────────┐
+  │                 Problema                 │                 Impacto                 │
+  ├──────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ refreshAllSummaries sem lock distribuído │ Médio — afeta deploys multi-instância   │
+  ├──────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Fila TSE in-memory                       │ Médio — jobs pendentes somem no restart │
+  ├──────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ 160+ parseInt(req.query.*) sem Zod       │ Médio — NaN silencioso em filtros       │
+  ├──────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ adapterCache sem TTL/expiração           │ Baixo — vazamento de memória leve       │
+  ├──────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Nenhum teste automatizado                │ Alto — risco a longo prazo              │
+  └──────────────────────────────────────────┴─────────────────────────────────────────┘
+
+  ---
+  Plano Atualizado
+
+  Prioridade 1 — Urgente (corrigir antes do próximo deploy)
+
+  ┌─────┬────────────────────────────────────────────────────────────────────────────────────┬─────────┐
+  │  #  │                                        Ação                                        │ Esforço │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ U1  │ Mover app.use("/api/ai", aiLimiter) para após passport.session() em registerRoutes │ 15 min  │
+  ├─────┼────────────────────────────────────────────────────────────────────────────────────┼─────────┤
+  │ U2  │ Remover validate: false do aiLimiter após corrigir a ordem                         │ 5 min   │
+  └─────┴────────────────────────────────────────────────────────────────────────────────────┴─────────┘
+
+  Prioridade 2 — Curto Prazo
+
+  ┌─────┬───────────────────────────────────────────────────────────────────────────────┬────────────┐
+  │  #  │                                     Ação                                      │  Esforço   │
+  ├─────┼───────────────────────────────────────────────────────────────────────────────┼────────────┤
+  │ P1  │ Passar DB_HOST/DB_PORT como process.env nos scripts node inline do entrypoint │ 30 min     │
+  ├─────┼───────────────────────────────────────────────────────────────────────────────┼────────────┤
+  │ P2  │ Fornecer DATABASE_SSL_CA em produção para ativar rejectUnauthorized: true     │ Config ops │
+  ├─────┼───────────────────────────────────────────────────────────────────────────────┼────────────┤
+  │ P3  │ Advisory lock em refreshAllSummaries para multi-instância                     │ 3h         │
+  ├─────┼───────────────────────────────────────────────────────────────────────────────┼────────────┤
+  │ P4  │ Validação Zod nos req.query dos routers principais                            │ 1 dia      │
+  └─────┴───────────────────────────────────────────────────────────────────────────────┴────────────┘
+
+  Prioridade 3 — Médio Prazo
+
+  ┌─────┬────────────────────────────────────────────────────────┬─────────┐
+  │  #  │                          Ação                          │ Esforço │
+  ├─────┼────────────────────────────────────────────────────────┼─────────┤
+  │ P5  │ Persistir estado queued da fila TSE no banco           │ 4h      │
+  ├─────┼────────────────────────────────────────────────────────┼─────────┤
+  │ P6  │ Adicionar TTL ao adapterCache                          │ 30 min  │
+  ├─────┼────────────────────────────────────────────────────────┼─────────┤
+  │ P7  │ Testes: Vitest + cobertura mínima das funções críticas │ 2 dias  │
+  └─────┴────────────────────────────────────────────────────────┴─────────┘
+
+  ---
+  Resumo Executivo
+
+  O progresso continua forte: logging de produção está agora completamente seguro, getActivityTrend eliminou o N+1, getStats está paralelo, e o entrypoint de Docker ficou muito mais robusto com restauração automática de índices. O único problema novo introduzido é o bug de ordem de middlewares no rate limiter de IA — a funcionalidade existe mas não opera
+  como projetada. É uma correção de 15 minutos de alta prioridade. Os demais itens pendentes são melhorias de qualidade e robustez, não blockers de segurança imediata.

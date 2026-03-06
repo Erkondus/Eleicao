@@ -1,7 +1,8 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { type Server } from "http";
 import session from "express-session";
 import passport from "passport";
+import rateLimit from "express-rate-limit";
 import { getSessionConfig, initSessionStore } from "../session-config";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
@@ -67,6 +68,21 @@ export async function registerRoutes(
 
   app.use(passport.initialize());
   app.use(passport.session());
+
+  function aiRateLimitKey(req: Request): string {
+    const userId = (req as any).user?.id;
+    if (userId) return `user:${userId}`;
+    return req.ip || req.socket.remoteAddress || "unknown";
+  }
+  app.use("/api/ai", rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 30,
+    message: { error: "Limite de requisições de IA atingido. Aguarde 1 minuto." },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: aiRateLimitKey,
+    validate: false,
+  }));
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {

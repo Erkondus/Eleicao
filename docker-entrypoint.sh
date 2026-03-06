@@ -58,10 +58,10 @@ resolve_dns_to_ipv4() {
   fi
 
   echo "Resolving ${DB_HOST} to IPv4..."
-  RESOLVED_IP=$(node -e "
+  RESOLVED_IP=$(DB_RESOLVE_HOST="$DB_HOST" node -e "
     const dns = require('dns');
     dns.setDefaultResultOrder('ipv4first');
-    dns.lookup('${DB_HOST}', { family: 4 }, (err, addr) => {
+    dns.lookup(process.env.DB_RESOLVE_HOST, { family: 4 }, (err, addr) => {
       if (err) { console.error('DNS_FAIL:' + err.message); process.exit(1); }
       console.log(addr);
     });
@@ -105,9 +105,13 @@ handle_ssl() {
 
     if node -e "
       const { Pool } = require('pg');
+      const fs = require('fs');
+      const sslOpts = process.env.DATABASE_SSL_CA
+        ? { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DATABASE_SSL_CA, 'utf8') }
+        : { rejectUnauthorized: false };
       const p = new Pool({
         connectionString: process.env.DATABASE_URL + '?sslmode=require',
-        ssl: { rejectUnauthorized: false },
+        ssl: sslOpts,
         connectionTimeoutMillis: 10000
       });
       p.query('SELECT 1')
@@ -144,7 +148,7 @@ if is_local_db; then
   RETRY_COUNT=0
 
   while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if node -e "const net = require('net'); const s = new net.Socket(); s.setTimeout(2000); s.connect(${DB_PORT}, '${DB_HOST}', () => { s.destroy(); process.exit(0); }); s.on('error', () => process.exit(1)); s.on('timeout', () => { s.destroy(); process.exit(1); });" 2>/dev/null; then
+    if DB_CHECK_HOST="$DB_HOST" DB_CHECK_PORT="$DB_PORT" node -e "const net = require('net'); const s = new net.Socket(); s.setTimeout(2000); s.connect(parseInt(process.env.DB_CHECK_PORT), process.env.DB_CHECK_HOST, () => { s.destroy(); process.exit(0); }); s.on('error', () => process.exit(1)); s.on('timeout', () => { s.destroy(); process.exit(1); });" 2>/dev/null; then
       echo "Database is reachable!"
       break
     fi
@@ -173,7 +177,17 @@ echo "Running pre-migration column fixes..."
 
 node -e "
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'disable' ? false : (process.env.DATABASE_SSL === 'require' ? { rejectUnauthorized: false } : false) });
+const fs = require('fs');
+function getSslConfig() {
+  if (process.env.DATABASE_SSL === 'disable') return false;
+  if (process.env.DATABASE_SSL === 'require') {
+    return process.env.DATABASE_SSL_CA
+      ? { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DATABASE_SSL_CA, 'utf8') }
+      : { rejectUnauthorized: false };
+  }
+  return false;
+}
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: getSslConfig() });
 (async () => {
   const client = await pool.connect();
   try {
@@ -231,7 +245,14 @@ echo "Restoring expression-based indexes (not managed by Drizzle)..."
 node -e "
 const { Pool } = require('pg');
 (async () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'disable' ? false : { rejectUnauthorized: false } });
+  const fs = require('fs');
+  function getSslConfig() {
+    if (process.env.DATABASE_SSL === 'disable') return false;
+    return process.env.DATABASE_SSL_CA
+      ? { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DATABASE_SSL_CA, 'utf8') }
+      : { rejectUnauthorized: false };
+  }
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: getSslConfig() });
   const client = await pool.connect();
   try {
     const tableCheck = await client.query(\"SELECT 1 FROM information_schema.tables WHERE table_name = 'tse_candidate_votes' LIMIT 1\");

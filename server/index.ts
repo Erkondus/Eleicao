@@ -128,24 +128,6 @@ app.use("/api/auth/reset-admin", rateLimit({
   legacyHeaders: false,
 }));
 
-function getAiRateLimitKey(req: express.Request): string {
-  const userId = (req as any).user?.id;
-  if (userId) return `user:${userId}`;
-  const addr = req.headers["x-forwarded-for"];
-  if (typeof addr === "string") return addr.split(",")[0].trim();
-  return req.socket.remoteAddress || "unknown";
-}
-const aiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 30,
-  message: { error: "Limite de requisições de IA atingido. Aguarde 1 minuto." },
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: getAiRateLimitKey,
-  validate: false,
-});
-app.use("/api/ai", aiLimiter);
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
