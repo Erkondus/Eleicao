@@ -7,11 +7,16 @@ echo "=== SimulaVoto Deploy ==="
 echo "Compose file: $COMPOSE_FILE"
 echo ""
 
+if [ ! -f "version.json" ]; then
+  echo "ERROR: version.json not found"
+  exit 1
+fi
+
 echo "Bumping version..."
-node -e "
+
+docker run --rm -v "$(pwd)/version.json:/app/version.json" -w /app node:20-alpine node -e "
 const fs = require('fs');
-const versionPath = 'version.json';
-const data = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
+const data = JSON.parse(fs.readFileSync('version.json', 'utf-8'));
 if (!Array.isArray(data.changelog)) data.changelog = [];
 const today = new Date().toISOString().split('T')[0];
 const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -26,14 +31,15 @@ if (sameDayEntry && sameDayEntry.date === today) {
   data.changelog.unshift({
     version: newVersion,
     date: today,
-    changes: ['Build automático ' + newVersion + ' (' + now + ')'],
+    changes: ['Build automatico ' + newVersion + ' (' + now + ')'],
   });
 }
 
+const oldVersion = data.version;
 data.version = newVersion;
 data.buildDate = today;
-fs.writeFileSync(versionPath, JSON.stringify(data, null, 2) + '\n');
-console.log('Version: ' + newVersion + ' (buildDate: ' + today + ')');
+fs.writeFileSync('version.json', JSON.stringify(data, null, 2) + '\n');
+console.log('Version: ' + oldVersion + ' -> ' + newVersion + ' (buildDate: ' + today + ')');
 "
 
 echo ""
