@@ -221,7 +221,7 @@ echo "Running database schema sync (db:push)..."
 
 DB_PUSH_TIMEOUT=120
 
-if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "" | npm run db:push 2>&1'; then
+if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "no" | npm run db:push 2>&1'; then
   echo "db:push completed successfully!"
 else
   EXIT_CODE=$?
