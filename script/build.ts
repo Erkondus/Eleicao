@@ -33,6 +33,11 @@ const allowlist = [
 ];
 
 async function autoBumpVersion() {
+  if (process.env.SKIP_VERSION_BUMP === "1") {
+    console.log("version bump skipped (SKIP_VERSION_BUMP=1)");
+    return;
+  }
+
   const versionPath = "version.json";
   try {
     const data = JSON.parse(await readFile(versionPath, "utf-8"));

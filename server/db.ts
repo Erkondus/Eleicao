@@ -76,8 +76,8 @@ async function resolveToIPv4(connectionString: string): Promise<string> {
 
 function getSSLMode(isLocal: boolean): "force" | "disable" | "auto" {
   const sslEnv = process.env.DATABASE_SSL?.toLowerCase();
-  if (sslEnv === "true" || sslEnv === "1") return "force";
-  if (sslEnv === "false" || sslEnv === "0") return "disable";
+  if (sslEnv === "true" || sslEnv === "1" || sslEnv === "require") return "force";
+  if (sslEnv === "false" || sslEnv === "0" || sslEnv === "disable") return "disable";
   if (sslEnv === "auto" || !sslEnv) {
     if (isLocal) return "disable";
     return "auto";

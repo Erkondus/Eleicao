@@ -8,7 +8,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN SKIP_VERSION_BUMP=1 npm run build
 
 FROM node:20-alpine AS runner
 
