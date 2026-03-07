@@ -98,6 +98,7 @@ for (const item of results.integrations) {
 
 **Notes:**
 
+- When the user has not explicitly requested a specific provider, at least search with a generic, capability-focused query to ensure all relevant options are returned. For example, when user asks "build an icon generating app", prefer `searchIntegrations("image generation")` instead of `searchIntegrations("OpenAI image generation")`
 - If a connector has already been authorized by the user or a teammate, it will appear as a `connection` (not a `connector`) in results
 - Try multiple queries if needed: `"stripe"`, `"payments"`, `"stripe payment processing"` may return different results
 - The `id` field is the exact string to pass to subsequent functions

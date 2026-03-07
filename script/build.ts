@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, writeFile } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -32,7 +32,43 @@ const allowlist = [
   "zod-validation-error",
 ];
 
+async function autoBumpVersion() {
+  const versionPath = "version.json";
+  try {
+    const data = JSON.parse(await readFile(versionPath, "utf-8"));
+    if (!Array.isArray(data.changelog)) data.changelog = [];
+    const today = new Date().toISOString().split("T")[0];
+    const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+    const [major, minor, patch] = data.version.split(".").map(Number);
+    const newVersion = `${major}.${minor}.${patch + 1}`;
+
+    const sameDayEntry = data.changelog[0];
+    if (sameDayEntry && sameDayEntry.date === today) {
+      sameDayEntry.changes.push(`Build ${now}`);
+      console.log(`same-day build appended to changelog entry ${sameDayEntry.version}`);
+    } else {
+      data.changelog.unshift({
+        version: newVersion,
+        date: today,
+        changes: [`Build automático ${newVersion} (${now})`],
+      });
+    }
+
+    data.version = newVersion;
+    data.buildDate = today;
+
+    console.log(`version bumped: ${major}.${minor}.${patch} -> ${newVersion}`);
+
+    await writeFile(versionPath, JSON.stringify(data, null, 2) + "\n");
+  } catch (err) {
+    console.warn("warning: could not auto-bump version:", err);
+  }
+}
+
 async function buildAll() {
+  await autoBumpVersion();
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");

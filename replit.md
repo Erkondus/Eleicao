@@ -42,6 +42,7 @@ The application features a React + Vite + TailwindCSS + shadcn/ui frontend and a
 -   **AI Adapter Cache TTL:** Adapter cache entries expire after 1 hour to avoid stale configurations. Cache also cleared on provider deletion.
 -   **SSL CA Certificate:** Supports `DATABASE_SSL_CA` env var for `rejectUnauthorized: true` SSL connections to PostgreSQL. Falls back to `rejectUnauthorized: false` when no CA provided. All inline Node scripts in `docker-entrypoint.sh` also respect `DATABASE_SSL_CA`. Shell variable interpolation in entrypoint inline scripts uses `process.env` instead of direct `${VAR}` interpolation for safety.
 -   **Performance:** `getStats()` uses `Promise.all` (4 parallel queries); `getActivityTrend()` uses 2 `GROUP BY` queries instead of N+1 loop (14 → 2 queries).
+-   **Auto-Versioning on Build:** `script/build.ts` automatically bumps the patch version and updates `buildDate` in `version.json` before each production build. If the version was already bumped today with the same target version, only `buildDate` is refreshed (prevents duplicate changelog entries on multiple builds in the same day). Manual bumps via `scripts/bump-version.ts` (minor/major) still work and take precedence.
 
 ## External Dependencies
 -   **OpenAI:** GPT-4o, GPT-4o-mini for AI features (validation, insights, sentiment, predictions, suggestions) and `text-embedding-3-small` for semantic search.
