@@ -120,6 +120,7 @@ handle_ssl() {
     " 2>/dev/null; then
       echo "SSL: connected WITH SSL"
       export DATABASE_URL="${DATABASE_URL}?sslmode=require"
+      export DATABASE_SSL="require"
     else
       echo "SSL: SSL failed, testing without SSL..."
       if node -e "
@@ -133,6 +134,7 @@ handle_ssl() {
           .catch(() => { p.end(); process.exit(1); });
       " 2>/dev/null; then
         echo "SSL: connected WITHOUT SSL"
+        export DATABASE_SSL="disable"
       else
         echo "SSL: both SSL and non-SSL connections failed"
         echo "WARNING: Database may be unreachable. Check DATABASE_URL."
@@ -248,9 +250,12 @@ const { Pool } = require('pg');
   const fs = require('fs');
   function getSslConfig() {
     if (process.env.DATABASE_SSL === 'disable') return false;
-    return process.env.DATABASE_SSL_CA
-      ? { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DATABASE_SSL_CA, 'utf8') }
-      : { rejectUnauthorized: false };
+    if (process.env.DATABASE_SSL === 'require') {
+      return process.env.DATABASE_SSL_CA
+        ? { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DATABASE_SSL_CA, 'utf8') }
+        : { rejectUnauthorized: false };
+    }
+    return false;
   }
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: getSslConfig() });
   const client = await pool.connect();

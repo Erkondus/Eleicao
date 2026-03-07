@@ -382,9 +382,10 @@ router.post("/api/analytics/refresh-summaries", requireAuth, requireRole("admin"
     const result = await refreshAllSummaries();
     await logAudit(req, "refresh", "summary_tables", "all", { tables: result.tables, duration: result.duration });
     res.json({ success: true, ...result });
-  } catch (error) {
-    console.error("Summary refresh error:", error);
-    res.status(500).json({ error: "Failed to refresh summary tables" });
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    console.error("Summary refresh error:", msg);
+    res.status(500).json({ error: `Falha ao atualizar resumos: ${msg}` });
   }
 });
 

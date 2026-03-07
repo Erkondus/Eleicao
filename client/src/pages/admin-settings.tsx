@@ -92,9 +92,17 @@ export default function AdminSettings() {
       });
     },
     onError: (error: any) => {
+      let desc = error.message || "Falha na operação";
+      try {
+        const jsonStart = desc.indexOf("{");
+        if (jsonStart >= 0) {
+          const parsed = JSON.parse(desc.slice(jsonStart));
+          desc = parsed.error || desc;
+        }
+      } catch {}
       toast({
         title: "Erro ao atualizar resumos",
-        description: error.message || "Falha na operação",
+        description: desc,
         variant: "destructive",
       });
     },
