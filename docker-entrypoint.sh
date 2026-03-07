@@ -217,29 +217,82 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: getSslC
 " 2>&1 || echo "Pre-migration skipped (non-fatal)"
 
 echo ""
-echo "Running database schema sync (db:push)..."
 
-DB_PUSH_TIMEOUT=120
+SCHEMA_HASH=$(cat shared/schema/*.ts 2>/dev/null | sha256sum | cut -d' ' -f1)
+STORED_HASH=""
+HASH_QUERY="SELECT value FROM app_metadata WHERE key = 'schema_hash' LIMIT 1"
+STORED_HASH=$(DB_CHECK_HOST="$DB_HOST" DB_CHECK_PORT="$DB_PORT" node -e "
+const { Pool } = require('pg');
+const fs = require('fs');
+function getSslConfig() {
+  if (process.env.DATABASE_SSL === 'disable') return false;
+  if (process.env.DATABASE_SSL === 'require') {
+    return process.env.DATABASE_SSL_CA
+      ? { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DATABASE_SSL_CA, 'utf8') }
+      : { rejectUnauthorized: false };
+  }
+  return false;
+}
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: getSslConfig() });
+pool.query('SELECT value FROM app_metadata WHERE key = \$1', ['schema_hash'])
+  .then(r => { console.log(r.rows[0]?.value || ''); pool.end(); })
+  .catch(() => { console.log(''); pool.end(); });
+" 2>/dev/null || echo "")
 
-if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "no" | npm run db:push 2>&1'; then
-  echo "db:push completed successfully!"
+if [ "$SCHEMA_HASH" = "$STORED_HASH" ] && [ -n "$STORED_HASH" ]; then
+  echo "Schema unchanged (hash: ${SCHEMA_HASH:0:12}...), skipping db:push."
 else
-  EXIT_CODE=$?
-  if [ "$EXIT_CODE" = "124" ]; then
-    echo "db:push timed out after ${DB_PUSH_TIMEOUT}s."
+  echo "Running database schema sync (db:push)..."
+  if [ -n "$STORED_HASH" ]; then
+    echo "Schema changed: ${STORED_HASH:0:12}... -> ${SCHEMA_HASH:0:12}..."
   else
-    echo "db:push failed (exit code: $EXIT_CODE)"
+    echo "First run or no stored hash, running db:push..."
   fi
-  echo ""
-  echo "============================================"
-  echo "WARNING: db:push failed!"
-  echo "============================================"
-  echo "Tabelas podem nao ter sido criadas."
-  echo ""
-  echo "Para criar manualmente:"
-  echo "1. SQL Editor do Supabase: cole scripts/create-tables.sql"
-  echo "2. psql: psql \$DATABASE_URL -f scripts/create-tables.sql"
-  echo "============================================"
+
+  DB_PUSH_TIMEOUT=120
+
+  if timeout ${DB_PUSH_TIMEOUT} sh -c 'yes "" | npm run db:push 2>&1'; then
+    echo "db:push completed successfully!"
+
+    SCHEMA_HASH="$SCHEMA_HASH" node -e "
+    const { Pool } = require('pg');
+    const fs = require('fs');
+    function getSslConfig() {
+      if (process.env.DATABASE_SSL === 'disable') return false;
+      if (process.env.DATABASE_SSL === 'require') {
+        return process.env.DATABASE_SSL_CA
+          ? { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DATABASE_SSL_CA, 'utf8') }
+          : { rejectUnauthorized: false };
+      }
+      return false;
+    }
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: getSslConfig() });
+    pool.query('CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT)')
+      .then(() => pool.query(
+        'INSERT INTO app_metadata (key, value) VALUES (\$1, \$2) ON CONFLICT (key) DO UPDATE SET value = \$2',
+        ['schema_hash', process.env.SCHEMA_HASH]
+      ))
+      .then(() => { console.log('Schema hash stored: ' + process.env.SCHEMA_HASH.substring(0, 12) + '...'); pool.end(); })
+      .catch(e => { console.error('Hash store warning:', e.message); pool.end(); });
+    " 2>/dev/null || true
+  else
+    EXIT_CODE=$?
+    if [ "$EXIT_CODE" = "124" ]; then
+      echo "db:push timed out after ${DB_PUSH_TIMEOUT}s."
+    else
+      echo "db:push failed (exit code: $EXIT_CODE)"
+    fi
+    echo ""
+    echo "============================================"
+    echo "WARNING: db:push failed!"
+    echo "============================================"
+    echo "Tabelas podem nao ter sido criadas."
+    echo ""
+    echo "Para criar manualmente:"
+    echo "1. SQL Editor do Supabase: cole scripts/create-tables.sql"
+    echo "2. psql: psql \$DATABASE_URL -f scripts/create-tables.sql"
+    echo "============================================"
+  fi
 fi
 
 echo ""
